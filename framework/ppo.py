@@ -13,6 +13,9 @@ import tyro
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
+from reward import RewardNet
+from reward import train as train_reward
+import teacher
 
 @dataclass
 class Args:
@@ -76,6 +79,20 @@ class Args:
     """the mini-batch size (computed in runtime)"""
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
+
+    # teacher feedback
+
+    """the frequency of teacher feedback (every K iterations)"""
+    teacher_feedback_frequency: int = 1000
+    """the number of queries per feedback session"""
+    teacher_feedback_num_queries_per_session: int = 500
+    """the amount of gradient steps to take on the teacher feedback"""
+    teacher_update_epochs: int = 100
+    """the batch size of the teacher feedback sampled from the feedback buffer"""
+    teacher_feedback_batch_size: int = 32
+    """the learning rate of the teacher"""
+    teacher_learning_rate: float = 1e-3
+
 
 
 def make_env(env_id, idx, capture_video, run_name):
@@ -167,6 +184,19 @@ if __name__ == "__main__":
     agent = Agent(envs).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # reward setup
+    obs_space_dim = np.prod(envs.single_observation_space.shape)
+    action_space_dim = envs.single_action_space.n \
+        if isinstance(envs.single_action_space, gym.spaces.Discrete) \
+        else envs.single_action_space.shape[0]
+
+    reward_net = RewardNet(obs_space_dim=obs_space_dim, action_space_dim=action_space_dim, hidden_dim=16).to(device)
+    reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
+
+    replay_buffer_obs = torch.zeros((args.teacher_feedback_frequency, args.num_steps) + envs.single_observation_space.shape).to(device)
+    replay_buffer_actions = torch.zeros((args.teacher_feedback_frequency, args.num_steps) + envs.single_action_space.shape).to(device)
+    replay_buffer_rewards = torch.zeros((args.teacher_feedback_frequency, args.num_steps)).to(device)
+
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
     actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
@@ -174,6 +204,11 @@ if __name__ == "__main__":
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+
+    print("Envs obs shape", envs.single_observation_space.shape)
+    print("Envs action shape", envs.single_action_space.shape)
+    print("Envs action n", envs.single_action_space.n)
+    print("Shape obs", obs.shape)
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
@@ -183,6 +218,43 @@ if __name__ == "__main__":
     next_done = torch.zeros(args.num_envs).to(device)
 
     for iteration in range(1, args.num_iterations + 1):
+        ### REWARD LEARNING ###
+
+        if iteration != 1 and iteration % args.teacher_feedback_frequency == 0:
+            num_steps = args.num_steps
+            num_queries = args.teacher_feedback_num_queries_per_session
+
+            D_s = torch.zeros((num_queries, 2, num_steps, obs_space_dim + action_space_dim)).to(device) # Segments
+            D_mu = torch.zeros(num_queries).to(device) # Preferences
+
+            for i in range(num_queries):
+                # Rewards are used to simulate human feedback
+                o1, o2, o1_reward, o2_reward = teacher.sample_trajectories(replay_buffer_obs, replay_buffer_actions, replay_buffer_rewards)
+
+                # Query instructor (normally a human who decides which trajectory is better)
+                preference = teacher.give_preference(o1, o2, o1_reward, o2_reward)
+
+                # store human preference to D
+                D_s[i][0] = o1
+                D_s[i][1] = o2
+                D_mu[i] = preference
+
+                # print("o1 sum", torch.sum(o1))
+                # print("o2 sum", torch.sum(o2))
+
+            train_reward(
+                model=reward_net,
+                optimizer=reward_optimizer,
+                writer=writer,
+                global_step=global_step,
+                D_s=D_s,
+                D_mu=D_mu,
+                epochs=args.teacher_update_epochs,
+                batch_size=args.teacher_feedback_batch_size,
+            )
+
+        ### AGENT LEARNING ###
+
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -201,8 +273,21 @@ if __name__ == "__main__":
             actions[step] = action
             logprobs[step] = logprob
 
+            if isinstance(envs.single_action_space, gym.spaces.Discrete):
+                # The environment uses discrete actions, we need to one-hot encode the action
+                # to make training more efficient (or even feasible)
+                action_one_hot = torch.nn.functional.one_hot(action.squeeze(-1).long(), num_classes=action_space_dim).float()
+                input_to_reward_net = torch.cat([next_obs, action_one_hot], dim=-1)
+            else:
+                input_to_reward_net = torch.cat([next_obs, action.unsqueeze(-1)], dim=-1)
+
+            # reward prediction
+            reward = reward_net(input_to_reward_net).squeeze(-1)
+
             # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
+            # We ignore the real reward and instead use the reward from the reward network
+            next_obs, _reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
+
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
@@ -213,6 +298,12 @@ if __name__ == "__main__":
                         print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
                         writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                         writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+
+        # Fill the replay buffer (for teacher feedback and reward learning)
+        # We only store trajectories from the first environment
+        replay_buffer_obs[iteration % args.teacher_feedback_frequency] = obs[:, 0, :]
+        replay_buffer_actions[iteration % args.teacher_feedback_frequency] = actions[:, 0]
+        replay_buffer_rewards[iteration % args.teacher_feedback_frequency] = rewards[:, 0]
 
         # bootstrap value if not done
         with torch.no_grad():
