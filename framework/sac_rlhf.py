@@ -17,7 +17,7 @@ from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from torch.utils.tensorboard import SummaryWriter
 
-import teacher
+from teacher import Teacher
 
 @dataclass
 class Args:
@@ -77,6 +77,19 @@ class Args:
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 1e-3
     """the learning rate of the teacher"""
+
+    # Simulated Teacher
+    sim_beta: float = -1
+    """this parameter controls how deterministic or random the teacher's preferences are"""
+    sim_gamma: float = 1
+    """the discount factor gamma, which models myopic behavior"""
+    sim_epsilon: float = 0
+    """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
+    sim_delta_skip: float = 0
+    """skip two trajectories if neither segment demonstrates the desired behavior"""
+    sim_delta_equal: float = 0
+    """the range of two trajectories being equal"""
+
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -241,8 +254,20 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                 print("step", global_step, i)
 
+                SimTeacher = Teacher(
+                    args.sim_beta,
+                    args.sim_gamma,
+                    args.sim_epsilon,
+                    args.sim_delta_skip,
+                    args.sim_delta_equal
+                )
+
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                preference = teacher.give_preference(first_trajectory, second_trajectory)
+                preference = SimTeacher.give_preference(first_trajectory, second_trajectory)
+
+                # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
+                if preference is None:
+                    continue
 
                 # Store preferences
                 pref_buffer.add(first_trajectory, second_trajectory, preference)
