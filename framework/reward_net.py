@@ -27,14 +27,11 @@ class RewardNet(nn.Module):
         exp1 = torch.exp(torch.sum(r1))
         exp2 = torch.exp(torch.sum(r2))
         prop1 = exp1 / (exp1 + exp2)
-        prop2 = exp2 / (exp1 + exp2)
-        return prop1, prop2
+        return prop1
 
     def preference_loss(self, predictions, preferences):
-        # Compute loss based on human feedback
-        # predictions shape: (batch_size, 2)
-        # preferences shape: (batch_size, 2)
-        return -torch.sum(preferences * torch.log(predictions))
+        # Compute binary cross entropy loss based on human feedback
+        return -torch.mean(preferences * torch.log(predictions) + (1 - preferences) * torch.log(1 - predictions))
 
 def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs, batch_size, env: Optional[VecNormalize] = None):
     for epoch in range(epochs):
@@ -42,6 +39,7 @@ def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs,
 
         for pref_pair in prefs:
             t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
+            pref = torch.tensor(pref, dtype=torch.float32)
 
             t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
             t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
@@ -51,10 +49,10 @@ def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs,
             r1 = model(t1.samples.observations, t1.samples.actions)
             r2 = model(t2.samples.observations, t2.samples.actions)
 
-            prob1, prob2 = model.preference_prob(r1, r2)
-            predictions = torch.stack([prob1, prob2])
+            prediction = model.preference_prob(r1, r2)
+            prediction = prediction.clone().detach().requires_grad_(True)
 
-            loss = model.preference_loss(predictions, pref)
+            loss = model.preference_loss(prediction, pref)
             loss.backward()
             optimizer.step()
 
