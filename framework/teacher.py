@@ -57,24 +57,23 @@ class Teacher:
         return y
 
     def _stochastic_preference(self, first_trajectory: Trajectory, second_trajectory: Trajectory) -> bool:
-        # Compute exponential preference with clamping to avoid overflow
-        exp1 = torch.exp(torch.clamp(
-            self.beta * torch.sum(self._trajectory_weights(first_trajectory) * first_trajectory.samples.rewards),
-            max=700
-        )).item()
+        if self.beta > 0:
+            sum1 = self.beta * torch.sum(self._trajectory_weights(first_trajectory) * first_trajectory.samples.rewards).item()
 
-        exp2 = torch.exp(torch.clamp(
-            self.beta * torch.sum(self._trajectory_weights(second_trajectory) * second_trajectory.samples.rewards),
-            max=700
-        )).item()
+            sum2 = self.beta * torch.sum(self._trajectory_weights(second_trajectory) * second_trajectory.samples.rewards).item()
 
-        exp_values = torch.tensor([exp1, exp2])
-        p1, p2 = torch.softmax(exp_values, dim=0).tolist()
+            combine_trajectories = torch.tensor([sum1, sum2])
+            p1, p2 = torch.softmax(combine_trajectories, dim=0).tolist()
 
-        assert 0 <= p1 <= 1, f"p1={p1} is out of bounds, exp1={exp1}, exp2={exp2}"
-        assert 0 <= p2 <= 1, f"p2={p2} is out of bounds, exp1={exp1}, exp2={exp2}"
+            assert 0 <= p1 <= 1, f"p1={p1} is out of bounds"
+            assert 0 <= p2 <= 1, f"p2={p2} is out of bounds"
 
-        return True if p1 > p2 else False
+            return True if p1 > p2 else False
+        else:
+            first_trajectory_reward = first_trajectory.samples.rewards.sum().item()
+            second_trajectory_reward = second_trajectory.samples.rewards.sum().item()
+
+            return True if first_trajectory_reward > second_trajectory_reward else False
 
     def _trajectory_weights(self, trajectory: Trajectory) -> torch.Tensor:
         h = trajectory.samples.rewards.size(dim=0)

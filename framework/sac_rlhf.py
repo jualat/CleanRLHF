@@ -79,15 +79,15 @@ class Args:
     """the learning rate of the teacher"""
 
     # Simulated Teacher
-    sim_beta: float = -1
+    teacher_sim_beta: float = -1
     """this parameter controls how deterministic or random the teacher's preferences are"""
-    sim_gamma: float = 1
+    teacher_sim_gamma: float = 1
     """the discount factor gamma, which models myopic behavior"""
-    sim_epsilon: float = 0
+    teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    sim_delta_skip: float = 0
+    teacher_sim_delta_skip: float = 0
     """skip two trajectories if neither segment demonstrates the desired behavior"""
-    sim_delta_equal: float = 0
+    teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
 
 
@@ -255,11 +255,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 print("step", global_step, i)
 
                 SimTeacher = Teacher(
-                    args.sim_beta,
-                    args.sim_gamma,
-                    args.sim_epsilon,
-                    args.sim_delta_skip,
-                    args.sim_delta_equal
+                    args.teacher_sim_beta,
+                    args.teacher_sim_gamma,
+                    args.teacher_sim_epsilon,
+                    args.teacher_sim_delta_skip,
+                    args.teacher_sim_delta_equal
                 )
 
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
