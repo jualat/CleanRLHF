@@ -1,9 +1,14 @@
 import random
 import torch
-from sympy.stats.rv import probability
 
 from replay_buffer import Trajectory
+from enum import Enum
 
+class Preference(Enum):
+    SKIP = None  # Skip the query
+    EQUAL = 0.5  # Segments are equally preferable
+    FIRST = 1.0  # First segment is preferred
+    SECOND = 0.0  # Second segment is preferred
 
 class Teacher:
     """
@@ -33,12 +38,19 @@ class Teacher:
       the teacher marks the segments as equally preferable and provides a uniform response.
     """
 
-    def __init__(self, beta, gamma, epsilon, delta_skip, delta_equal):
+    def __init__(self, beta, gamma, epsilon, delta_skip, delta_equal, seed=None):
         self.beta = beta
         self.gamma = gamma
         self.epsilon = epsilon
         self.delta_skip = delta_skip
         self.delta_equal = delta_equal
+        self.seed = seed
+
+        if seed is not None:
+            random.seed(seed)
+            self.torch_generator = torch.Generator().manual_seed(seed)
+        else:
+            self.torch_generator = None
 
     def give_preference(self, first_trajectory: Trajectory, second_trajectory: Trajectory) -> float:
         first_trajectory_reward = first_trajectory.samples.rewards.sum().item()
@@ -46,20 +58,19 @@ class Teacher:
         mistake = random.random()
 
         if max(first_trajectory_reward, second_trajectory_reward) < self.delta_skip:
-            y = None
+            y = Preference.SKIP.value
         elif abs(first_trajectory_reward - second_trajectory_reward) < self.delta_equal:
-            y = 0.5
-        elif self._stochastic_preference(first_trajectory, second_trajectory):
-            y = 1.0 if (1 - self.epsilon) > mistake else 0.0
+            y = Preference.EQUAL.value
+        elif self._stochastic_preference(first_trajectory, second_trajectory, first_trajectory_reward, second_trajectory_reward):
+            y = Preference.FIRST.value if (1 - self.epsilon) > mistake else Preference.SECOND.value
         else:
-            y = 0.0 if (1 - self.epsilon) > mistake else 1.0
+            y = Preference.SECOND.value if (1 - self.epsilon) > mistake else Preference.FIRST.value
 
         return y
 
-    def _stochastic_preference(self, first_trajectory: Trajectory, second_trajectory: Trajectory) -> bool:
+    def _stochastic_preference(self, first_trajectory: Trajectory, second_trajectory: Trajectory, first_trajectory_reward, second_trajectory_reward) -> bool:
         if self.beta > 0:
             sum1 = self.beta * torch.sum(self._trajectory_weights(first_trajectory) * first_trajectory.samples.rewards).item()
-
             sum2 = self.beta * torch.sum(self._trajectory_weights(second_trajectory) * second_trajectory.samples.rewards).item()
 
             combine_trajectories = torch.tensor([sum1, sum2])
@@ -70,9 +81,6 @@ class Teacher:
 
             return True if p1 > p2 else False
         else:
-            first_trajectory_reward = first_trajectory.samples.rewards.sum().item()
-            second_trajectory_reward = second_trajectory.samples.rewards.sum().item()
-
             return True if first_trajectory_reward > second_trajectory_reward else False
 
     def _trajectory_weights(self, trajectory: Trajectory) -> torch.Tensor:
