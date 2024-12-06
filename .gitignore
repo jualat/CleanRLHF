@@ -1,2 +1,5 @@
 # IDE-specific files
 .idea
+
+# Automatic activation of pyenv-virtualenv
+.python-version
