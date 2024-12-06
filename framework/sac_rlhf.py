@@ -259,7 +259,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     args.teacher_sim_gamma,
                     args.teacher_sim_epsilon,
                     args.teacher_sim_delta_skip,
-                    args.teacher_sim_delta_equal
+                    args.teacher_sim_delta_equal,
+                    args.seed
                 )
 
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
