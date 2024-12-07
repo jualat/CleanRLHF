@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 
+from video_recorder import VideoRecorder
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
@@ -231,6 +232,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
     reward_net = RewardNet(hidden_dim=16, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
+    video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
@@ -243,6 +245,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 first_trajectory, second_trajectory = rb.sample_trajectories()
 
                 print("step", global_step, i)
+
+                # Create video of the two trajectories. For now, we only render if capture_video is True.
+                # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
+                if args.capture_video:
+                    video_recorder.record_trajectory(first_trajectory, run_name)
+                    video_recorder.record_trajectory(second_trajectory, run_name)
 
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
                 preference = teacher.give_preference(first_trajectory, second_trajectory)
