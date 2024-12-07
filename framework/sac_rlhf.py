@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 
 import gymnasium as gym
+from gymnasium.experimental.wrappers.rendering import RecordVideoV0
 import numpy as np
 import torch
 import torch.nn as nn
@@ -82,7 +83,9 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
             env = gym.make(env_id, render_mode="rgb_array")
-            env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+            # You've to use experimental wrappers to record video to avoid black screen issue:
+            # https://github.com/Farama-Foundation/Gymnasium/issues/455#issuecomment-1517900688
+            env = RecordVideoV0(env, f"videos/{run_name}")
         else:
             env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
