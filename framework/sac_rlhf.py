@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 
+from unsupervised_exploration import UnsupervisedExploration
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
@@ -89,6 +90,15 @@ class Args:
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
+
+    # Unsupervised Exploration
+    unsupervised_exploration: UnsupervisedExploration = True
+    """toggle the unsupervised exploration"""
+    total_explore_steps: int = 400
+    """total number of explore steps"""
+    explore_batch_size: int = 32
+    """the batch size of the explore sampled from the replay buffer"""
+    explore_learning_starts: int = 64
 
 
 def make_env(env_id, seed, idx, capture_video, run_name):
@@ -241,6 +251,88 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
     reward_net = RewardNet(hidden_dim=16, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
+
+    rb_exp = ReplayBuffer(
+        args.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        handle_timeout_termination=False,
+    )
+    if args.unsupervised_exploration:
+        knn_estimator = UnsupervisedExploration(k=3)
+        obs, _ = envs.reset(seed=args.seed)
+        ### UNSUPERVISED EXPLORATION ###
+        print(obs)
+        for explore_step in range(args.total_explore_steps):
+            if explore_step < args.explore_learning_starts:
+                actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+            else:
+                actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
+                actions = actions.detach().cpu().numpy()
+            next_obs, _, terminations, truncations, infos = envs.step(actions)
+
+            real_next_obs = next_obs.copy()
+            for idx, trunc in enumerate(truncations):
+                if trunc:
+                    real_next_obs[idx] = infos["final_observation"][idx]
+
+            intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
+            knn_estimator.update_states(next_obs)
+            print(intrinsic_reward)
+
+            rb_exp.add(obs, real_next_obs, actions, intrinsic_reward, terminations, infos)
+
+            obs = next_obs
+            if explore_step > args.explore_learning_starts:
+                data = rb_exp.sample(args.explore_batch_size)
+                with torch.no_grad():
+                    real_rewards = data.rewards
+                    next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+                    qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+                    qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+                    min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+                    next_q_value = real_rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (
+                        min_qf_next_target).view(-1)
+
+                qf1_a_values = qf1(data.observations, data.actions).view(-1)
+                qf2_a_values = qf2(data.observations, data.actions).view(-1)
+                qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+                qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+                qf_loss = qf1_loss + qf2_loss
+
+                # optimize the model
+                q_optimizer.zero_grad()
+                qf_loss.backward()
+                q_optimizer.step()
+
+                if explore_step % args.policy_frequency == 0:  # TD 3 Delayed update support
+                    for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                        pi, log_pi, _ = actor.get_action(data.observations)
+                        qf1_pi = qf1(data.observations, pi)
+                        qf2_pi = qf2(data.observations, pi)
+                        min_qf_pi = torch.min(qf1_pi, qf2_pi)
+                        actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
+
+                        actor_optimizer.zero_grad()
+                        actor_loss.backward()
+                        actor_optimizer.step()
+                        if args.autotune:
+                            with torch.no_grad():
+                                _, log_pi, _ = actor.get_action(data.observations)
+                            alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+
+                            a_optimizer.zero_grad()
+                            alpha_loss.backward()
+                            a_optimizer.step()
+                            alpha = log_alpha.exp().item()
+
+                            # update the target networks
+                if explore_step % args.target_network_frequency == 0:
+                    for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                    for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
+                        target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
