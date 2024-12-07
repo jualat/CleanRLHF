@@ -80,6 +80,9 @@ class Teacher:
             assert 0 <= p2 <= 1, f"p2={p2} is out of bounds"
 
             return True if p1 > p2 else False
+        elif self.beta == 0:
+            # Use a random float to choose uniformly between the two trajectories
+            return random.random() < 0.5
         else:
             return True if first_trajectory_reward > second_trajectory_reward else False
 

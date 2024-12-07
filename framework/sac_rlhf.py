@@ -254,7 +254,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                 print("step", global_step, i)
 
-                SimTeacher = Teacher(
+                sim_teacher = Teacher(
                     args.teacher_sim_beta,
                     args.teacher_sim_gamma,
                     args.teacher_sim_epsilon,
@@ -264,7 +264,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                preference = SimTeacher.give_preference(first_trajectory, second_trajectory)
+                preference = sim_teacher.give_preference(first_trajectory, second_trajectory)
 
                 # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
                 if preference is None:
