@@ -2,7 +2,7 @@
 name = "cleanrlhf"
 version = "0.1.0"
 description = ""
-authors = ["Benjamin Kuen <b.kuen@campus.lmu.de>"]
+authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -16,6 +16,7 @@ tensorboard = "^2.10.0"
 torch = ">=1.12.1"
 tyro = "^0.5.10"
 wandb = "^0.13.11"
+pre-commit = "^4.0.1"
 
 
 [build-system]
