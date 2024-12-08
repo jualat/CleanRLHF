@@ -1,9 +1,8 @@
 import os
 
 import gymnasium as gym
-import numpy as np
-import imageio
 from replay_buffer import ReplayBuffer, Trajectory
+import cv2
 
 class VideoRecorder:
     """
@@ -35,12 +34,14 @@ class VideoRecorder:
 
         # Extract actions and dones from the replay buffer slice
         actions = trajectory.samples.actions
-        images = []
 
         # Reset the environment with a fixed seed for reproducibility
         _, _ = env.reset(seed=self.seed)
         img = env.render()
-        images.append(img)
+
+        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
+        writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (img.shape[1], img.shape[0]))
+        writer.write(img)
 
         # Replay the actions
         for action in actions:
@@ -49,17 +50,8 @@ class VideoRecorder:
             # Step the environment with the recorded action
             _, _, _, _, _ = env.step(action)
 
-            # Save the rendered image
-            img = env.render()
-            images.append(img)
-
-        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
-
-        # Render the images as a video
-        imageio.mimsave(out_path, [np.array(img) for i, img in enumerate(images)], fps=fps)
+            # Save the rendered image to the video file
+            writer.write(env.render())
 
         # Close the environment to ensure the video file is finalized
         env.close()
-
-
-
