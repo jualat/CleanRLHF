@@ -29,7 +29,10 @@ class VideoRecorder:
         # Ensure the directory for videos exists
         video_folder = f"./videos/{run_name}/trajectories"
         os.makedirs(video_folder, exist_ok=True)
-
+        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
+        if os.path.exists(out_path):
+            print(f"Skipping {out_path}")
+            return
         env = gym.make(self.env_id, render_mode="rgb_array")
 
         # Extract actions and dones from the replay buffer slice
@@ -39,7 +42,6 @@ class VideoRecorder:
         _, _ = env.reset(seed=self.seed)
         img = env.render()
 
-        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
         writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (img.shape[1], img.shape[0]))
         writer.write(img)
 
