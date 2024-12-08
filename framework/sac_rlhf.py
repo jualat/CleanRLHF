@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 
 import gymnasium as gym
+from gymnasium.experimental.wrappers.rendering import RecordVideoV0
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import tyro
 
+from video_recorder import VideoRecorder
 from unsupervised_exploration import UnsupervisedExploration
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
@@ -105,7 +107,9 @@ def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
             env = gym.make(env_id, render_mode="rgb_array")
-            env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+            # You've to use experimental wrappers to record video to avoid black screen issue:
+            # https://github.com/Farama-Foundation/Gymnasium/issues/455#issuecomment-1517900688
+            env = RecordVideoV0(env, f"videos/{run_name}")
         else:
             env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -308,6 +312,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
     reward_net = RewardNet(hidden_dim=16, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
+    video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
     rb_exp = ReplayBuffer(
         args.buffer_size,
@@ -390,6 +395,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     args.seed
                 )
 
+                # Create video of the two trajectories. For now, we only render if capture_video is True.
+                # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
+                if args.capture_video:
+                    video_recorder.record_trajectory(first_trajectory, run_name)
+                    video_recorder.record_trajectory(second_trajectory, run_name)
+
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
                 preference = sim_teacher.give_preference(first_trajectory, second_trajectory)
 
@@ -415,6 +426,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         actions = select_actions(obs, actor, device, global_step, args.learning_starts, envs)
 
+        # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(actions)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
