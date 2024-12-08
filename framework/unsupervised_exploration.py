@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial import KDTree
 
-class UnsupervisedExploration:
+class ExplorationRewardKNN:
     def __init__(self, k=3):
         self.k = k
         self.visited_states = []
@@ -13,7 +13,7 @@ class UnsupervisedExploration:
         """
         if len(states.shape) != 2:
             raise ValueError(f"States must have shape (num_envs, obs_dim), but got {states.shape}")
-        self.visited_states.extend(states.tolist())  # Add batch of states
+        self.visited_states.extend(states.tolist())
 
     def compute_intrinsic_rewards(self, states):
         """
@@ -25,12 +25,13 @@ class UnsupervisedExploration:
             # Not enough points to calculate k-NN distances
             return np.zeros(states.shape[0])
 
-        # Build KDTree with normalized visited states
+        # Normalizing the all visited_states to ensure that each dimension contributes equally to the distance metric
         visited_states = np.array(self.visited_states)
         visited_states = (visited_states - visited_states.mean(axis=0)) / (visited_states.std(axis=0) + 1e-8)
         tree = KDTree(visited_states)
 
-        # Normalize the input states
+        # Normalizing the data to have a mean of 0 and a standard deviation of 1 allows the KDTree
+        # to process all dimensions on an equal footing, irrespective of their original distributions.
         states = (states - visited_states.mean(axis=0)) / (visited_states.std(axis=0) + 1e-8)
 
         # Query the KDTree for distances
@@ -39,16 +40,11 @@ class UnsupervisedExploration:
 
         # Clip distances to avoid log(0)
         distances_to_kth_neighbor = np.clip(distances_to_kth_neighbor, 1e-8, None)
-
-        # Compute intrinsic rewards
         intrinsic_rewards = np.log(distances_to_kth_neighbor)
 
-        # Debugging: Check for inf or NaN values
+        # Removing NaNs and infinite values in order to ensure the system remains robust
         if not np.all(np.isfinite(intrinsic_rewards)):
             print(f"Non-finite intrinsic rewards detected: {intrinsic_rewards}")
             intrinsic_rewards = np.nan_to_num(intrinsic_rewards, nan=0.0, posinf=1e6, neginf=-1e6)
 
         return intrinsic_rewards
-
-
-
