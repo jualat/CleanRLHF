@@ -36,7 +36,7 @@ class RewardNet(nn.Module):
 def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs, batch_size, env: Optional[VecNormalize] = None):
     for epoch in range(epochs):
         prefs = pref_buffer.sample(batch_size)
-
+        total_loss = 0.0
         for pref_pair in prefs:
             t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
             pref = torch.tensor(pref, dtype=torch.float32)
@@ -55,8 +55,11 @@ def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs,
             loss = model.preference_loss(prediction, pref)
             loss.backward()
             optimizer.step()
+            total_loss += loss.item()
 
             writer.add_scalar("losses/reward_loss", loss.item(), global_step)
 
+        if epoch % 10 == 0:
+            print(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
         if epoch % 100 == 0:
             print(f"Reward epoch {epoch}, Loss {loss.item()}")
