@@ -70,11 +70,11 @@ class Args:
     """automatic tuning of the entropy coefficient"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 1000
+    teacher_feedback_frequency: int = 5000
     """the frequency of teacher feedback (every K iterations)"""
     teacher_feedback_num_queries_per_session: int = 500
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 100
+    teacher_update_epochs: int = 300
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
@@ -96,9 +96,9 @@ class Args:
     # Unsupervised Exploration
     unsupervised_exploration: UnsupervisedExploration = True
     """toggle the unsupervised exploration"""
-    total_explore_steps: int = 5000
+    total_explore_steps: int = 10000
     """total number of explore steps"""
-    explore_batch_size: int = 128
+    explore_batch_size: int = 256
     """the batch size of the explore sampled from the replay buffer"""
     explore_learning_starts: int = 512
 
@@ -310,7 +310,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     start_time = time.time()
 
     pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
-    reward_net = RewardNet(hidden_dim=16, env=envs).to(device)
+    reward_net = RewardNet(hidden_dim=256, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
@@ -373,6 +373,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar("exploration/intrinsic_reward_mean", intrinsic_reward.mean(), explore_step)
                 writer.add_scalar("exploration/terminations", terminations.sum(), explore_step)
                 writer.add_scalar("exploration/state_coverage", len(knn_estimator.visited_states), explore_step)
+                print("SPS:", int(explore_step / (time.time() - start_time)))
+                writer.add_scalar("exploration/SPS", int(explore_step / (time.time() - start_time)), explore_step)
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
