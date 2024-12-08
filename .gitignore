@@ -3,3 +3,5 @@
 
 # Automatic activation of pyenv-virtualenv
 .python-version
+
+.DS_Store
