@@ -14,7 +14,7 @@ import torch.optim as optim
 import tyro
 
 from video_recorder import VideoRecorder
-from unsupervised_exploration import UnsupervisedExploration
+from unsupervised_exploration import ExplorationRewardKNN
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
@@ -74,7 +74,7 @@ class Args:
     """the frequency of teacher feedback (every K iterations)"""
     teacher_feedback_num_queries_per_session: int = 500
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 300
+    teacher_update_epochs: int = 200
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
@@ -94,7 +94,7 @@ class Args:
     """the range of two trajectories being equal"""
 
     # Unsupervised Exploration
-    unsupervised_exploration: UnsupervisedExploration = True
+    unsupervised_exploration: bool = True
     """toggle the unsupervised exploration"""
     total_explore_steps: int = 10000
     """total number of explore steps"""
@@ -322,10 +322,19 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         handle_timeout_termination=False,
     )
 
-    if args.unsupervised_exploration:
-        knn_estimator = UnsupervisedExploration(k=3)
-        obs, _ = envs.reset(seed=args.seed)
+    # Init Teacher
+    sim_teacher = Teacher(
+        args.teacher_sim_beta,
+        args.teacher_sim_gamma,
+        args.teacher_sim_epsilon,
+        args.teacher_sim_delta_skip,
+        args.teacher_sim_delta_equal,
+        args.seed
+    )
 
+    if args.unsupervised_exploration:
+        knn_estimator = ExplorationRewardKNN(k=3)
+        obs, _ = envs.reset(seed=args.seed)
         for explore_step in range(args.total_explore_steps):
 
             actions = select_actions(obs, actor, device, explore_step, args.explore_learning_starts, envs)
@@ -346,37 +355,37 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if explore_step > args.explore_learning_starts:
                 data = rb_exp.sample(args.explore_batch_size)
                 qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
-                                          qf1,
-                                          qf2,
-                                          qf1_target,
-                                          qf2_target,
-                                          alpha,
-                                          args.gamma,
-                                          q_optimizer,
-                                          reward_net,
-                                          explore=True)
+                                                                                          qf1,
+                                                                                          qf2,
+                                                                                          qf1_target,
+                                                                                          qf2_target,
+                                                                                          alpha,
+                                                                                          args.gamma,
+                                                                                          q_optimizer,
+                                                                                          reward_net,
+                                                                                          explore=True)
 
                 if explore_step % args.policy_frequency == 0:  # TD 3 Delayed update support
                     for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                         actor_loss = update_actor(data,
-                                     actor,
-                                     qf1,
-                                     qf2,
-                                     alpha,
-                                     actor_optimizer)
+                                                  actor,
+                                                  qf1,
+                                                  qf2,
+                                                  alpha,
+                                                  actor_optimizer)
 
             if explore_step % args.target_network_frequency == 0:
                 update_target_networks(qf1, qf1_target, args.tau)
                 update_target_networks(qf2, qf2_target, args.tau)
 
-            if explore_step % 10 == 0:
+            if explore_step % 100 == 0:
                 writer.add_scalar("exploration/intrinsic_reward_mean", intrinsic_reward.mean(), explore_step)
                 writer.add_scalar("exploration/terminations", terminations.sum(), explore_step)
                 writer.add_scalar("exploration/state_coverage", len(knn_estimator.visited_states), explore_step)
                 print("SPS:", int(explore_step / (time.time() - start_time)))
                 writer.add_scalar("exploration/SPS", int(explore_step / (time.time() - start_time)), explore_step)
+                print(f"Exploration step: {explore_step}")
 
-    # TRY NOT TO MODIFY: start the game
     obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
         ### REWARD LEARNING ###
@@ -387,15 +396,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 first_trajectory, second_trajectory = rb.sample_trajectories()
 
                 print("step", global_step, i)
-
-                sim_teacher = Teacher(
-                    args.teacher_sim_beta,
-                    args.teacher_sim_gamma,
-                    args.teacher_sim_epsilon,
-                    args.teacher_sim_delta_skip,
-                    args.teacher_sim_delta_equal,
-                    args.seed
-                )
 
                 # Create video of the two trajectories. For now, we only render if capture_video is True.
                 # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
