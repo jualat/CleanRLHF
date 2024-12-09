@@ -54,6 +54,5 @@ class VideoRecorder:
 
             # Save the rendered image to the video file
             writer.write(env.render())
-        print("video_done")
         # Close the environment to ensure the video file is finalized
         env.close()
