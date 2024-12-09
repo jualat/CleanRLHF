@@ -11,6 +11,8 @@ from stable_baselines3.common.type_aliases import ReplayBufferSamples
 from stable_baselines3.common.vec_env import VecNormalize
 from sympy.codegen.ast import int32
 
+from reward_net import RewardNet
+
 
 class Trajectory(NamedTuple):
     replay_buffer_start_idx: int
@@ -71,7 +73,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         print("Done indices", done_indices)
 
         # The end indices are the done indices, including the last one.
-        ends = done_indices + 1
+        ends = done_indices + 4
 
         # Randomly select indices for the trajectories
         # Set replace=False to sample different trajectories
@@ -92,9 +94,18 @@ class ReplayBuffer(SB3ReplayBuffer):
             samples=trajectory_samples,
         )
 
-    def relabel_rewards(self):
+    def relabel_rewards(self, reward_net: RewardNet):
         """
         Relabel rewards in the replay buffer to take into account the change in the reward function.
+        :param reward_net: Reward network
         :return:
         """
-        pass
+        # Convert the entire observations and actions arrays to NumPy arrays
+        observations = np.array(self.observations, dtype=np.float32).squeeze(axis=1)
+        actions = np.array(self.actions, dtype=np.float32).squeeze(axis=1)
+
+        # Calculate the new rewards using the reward_net
+        new_rewards = reward_net.predict_reward(observations, actions)
+
+        # Update the rewards in the replay buffer
+        self.rewards = new_rewards
