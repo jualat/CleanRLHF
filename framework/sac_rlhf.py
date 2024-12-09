@@ -14,6 +14,7 @@ import torch.optim as optim
 import tyro
 
 from video_recorder import VideoRecorder
+from unsupervised_exploration import ExplorationRewardKNN
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
@@ -69,11 +70,11 @@ class Args:
     """automatic tuning of the entropy coefficient"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 1000
+    teacher_feedback_frequency: int = 5000
     """the frequency of teacher feedback (every K iterations)"""
     teacher_feedback_num_queries_per_session: int = 500
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 100
+    teacher_update_epochs: int = 200
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
@@ -92,6 +93,15 @@ class Args:
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
 
+    # Unsupervised Exploration
+    unsupervised_exploration: bool = True
+    """toggle the unsupervised exploration"""
+    total_explore_steps: int = 10000
+    """total number of explore steps"""
+    explore_batch_size: int = 256
+    """the batch size of the explore sampled from the replay buffer"""
+    explore_learning_starts: int = 512
+    """timestep to start learning in the exploration"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
@@ -108,6 +118,63 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
     return thunk
 
+def select_actions(obs, actor, device, explore_step, learning_start, envs):
+    if explore_step < learning_start:
+        return np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+    else:
+        actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
+        return actions.detach().cpu().numpy()
+
+def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer, reward_net, explore):
+    with torch.no_grad():
+        if explore:
+            real_rewards = data.rewards
+        else:
+            real_rewards = reward_net(data.observations, data.actions)
+        next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+        qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+        qf2_next_target = qf2_target(data.next_observations, next_state_actions)
+        min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+        next_q_value = real_rewards.flatten() + (1 - data.dones.flatten()) * gamma * (
+            min_qf_next_target).view(-1)
+
+    qf1_a_values = qf1(data.observations, data.actions).view(-1)
+    qf2_a_values = qf2(data.observations, data.actions).view(-1)
+    qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
+    qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
+    qf_loss = qf1_loss + qf2_loss
+
+    # optimize the model
+    q_optimizer.zero_grad()
+    qf_loss.backward()
+    q_optimizer.step()
+
+    return qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss
+
+def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
+    pi, log_pi, _ = actor.get_action(data.observations)
+    qf1_pi = qf1(data.observations, pi)
+    qf2_pi = qf2(data.observations, pi)
+    min_qf_pi = torch.min(qf1_pi, qf2_pi)
+    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
+
+    actor_optimizer.zero_grad()
+    actor_loss.backward()
+    actor_optimizer.step()
+    if args.autotune:
+        with torch.no_grad():
+            _, log_pi, _ = actor.get_action(data.observations)
+        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
+
+        a_optimizer.zero_grad()
+        alpha_loss.backward()
+        a_optimizer.step()
+        alpha = log_alpha.exp().item()
+    return actor_loss, alpha, alpha_loss
+
+def update_target_networks(source_net, target_net, tau):
+    for param, target_param in zip(source_net.parameters(), target_net.parameters()):
+        target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -243,11 +310,82 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     start_time = time.time()
 
     pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
-    reward_net = RewardNet(hidden_dim=16, env=envs).to(device)
+    reward_net = RewardNet(hidden_dim=256, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
-    # TRY NOT TO MODIFY: start the game
+    rb_exp = ReplayBuffer(
+        args.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        handle_timeout_termination=False,
+    )
+
+    # Init Teacher
+    sim_teacher = Teacher(
+        args.teacher_sim_beta,
+        args.teacher_sim_gamma,
+        args.teacher_sim_epsilon,
+        args.teacher_sim_delta_skip,
+        args.teacher_sim_delta_equal,
+        args.seed
+    )
+
+    if args.unsupervised_exploration:
+        knn_estimator = ExplorationRewardKNN(k=3)
+        obs, _ = envs.reset(seed=args.seed)
+        for explore_step in range(args.total_explore_steps):
+
+            actions = select_actions(obs, actor, device, explore_step, args.explore_learning_starts, envs)
+
+            next_obs, _, terminations, truncations, infos = envs.step(actions)
+
+            real_next_obs = next_obs.copy()
+            for idx, trunc in enumerate(truncations):
+                if trunc:
+                    real_next_obs[idx] = infos["final_observation"][idx]
+
+            intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
+            knn_estimator.update_states(next_obs)
+
+            rb_exp.add(obs, real_next_obs, actions, intrinsic_reward, terminations, infos)
+
+            obs = next_obs
+            if explore_step > args.explore_learning_starts:
+                data = rb_exp.sample(args.explore_batch_size)
+                qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
+                                                                                          qf1,
+                                                                                          qf2,
+                                                                                          qf1_target,
+                                                                                          qf2_target,
+                                                                                          alpha,
+                                                                                          args.gamma,
+                                                                                          q_optimizer,
+                                                                                          reward_net,
+                                                                                          explore=True)
+
+                if explore_step % args.policy_frequency == 0:  # TD 3 Delayed update support
+                    for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                        actor_loss = update_actor(data,
+                                                  actor,
+                                                  qf1,
+                                                  qf2,
+                                                  alpha,
+                                                  actor_optimizer)
+
+            if explore_step % args.target_network_frequency == 0:
+                update_target_networks(qf1, qf1_target, args.tau)
+                update_target_networks(qf2, qf2_target, args.tau)
+
+            if explore_step % 100 == 0:
+                writer.add_scalar("exploration/intrinsic_reward_mean", intrinsic_reward.mean(), explore_step)
+                writer.add_scalar("exploration/terminations", terminations.sum(), explore_step)
+                writer.add_scalar("exploration/state_coverage", len(knn_estimator.visited_states), explore_step)
+                print("SPS:", int(explore_step / (time.time() - start_time)))
+                writer.add_scalar("exploration/SPS", int(explore_step / (time.time() - start_time)), explore_step)
+                print(f"Exploration step: {explore_step}")
+
     obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
         ### REWARD LEARNING ###
@@ -258,15 +396,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 first_trajectory, second_trajectory = rb.sample_trajectories()
 
                 print("step", global_step, i)
-
-                sim_teacher = Teacher(
-                    args.teacher_sim_beta,
-                    args.teacher_sim_gamma,
-                    args.teacher_sim_epsilon,
-                    args.teacher_sim_delta_skip,
-                    args.teacher_sim_delta_equal,
-                    args.seed
-                )
 
                 # Create video of the two trajectories. For now, we only render if capture_video is True.
                 # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
@@ -300,12 +429,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         ### AGENT LEARNING ###
 
-        # ALGO LOGIC: put action logic here
-        if global_step < args.learning_starts:
-            actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
-        else:
-            actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
-            actions = actions.detach().cpu().numpy()
+        actions = select_actions(obs, actor, device, global_step, args.learning_starts, envs)
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(actions)
@@ -331,55 +455,30 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
             data = rb.sample(args.batch_size)
-            with torch.no_grad():
-                real_rewards = reward_net(data.observations, data.actions)
-                next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-                qf2_next_target = qf2_target(data.next_observations, next_state_actions)
-                min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-                next_q_value = real_rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (min_qf_next_target).view(-1)
-
-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
-            qf2_a_values = qf2(data.observations, data.actions).view(-1)
-            qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-            qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
-            qf_loss = qf1_loss + qf2_loss
-
-            # optimize the model
-            q_optimizer.zero_grad()
-            qf_loss.backward()
-            q_optimizer.step()
+            qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
+                                                                                      qf1,
+                                                                                      qf2,
+                                                                                      qf1_target,
+                                                                                      qf2_target,
+                                                                                      alpha,
+                                                                                      args.gamma,
+                                                                                      q_optimizer,
+                                                                                      reward_net,
+                                                                                      explore=False)
 
             if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
-                for _ in range(
-                    args.policy_frequency
-                ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    pi, log_pi, _ = actor.get_action(data.observations)
-                    qf1_pi = qf1(data.observations, pi)
-                    qf2_pi = qf2(data.observations, pi)
-                    min_qf_pi = torch.min(qf1_pi, qf2_pi)
-                    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
-
-                    actor_optimizer.zero_grad()
-                    actor_loss.backward()
-                    actor_optimizer.step()
-
-                    if args.autotune:
-                        with torch.no_grad():
-                            _, log_pi, _ = actor.get_action(data.observations)
-                        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
-
-                        a_optimizer.zero_grad()
-                        alpha_loss.backward()
-                        a_optimizer.step()
-                        alpha = log_alpha.exp().item()
+                for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                    actor_loss, alpha, alpha_loss = update_actor(data,
+                                                                 actor,
+                                                                 qf1,
+                                                                 qf2,
+                                                                 alpha,
+                                                                 actor_optimizer)
 
             # update the target networks
             if global_step % args.target_network_frequency == 0:
-                for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
-                for param, target_param in zip(qf2.parameters(), qf2_target.parameters()):
-                    target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
+                update_target_networks(qf1, qf1_target, args.tau)
+                update_target_networks(qf2, qf2_target, args.tau)
 
             if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
