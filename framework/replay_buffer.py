@@ -41,6 +41,8 @@ class ReplayBuffer(SB3ReplayBuffer):
         https://github.com/DLR-RM/stable-baselines3/issues/284
     """
 
+    ground_truth_rewards: np.ndarray
+
     def __init__(self,
         buffer_size: int,
         observation_space: spaces.Space,
@@ -53,6 +55,19 @@ class ReplayBuffer(SB3ReplayBuffer):
         super().__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs,
                          optimize_memory_usage=optimize_memory_usage,
                          handle_timeout_termination=handle_timeout_termination)
+        self.ground_truth_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+
+    def add(
+            self,
+            obs: np.ndarray,
+            next_obs: np.ndarray,
+            action: np.ndarray,
+            reward: np.ndarray,
+            done: np.ndarray,
+            infos: list[dict[str, any]],
+    ) -> None:
+        super().add(obs, next_obs, action, reward, done, infos)
+        self.ground_truth_rewards[self.pos] = np.array(reward)
 
     def sample_trajectories(self, env: Optional[VecNormalize] = None):
         """
@@ -83,6 +98,27 @@ class ReplayBuffer(SB3ReplayBuffer):
         second_trajectory = self.get_trajectory(int(starts[indices[1]]), int(ends[indices[1]]), env)
 
         return first_trajectory, second_trajectory
+
+
+    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
+        # Sample randomly the env idx
+        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
+
+        if self.optimize_memory_usage:
+            next_obs = self._normalize_obs(self.observations[(batch_inds + 1) % self.buffer_size, env_indices, :], env)
+        else:
+            next_obs = self._normalize_obs(self.next_observations[batch_inds, env_indices, :], env)
+
+        data = (
+            self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
+            self.actions[batch_inds, env_indices, :],
+            next_obs,
+            # Only use dones that are not due to timeouts
+            # deactivated by default (timeouts is initialized as an array of False)
+            (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),
+            self._normalize_reward(self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1), env),
+        )
+        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
     def get_trajectory(self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None):
         trajectory_indices = np.arange(start_idx, end_idx)
