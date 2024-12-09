@@ -73,7 +73,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         print("Done indices", done_indices)
 
         # The end indices are the done indices, including the last one.
-        ends = done_indices + 4
+        ends = done_indices + 1
 
         # Randomly select indices for the trajectories
         # Set replace=False to sample different trajectories
