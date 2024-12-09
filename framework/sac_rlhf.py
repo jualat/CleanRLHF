@@ -243,7 +243,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     start_time = time.time()
 
     pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
-    reward_net = RewardNet(hidden_dim=16, env=envs).to(device)
+    reward_net = RewardNet(hidden_dim=64, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
