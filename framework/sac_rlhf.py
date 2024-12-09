@@ -284,6 +284,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 args.teacher_feedback_batch_size,
             )
 
+            rb.relabel_rewards(reward_net)
+            print("Rewards relabeled")
+
         ### AGENT LEARNING ###
 
         # ALGO LOGIC: put action logic here

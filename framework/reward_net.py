@@ -33,6 +33,22 @@ class RewardNet(nn.Module):
         # Compute binary cross entropy loss based on human feedback
         return -torch.mean(preferences * torch.log(predictions) + (1 - preferences) * torch.log(1 - predictions))
 
+    def predict_reward(self, observations: np.ndarray, actions: np.ndarray):
+        """
+        Predict the reward for a given observation and action.
+        :param observations: The observations as a numpy array
+        :param action: The action as a numpy array
+        :return: The predicted as a numpy array
+        """
+
+        # Convert observations and actions to tensors
+        observations = torch.tensor(observations, dtype=torch.float32).to(self.fc1.weight.device)
+        actions = torch.tensor(actions, dtype=torch.float32).to(self.fc1.weight.device)
+
+        # Forward pass through the network
+        rewards = self.forward(observations, actions)
+        return rewards.cpu().detach().numpy()
+
 def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs, batch_size, env: Optional[VecNormalize] = None):
     for epoch in range(epochs):
         prefs = pref_buffer.sample(batch_size)

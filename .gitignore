@@ -1,2 +1,4 @@
 # IDE-specific files
 .idea
+#pyenv
+.python-version
