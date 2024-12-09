@@ -34,8 +34,11 @@ class ExplorationRewardKNN:
         # to process all dimensions on an equal footing, irrespective of their original distributions.
         states = (states - visited_states.mean(axis=0)) / (visited_states.std(axis=0) + 1e-8)
 
-        # Query the KDTree for distances
+        # Query the KDTree for distances.
+        # By asking for k + 1 neighbors, we ensure that the kth actual neighbor (excluding the query point itself)
+        # is included in the results.
         distances, _ = tree.query(states, k=self.k + 1)
+        # This extracts the distance to the kth actual nearest neighbor (ignoring the 0-distance self-match).
         distances_to_kth_neighbor = distances[:, -1]
 
         # Clip distances to avoid log(0)

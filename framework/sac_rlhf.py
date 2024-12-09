@@ -101,7 +101,7 @@ class Args:
     explore_batch_size: int = 256
     """the batch size of the explore sampled from the replay buffer"""
     explore_learning_starts: int = 512
-
+    """timestep to start learning in the exploration"""
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
