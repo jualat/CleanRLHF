@@ -13,11 +13,20 @@ from sympy.codegen.ast import int32
 
 from reward_net import RewardNet
 
+from typing import NamedTuple
+
+class CustomReplayBufferSamples(NamedTuple):
+    observations: torch.Tensor
+    actions: torch.Tensor
+    next_observations: torch.Tensor
+    dones: torch.Tensor
+    rewards: torch.Tensor
+    ground_truth_rewards: torch.Tensor
 
 class Trajectory(NamedTuple):
     replay_buffer_start_idx: int
     replay_buffer_end_idx: int
-    samples: ReplayBufferSamples
+    samples: CustomReplayBufferSamples
 
 
 class ReplayBuffer(SB3ReplayBuffer):
@@ -57,7 +66,7 @@ class ReplayBuffer(SB3ReplayBuffer):
                          handle_timeout_termination=handle_timeout_termination)
         self.ground_truth_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
-    def add(
+    def add_samples(
             self,
             obs: np.ndarray,
             next_obs: np.ndarray,
@@ -65,9 +74,10 @@ class ReplayBuffer(SB3ReplayBuffer):
             reward: np.ndarray,
             done: np.ndarray,
             infos: list[dict[str, any]],
+            ground_truth_rewards: np.ndarray
     ) -> None:
         super().add(obs, next_obs, action, reward, done, infos)
-        self.ground_truth_rewards[self.pos] = np.array(reward)
+        self.ground_truth_rewards[self.pos] = ground_truth_rewards
 
     def sample_trajectories(self, env: Optional[VecNormalize] = None):
         """
@@ -100,7 +110,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         return first_trajectory, second_trajectory
 
 
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
+    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> CustomReplayBufferSamples:
         # Sample randomly the env idx
         env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
 
@@ -109,16 +119,15 @@ class ReplayBuffer(SB3ReplayBuffer):
         else:
             next_obs = self._normalize_obs(self.next_observations[batch_inds, env_indices, :], env)
 
-        data = (
-            self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
-            self.actions[batch_inds, env_indices, :],
-            next_obs,
-            # Only use dones that are not due to timeouts
-            # deactivated by default (timeouts is initialized as an array of False)
-            (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),
-            self._normalize_reward(self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1), env),
+        return CustomReplayBufferSamples(
+            observations=self.to_torch(self._normalize_obs(self.observations[batch_inds, env_indices, :], env)),
+            actions=self.to_torch(self.actions[batch_inds, env_indices, :]),
+            next_observations=self.to_torch(next_obs),
+            dones=self.to_torch(
+                (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1)),
+            rewards=self.to_torch(self._normalize_reward(self.rewards[batch_inds, env_indices].reshape(-1, 1), env)),
+            ground_truth_rewards=self.to_torch(self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)),
         )
-        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
     def get_trajectory(self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None):
         trajectory_indices = np.arange(start_idx, end_idx)

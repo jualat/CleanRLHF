@@ -323,7 +323,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         for idx, trunc in enumerate(truncations):
             if trunc:
                 real_next_obs[idx] = infos["final_observation"][idx]
-        rb.add(obs, real_next_obs, actions, groundTruthRewards, terminations, infos)
+        rewards = reward_net(torch.tensor(obs, dtype=torch.float32), torch.tensor(actions, dtype=torch.float32))
+        rewards = rewards.detach().cpu().numpy() if isinstance(rewards, torch.Tensor) else rewards
+        rb.add_samples(obs, real_next_obs, actions, rewards, terminations, infos, groundTruthRewards)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
@@ -332,7 +334,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         if global_step > args.learning_starts:
             data = rb.sample(args.batch_size)
             with torch.no_grad():
-                real_rewards = reward_net(data.observations, data.actions)
+                real_rewards = data.rewards
                 next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
                 qf1_next_target = qf1_target(data.next_observations, next_state_actions)
                 qf2_next_target = qf2_target(data.next_observations, next_state_actions)

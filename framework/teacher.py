@@ -53,8 +53,8 @@ class Teacher:
             self.torch_generator = None
 
     def give_preference(self, first_trajectory: Trajectory, second_trajectory: Trajectory) -> float:
-        first_trajectory_reward = first_trajectory.samples.rewards.sum().item()
-        second_trajectory_reward = second_trajectory.samples.rewards.sum().item()
+        first_trajectory_reward = first_trajectory.samples.ground_truth_rewards.sum().item()
+        second_trajectory_reward = second_trajectory.samples.ground_truth_rewards.sum().item()
         mistake = random.random()
 
         if max(first_trajectory_reward, second_trajectory_reward) < self.delta_skip:
@@ -70,8 +70,8 @@ class Teacher:
 
     def _stochastic_preference(self, first_trajectory: Trajectory, second_trajectory: Trajectory, first_trajectory_reward, second_trajectory_reward) -> bool:
         if self.beta > 0:
-            sum1 = self.beta * torch.sum(self._trajectory_weights(first_trajectory) * first_trajectory.samples.rewards).item()
-            sum2 = self.beta * torch.sum(self._trajectory_weights(second_trajectory) * second_trajectory.samples.rewards).item()
+            sum1 = self.beta * torch.sum(self._trajectory_weights(first_trajectory) * first_trajectory.samples.ground_truth_rewards).item()
+            sum2 = self.beta * torch.sum(self._trajectory_weights(second_trajectory) * second_trajectory.samples.ground_truth_rewards).item()
 
             combine_trajectories = torch.tensor([sum1, sum2])
             p1, p2 = torch.softmax(combine_trajectories, dim=0).tolist()
@@ -87,11 +87,11 @@ class Teacher:
             return True if first_trajectory_reward > second_trajectory_reward else False
 
     def _trajectory_weights(self, trajectory: Trajectory) -> torch.Tensor:
-        h = trajectory.samples.rewards.size(dim=0)
-        timestep = torch.arange(1, h + 1).to(trajectory.samples.rewards.device).unsqueeze(-1)
+        h = trajectory.samples.ground_truth_rewards.size(dim=0)
+        timestep = torch.arange(1, h + 1).to(trajectory.samples.ground_truth_rewards.device).unsqueeze(-1)
         weights_first_trajectory = self.gamma ** (h - timestep)
 
         assert weights_first_trajectory.shape == trajectory.samples.rewards.shape, \
-            f"Shape mismatch: weights {weights_first_trajectory.shape}, rewards {trajectory.samples.rewards.shape}"
+            f"Shape mismatch: weights {weights_first_trajectory.shape}, rewards {trajectory.samples.ground_truth_rewards.shape}"
 
         return weights_first_trajectory
