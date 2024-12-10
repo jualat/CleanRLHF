@@ -11,16 +11,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 import tyro
 
-from video_recorder import VideoRecorder
-from unsupervised_exploration import ExplorationRewardKNN
-from preference_buffer import PreferenceBuffer
-from replay_buffer import ReplayBuffer
-from reward_net import RewardNet, train_reward
-from torch.utils.tensorboard import SummaryWriter
+from framework.performance_metrics import PerformanceMetrics
+from framework.preference_buffer import PreferenceBuffer
+from framework.replay_buffer import ReplayBuffer
+from framework.reward_net import RewardNet, train_reward
+from framework.teacher import Teacher
+from framework.unsupervised_exploration import ExplorationRewardKNN
+from framework.video_recorder import VideoRecorder
 
-from teacher import Teacher
 
 @dataclass
 class Args:
@@ -40,6 +41,8 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
+    measure_performance: str = None
+    """which measure performance metrics should be used"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
@@ -103,6 +106,7 @@ class Args:
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
 
+
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
@@ -118,12 +122,14 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
     return thunk
 
+
 def select_actions(obs, actor, device, explore_step, learning_start, envs):
     if explore_step < learning_start:
         return np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
     else:
         actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
         return actions.detach().cpu().numpy()
+
 
 def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer, reward_net, explore):
     with torch.no_grad():
@@ -151,6 +157,7 @@ def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_opti
 
     return qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss
 
+
 def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
     pi, log_pi, _ = actor.get_action(data.observations)
     qf1_pi = qf1(data.observations, pi)
@@ -172,15 +179,18 @@ def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
         alpha = log_alpha.exp().item()
     return actor_loss, alpha, alpha_loss
 
+
 def update_target_networks(source_net, target_net, tau):
     for param, target_param in zip(source_net.parameters(), target_net.parameters()):
         target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
+        self.fc1 = nn.Linear(
+            np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
@@ -309,10 +319,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
+    pref_buffer = PreferenceBuffer(
+        (args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
     reward_net = RewardNet(hidden_dim=256, env=envs).to(device)
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
+    metrics = PerformanceMetrics()
 
     rb_exp = ReplayBuffer(
         args.buffer_size,
@@ -489,6 +501,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
                 if args.autotune:
                     writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
+                if args.measure_performance == "pearson":
+                    metrics.add_rewards(
+                        np.concatenate(reward_net(data.observations, data.actions).detach().cpu().numpy(), axis=0),
+                        np.concatenate(data.rewards.detach().cpu().numpy(), axis=0)
+                    )
+                    pearson_corr = metrics.compute_pearson_correlation()
+                    writer.add_scalar("charts/pearson_correlation", pearson_corr, global_step)
+                    print(f"Pearson Correlation: {pearson_corr}")
+                    # metrics.reset()
 
     envs.close()
     writer.close()
