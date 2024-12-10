@@ -7,17 +7,24 @@ from typing import Union, Optional, NamedTuple
 
 from numpy import dtype
 from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
-from stable_baselines3.common.type_aliases import ReplayBufferSamples
 from stable_baselines3.common.vec_env import VecNormalize
 from sympy.codegen.ast import int32
 
 from reward_net import RewardNet
 
 
+class ReplayBufferSampleHF(NamedTuple):
+    observations: torch.Tensor
+    actions: torch.Tensor
+    next_observations: torch.Tensor
+    dones: torch.Tensor
+    rewards: torch.Tensor
+    ground_truth_rewards: torch.Tensor
+
 class Trajectory(NamedTuple):
     replay_buffer_start_idx: int
     replay_buffer_end_idx: int
-    samples: ReplayBufferSamples
+    samples: ReplayBufferSampleHF
 
 
 class ReplayBuffer(SB3ReplayBuffer):
@@ -41,7 +48,6 @@ class ReplayBuffer(SB3ReplayBuffer):
         https://github.com/DLR-RM/stable-baselines3/issues/284
     """
 
-    ground_truth_rewards: np.ndarray
 
     def __init__(self,
         buffer_size: int,
@@ -63,11 +69,12 @@ class ReplayBuffer(SB3ReplayBuffer):
             next_obs: np.ndarray,
             action: np.ndarray,
             reward: np.ndarray,
+            ground_truth_rewards: np.ndarray,
             done: np.ndarray,
             infos: list[dict[str, any]],
     ) -> None:
         super().add(obs, next_obs, action, reward, done, infos)
-        self.ground_truth_rewards[self.pos] = np.array(reward)
+        self.ground_truth_rewards[self.pos] = ground_truth_rewards
 
     def sample_trajectories(self, env: Optional[VecNormalize] = None):
         """
@@ -100,7 +107,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         return first_trajectory, second_trajectory
 
 
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSamples:
+    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSampleHF:
         # Sample randomly the env idx
         env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
 
@@ -109,16 +116,14 @@ class ReplayBuffer(SB3ReplayBuffer):
         else:
             next_obs = self._normalize_obs(self.next_observations[batch_inds, env_indices, :], env)
 
-        data = (
-            self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
-            self.actions[batch_inds, env_indices, :],
-            next_obs,
-            # Only use dones that are not due to timeouts
-            # deactivated by default (timeouts is initialized as an array of False)
-            (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),
-            self._normalize_reward(self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1), env),
+        return ReplayBufferSampleHF(
+            observations = self.to_torch(self._normalize_obs(self.observations[batch_inds, env_indices, :], env)),
+            actions = self.to_torch(self.actions[batch_inds, env_indices, :]),
+            next_observations = self.to_torch(next_obs),
+            dones = self.to_torch((self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1)),
+            rewards =  self.to_torch(self._normalize_reward(self.rewards[batch_inds, env_indices].reshape(-1, 1), env)),
+            ground_truth_rewards = self.to_torch(self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)),
         )
-        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
     def get_trajectory(self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None):
         trajectory_indices = np.arange(start_idx, end_idx)
