@@ -441,7 +441,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs[idx] = infos["final_observation"][idx]
 
         rewards = reward_net.predict_reward(obs, actions)
-        rewards = rewards.detach().cpu().numpy()
         rb.add(obs, real_next_obs, actions, rewards, groundTruthRewards, terminations, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
