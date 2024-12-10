@@ -339,7 +339,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             actions = select_actions(obs, actor, device, explore_step, args.explore_learning_starts, envs)
 
-            next_obs, _, terminations, truncations, infos = envs.step(actions)
+            next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(actions)
 
             real_next_obs = next_obs.copy()
             for idx, trunc in enumerate(truncations):
@@ -349,7 +349,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
 
-            rb_exp.add(obs, real_next_obs, actions, intrinsic_reward, terminations, infos)
+            rb_exp.add(obs, real_next_obs, actions, intrinsic_reward, ground_truth_reward, terminations, infos)
 
             obs = next_obs
             if explore_step > args.explore_learning_starts:
@@ -447,7 +447,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         for idx, trunc in enumerate(truncations):
             if trunc:
                 real_next_obs[idx] = infos["final_observation"][idx]
-        rb.add(obs, real_next_obs, actions, groundTruthRewards, terminations, infos)
+
+        rewards = reward_net.predict_reward(obs, actions)
+        rb.add(obs, real_next_obs, actions, rewards, groundTruthRewards, terminations, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
