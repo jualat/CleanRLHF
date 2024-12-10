@@ -314,14 +314,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
-    rb_exp = ReplayBuffer(
-        args.buffer_size,
-        envs.single_observation_space,
-        envs.single_action_space,
-        device,
-        handle_timeout_termination=False,
-    )
-
     # Init Teacher
     sim_teacher = Teacher(
         args.teacher_sim_beta,
@@ -339,7 +331,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             actions = select_actions(obs, actor, device, explore_step, args.explore_learning_starts, envs)
 
-            next_obs, _, terminations, truncations, infos = envs.step(actions)
+            next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(actions)
 
             real_next_obs = next_obs.copy()
             for idx, trunc in enumerate(truncations):
@@ -349,11 +341,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
 
-            rb_exp.add(obs, real_next_obs, actions, intrinsic_reward, terminations, infos)
+            rb.add(obs, real_next_obs, actions, intrinsic_reward, ground_truth_reward, terminations, infos)
 
             obs = next_obs
             if explore_step > args.explore_learning_starts:
-                data = rb_exp.sample(args.explore_batch_size)
+                data = rb.sample(args.explore_batch_size)
                 qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
                                                                                           qf1,
                                                                                           qf2,
@@ -424,6 +416,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 args.teacher_feedback_batch_size,
             )
 
+            rb.relabel_rewards(reward_net)
+            print("Rewards relabeled")
+
         ### AGENT LEARNING ###
 
         actions = select_actions(obs, actor, device, global_step, args.learning_starts, envs)
@@ -444,7 +439,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         for idx, trunc in enumerate(truncations):
             if trunc:
                 real_next_obs[idx] = infos["final_observation"][idx]
-        rb.add(obs, real_next_obs, actions, groundTruthRewards, terminations, infos)
+
+        rewards = reward_net.predict_reward(obs, actions)
+        rewards = rewards.detach().cpu().numpy()
+        rb.add(obs, real_next_obs, actions, rewards, groundTruthRewards, terminations, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
