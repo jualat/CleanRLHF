@@ -17,9 +17,9 @@ stable-baselines3 = "2.0.0"
 tensorboard = "^2.10.0"
 torch = ">=1.12.1"
 tyro = "^0.5.10"
+numpy = "<2.0"
 wandb = "^0.13.11"
 scipy = ">=1.14.1"
-
 
 [build-system]
 requires = ["poetry-core"]
