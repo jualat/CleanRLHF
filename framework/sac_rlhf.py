@@ -74,7 +74,7 @@ class Args:
     """the frequency of teacher feedback (every K iterations)"""
     teacher_feedback_num_queries_per_session: int = 500
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 200
+    teacher_update_epochs: int = 20
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
