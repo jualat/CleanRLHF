@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
-def gen_reward_net(hidden_dim = 256, layers = 2, env=None):
+def gen_reward_net(hidden_dim, layers = 4, env=None):
     reward_net = [nn.Linear(
         np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape),
                   hidden_dim)]
@@ -20,38 +20,27 @@ def gen_reward_net(hidden_dim = 256, layers = 2, env=None):
 class RewardNet(nn.Module):
     def __init__(self, env, hidden_dim):
         super(RewardNet, self).__init__()
-        self.ensemble = []
-        paramlst = []
+        self.ensemble = nn.ModuleList()
 
         for _ in range(3):
             model = nn.Sequential(*gen_reward_net(hidden_dim, env=env))
             self.ensemble.append(model)
-            paramlst.extend(model.parameters())
-
-        self.parameters = nn.ParameterList(paramlst)
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
-        x0 = self.ensemble[0](x)
-        x1 = self.ensemble[1](x)
-        x2 = self.ensemble[2](x)
-        #print(f"x0:{x0}, x1:{x1}, x2:{x2}")
-        return torch.mean(torch.stack([x0, x1, x2]), 0)
+        y = [model(x) for model in self.ensemble]
+        y = torch.stack(y, dim=0)
+        return torch.mean(y, dim=0)
 
     def preference_prob(self, r1, r2):
         # Probability based on Bradley-Terry model
         # r_{1,2} shape: (num_steps,)
-
-        if not r1.numel() == 0:
-            exp1 = torch.exp(torch.clamp(torch.sum(r1)-torch.max(r1), max=85))
-        else: exp1 = torch.tensor(0.0001)
-        if  not r2.numel() == 0:
-            exp2 = torch.exp(torch.clamp(torch.sum(r2)-torch.max(r2), max=85))
-        else: exp2 = torch.tensor(0.0001)
-
-        prob1 = exp1 / (exp1 + exp2)
-        assert 0 <= prob1 <= 1
-        return prob1
+        softmax = nn.Softmax(dim=0)
+        exp1 = torch.sum(r1)
+        exp2 = torch.sum(r2)
+        prob = softmax(torch.tensor([exp1, exp2]))
+        assert 0 <= prob[0] <= 1
+        return prob[0]
 
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
         # Compute binary cross entropy loss based on human feedback
@@ -84,22 +73,27 @@ def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs,
 
             t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
             t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
+            ensemble_loss = 0.0
 
-            optimizer.zero_grad()
+            for single_model in model.ensemble:
+                optimizer.zero_grad()
 
-            r1 = model(t1.samples.observations, t1.samples.actions)
-            r2 = model(t2.samples.observations, t2.samples.actions)
+                r1 = single_model(torch.cat([t1.samples.observations, t1.samples.actions], dim=1))
+                r2 = single_model(torch.cat([t2.samples.observations, t2.samples.actions], dim=1))
 
-            prediction = model.preference_prob(r1, r2)
-            prediction = prediction.clone().detach().requires_grad_(True)
+                prediction = model.preference_prob(r1, r2)
+                prediction = prediction.clone().detach().requires_grad_(True)
 
-            loss = model.preference_loss(prediction, pref)
-            assert loss != float('inf')
-            loss.backward()
+                loss = model.preference_loss(prediction, pref)
+                assert loss != float('inf')
+                ensemble_loss += loss
+
+            ensemble_loss /= len(model.ensemble)
+            ensemble_loss.backward()
             optimizer.step()
-            total_loss += loss.item()
+            total_loss += ensemble_loss.item()
 
-            writer.add_scalar("losses/reward_loss", loss.item(), global_step)
+            writer.add_scalar("losses/reward_loss", ensemble_loss.item(), global_step)
 
         if epoch % 10 == 0:
             print(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
