@@ -36,7 +36,7 @@ class RewardNet(nn.Module):
         x1 = self.ensemble[1](x)
         x2 = self.ensemble[2](x)
         #print(f"x0:{x0}, x1:{x1}, x2:{x2}")
-        return x0
+        return torch.mean(torch.stack([x0, x1, x2]), 0)
 
     def preference_prob(self, r1, r2):
         # Probability based on Bradley-Terry model
