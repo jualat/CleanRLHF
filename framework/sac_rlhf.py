@@ -40,6 +40,9 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
+    num_envs: int = 12
+    """the number of parallel environments to accelerate training. 
+    Set this to the number of available CPU threads for best performance."""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
@@ -72,9 +75,9 @@ class Args:
     # Human feedback arguments
     teacher_feedback_frequency: int = 5000
     """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 500
+    teacher_feedback_num_queries_per_session: int = 100
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 200
+    teacher_update_epochs: int = 20
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
@@ -275,7 +278,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name)])
+    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, 0, args.capture_video, run_name) for _ in range(args.num_envs)])
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
