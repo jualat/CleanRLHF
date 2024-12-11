@@ -188,8 +188,7 @@ def update_target_networks(source_net, target_net, tau):
 
 def save_model_all(run_name: str, step: int,  state_dict: dict):
     model_folder = f"./models/{run_name}/{step}"
-    if not os.path.exists(model_folder):
-        os.makedirs(model_folder)
+    os.makedirs(model_folder, exist_ok=True)
     out_path = f"{model_folder}/checkpoint.pth"
 
     total_state_dict = {name: obj.state_dict() for name, obj in state_dict.items()}
@@ -206,8 +205,7 @@ def load_model_all(state_dict: dict, path: str, device):
 
 def save_replay_buffer(run_name: str, step:int, replay_buffer :ReplayBuffer):
     model_folder = f"./models/{run_name}/{step}"
-    if not os.path.exists(model_folder):
-        os.makedirs(model_folder)
+    os.makedirs(model_folder, exist_ok=True)
     out_path = f"{model_folder}/replay_buffer.pth"
 
     buffer_data = {
@@ -385,9 +383,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed
     )
-
+    current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
         knn_estimator = ExplorationRewardKNN(k=3)
+        current_step += 1
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in range(args.total_explore_steps):
 
@@ -483,116 +482,140 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             device = device
         )
 
+    try:
+        obs, _ = envs.reset(seed=args.seed)
+        for global_step in range(args.total_timesteps):
+            ### REWARD LEARNING ###
+            current_step += 1
+            # If we pre-train we can start at step 0 with training our rewards
+            if global_step % args.teacher_feedback_frequency == 0 and \
+                    (global_step != 0 or args.exploration_load or args.unsupervised_exploration):
+                for i in range(args.teacher_feedback_num_queries_per_session):
+                    # Sample trajectories from replay buffer to query teacher
+                    first_trajectory, second_trajectory = rb.sample_trajectories()
 
-    obs, _ = envs.reset(seed=args.seed)
-    for global_step in range(args.total_timesteps):
-        ### REWARD LEARNING ###
-        # If we pre-train we can start at step 0 with training our rewards
-        if global_step % args.teacher_feedback_frequency == 0 and \
-                (global_step != 0 or args.exploration_load or args.unsupervised_exploration):
-            for i in range(args.teacher_feedback_num_queries_per_session):
-                # Sample trajectories from replay buffer to query teacher
-                first_trajectory, second_trajectory = rb.sample_trajectories()
+                    print("step", global_step, i)
 
-                print("step", global_step, i)
+                    # Create video of the two trajectories. For now, we only render if capture_video is True.
+                    # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
+                    if args.capture_video:
+                        video_recorder.record_trajectory(first_trajectory, run_name)
+                        video_recorder.record_trajectory(second_trajectory, run_name)
 
-                # Create video of the two trajectories. For now, we only render if capture_video is True.
-                # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                if args.capture_video:
-                    video_recorder.record_trajectory(first_trajectory, run_name)
-                    video_recorder.record_trajectory(second_trajectory, run_name)
+                    # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
+                    preference = sim_teacher.give_preference(first_trajectory, second_trajectory)
 
-                # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                preference = sim_teacher.give_preference(first_trajectory, second_trajectory)
+                    # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
+                    if preference is None:
+                        continue
 
-                # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
-                if preference is None:
-                    continue
+                    # Store preferences
+                    pref_buffer.add(first_trajectory, second_trajectory, preference)
 
-                # Store preferences
-                pref_buffer.add(first_trajectory, second_trajectory, preference)
+                train_reward(
+                    reward_net,
+                    reward_optimizer,
+                    writer,
+                    pref_buffer,
+                    rb,
+                    global_step,
+                    args.teacher_update_epochs,
+                    args.teacher_feedback_batch_size,
+                )
 
-            train_reward(
-                reward_net,
-                reward_optimizer,
-                writer,
-                pref_buffer,
-                rb,
-                global_step,
-                args.teacher_update_epochs,
-                args.teacher_feedback_batch_size,
-            )
+                rb.relabel_rewards(reward_net)
+                print("Rewards relabeled")
 
-            rb.relabel_rewards(reward_net)
-            print("Rewards relabeled")
+            ### AGENT LEARNING ###
 
-        ### AGENT LEARNING ###
+            actions = select_actions(obs, actor, device, global_step, args.learning_starts, envs)
 
-        actions = select_actions(obs, actor, device, global_step, args.learning_starts, envs)
+            # TRY NOT TO MODIFY: execute the game and log data.
+            next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(actions)
 
-        # TRY NOT TO MODIFY: execute the game and log data.
-        next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(actions)
+            # TRY NOT TO MODIFY: record rewards for plotting purposes
+            if infos and "final_info" in infos:
+                for info in infos["final_info"]:
+                    if info:
+                        print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
+                        writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
+                        writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+                        break
 
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        if infos and "final_info" in infos:
-            for info in infos["final_info"]:
-                if info:
-                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                    writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-                    break
+            # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+            real_next_obs = next_obs.copy()
+            for idx, trunc in enumerate(truncations):
+                if trunc:
+                    real_next_obs[idx] = infos["final_observation"][idx]
 
-        # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
-        real_next_obs = next_obs.copy()
-        for idx, trunc in enumerate(truncations):
-            if trunc:
-                real_next_obs[idx] = infos["final_observation"][idx]
+            rewards = reward_net.predict_reward(obs, actions)
+            rb.add(obs, real_next_obs, actions, rewards.squeeze(), groundTruthRewards, terminations, infos)
 
-        rewards = reward_net.predict_reward(obs, actions)
-        rb.add(obs, real_next_obs, actions, rewards.squeeze(), groundTruthRewards, terminations, infos)
+            # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
+            obs = next_obs
 
-        # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
-        obs = next_obs
+            # ALGO LOGIC: training.
+            if global_step > args.learning_starts:
+                data = rb.sample(args.batch_size)
+                qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
+                                                                                          qf1,
+                                                                                          qf2,
+                                                                                          qf1_target,
+                                                                                          qf2_target,
+                                                                                          alpha,
+                                                                                          args.gamma,
+                                                                                          q_optimizer
+                                                                                          )
 
-        # ALGO LOGIC: training.
-        if global_step > args.learning_starts:
-            data = rb.sample(args.batch_size)
-            qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
-                                                                                      qf1,
-                                                                                      qf2,
-                                                                                      qf1_target,
-                                                                                      qf2_target,
-                                                                                      alpha,
-                                                                                      args.gamma,
-                                                                                      q_optimizer
-                                                                                      )
+                if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
+                    for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                        actor_loss, alpha, alpha_loss = update_actor(data,
+                                                                     actor,
+                                                                     qf1,
+                                                                     qf2,
+                                                                     alpha,
+                                                                     actor_optimizer)
 
-            if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
-                for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    actor_loss, alpha, alpha_loss = update_actor(data,
-                                                                 actor,
-                                                                 qf1,
-                                                                 qf2,
-                                                                 alpha,
-                                                                 actor_optimizer)
+                # update the target networks
+                if global_step % args.target_network_frequency == 0:
+                    update_target_networks(qf1, qf1_target, args.tau)
+                    update_target_networks(qf2, qf2_target, args.tau)
 
-            # update the target networks
-            if global_step % args.target_network_frequency == 0:
-                update_target_networks(qf1, qf1_target, args.tau)
-                update_target_networks(qf2, qf2_target, args.tau)
+                if global_step % 100 == 0:
+                    writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
+                    writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
+                    writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
+                    writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
+                    writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
+                    writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
+                    writer.add_scalar("losses/alpha", alpha, global_step)
+                    print("SPS:", int(global_step / (time.time() - start_time)))
+                    writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+                    if args.autotune:
+                        writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
 
-            if global_step % 100 == 0:
-                writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
-                writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
-                writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
-                writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
-                writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
-                writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                writer.add_scalar("losses/alpha", alpha, global_step)
-                print("SPS:", int(global_step / (time.time() - start_time)))
-                writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
-                if args.autotune:
-                    writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
-
-    envs.close()
-    writer.close()
+    except KeyboardInterrupt:
+        state_dict = {
+            "actor": actor,
+            "qf1": qf1,
+            "qf2": qf2,
+            "qf1_target": qf1_target,
+            "qf2_target": qf2_target,
+            "reward_net": reward_net,
+            "q_optimizer": q_optimizer,
+            "actor_optimizer": actor_optimizer,
+            "reward_optimizer": reward_optimizer
+        }
+        save_model_all(
+            run_name,
+            current_step,
+            state_dict
+        )
+        save_replay_buffer(
+            run_name,
+            current_step,
+            rb
+        )
+    finally:
+        envs.close()
+        writer.close()

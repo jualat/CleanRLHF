@@ -41,7 +41,7 @@ class RewardNet(nn.Module):
         """
         Predict the reward for a given observation and action.
         :param observations: The observations as a numpy array
-        :param action: The action as a numpy array
+        :param actions: The action as a numpy array
         :return: The predicted as a numpy array
         """
 
