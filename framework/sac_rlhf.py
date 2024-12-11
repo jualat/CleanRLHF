@@ -483,8 +483,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
         ### REWARD LEARNING ###
-
-        if global_step != 0 and global_step % args.teacher_feedback_frequency == 0:
+        # If we pre-train we can start at step 0 with training our rewards
+        if global_step % args.teacher_feedback_frequency == 0 and \
+                (global_step != 0 or args.exploration_load or args.unsupervised_exploration):
             for i in range(args.teacher_feedback_num_queries_per_session):
                 # Sample trajectories from replay buffer to query teacher
                 first_trajectory, second_trajectory = rb.sample_trajectories()
