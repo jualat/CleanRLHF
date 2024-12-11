@@ -7,3 +7,6 @@ videos/
 
 # Logs
 runs/
+
+# Models
+models/

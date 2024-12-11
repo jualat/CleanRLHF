@@ -12,6 +12,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import tyro
+import pickle
+import gzip
 
 from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
@@ -19,7 +21,6 @@ from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from torch.utils.tensorboard import SummaryWriter
-
 from teacher import Teacher
 
 @dataclass
@@ -103,6 +104,15 @@ class Args:
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
 
+    # Load Model
+    exploration_load: bool = False
+    """skip exploration and load the pre-trained model and buffer from a file"""
+    path_to_replay_buffer: str = ""
+    """path to replay buffer"""
+    path_to_model: str = ""
+    """path to model"""
+
+
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
@@ -118,19 +128,16 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
     return thunk
 
-def select_actions(obs, actor, device, explore_step, learning_start, envs):
-    if explore_step < learning_start:
+def select_actions(obs, actor, device, step, learning_start, envs):
+    if step < learning_start:
         return np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
     else:
         actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
         return actions.detach().cpu().numpy()
 
-def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer, reward_net, explore):
+def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer):
     with torch.no_grad():
-        if explore:
-            real_rewards = data.rewards
-        else:
-            real_rewards = reward_net(data.observations, data.actions)
+        real_rewards = data.rewards
         next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
         qf1_next_target = qf1_target(data.next_observations, next_state_actions)
         qf2_next_target = qf2_target(data.next_observations, next_state_actions)
@@ -175,6 +182,57 @@ def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
 def update_target_networks(source_net, target_net, tau):
     for param, target_param in zip(source_net.parameters(), target_net.parameters()):
         target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
+def save_model_all(run_name: str, step: int,  state_dict: dict):
+    model_folder = f"./models/{run_name}/{step}"
+    if not os.path.exists(model_folder):
+        os.makedirs(model_folder)
+    out_path = f"{model_folder}/checkpoint.pth"
+
+    total_state_dict = {name: obj.state_dict() for name, obj in state_dict.items()}
+    torch.save(total_state_dict, out_path)
+    print(f"Saved all models and optimizers to {out_path}")
+
+def load_model_all(state_dict: dict, path: str, device):
+    assert os.path.exists(path), "Path to model does not exist"
+    checkpoint = torch.load(path, device)
+    for name, obj in state_dict.items():
+        if name in checkpoint:
+            obj.load_state_dict(checkpoint[name])
+    print(f"Models and optimizers loaded from {path}")
+
+def save_replay_buffer(run_name: str, step:int, replay_buffer :ReplayBuffer):
+    model_folder = f"./models/{run_name}/{step}"
+    if not os.path.exists(model_folder):
+        os.makedirs(model_folder)
+    out_path = f"{model_folder}/replay_buffer.pth"
+
+    buffer_data = {
+        "observations": replay_buffer.observations,
+        "next_observations": replay_buffer.next_observations,
+        "actions": replay_buffer.actions,
+        "rewards": replay_buffer.rewards,
+        "ground_truth_rewards": replay_buffer.ground_truth_rewards,
+        "dones": replay_buffer.dones,
+    }
+    with gzip.open(out_path, "wb") as f:
+        pickle.dump(buffer_data, f)
+    print(f"Saved replay buffer to {out_path}")
+
+def load_replay_buffer(replay_buffer: ReplayBuffer, path:str):
+    assert os.path.exists(path), "Path to replay buffer does not exist"
+    with gzip.open(path, "rb") as f:
+        buffer_data = pickle.load(f)
+
+    replay_buffer.observations = buffer_data["observations"]
+    replay_buffer.next_observations = buffer_data["next_observations"]
+    replay_buffer.actions = buffer_data["actions"]
+    replay_buffer.rewards = buffer_data["rewards"]
+    replay_buffer.ground_truth_rewards = buffer_data["ground_truth_rewards"]
+    replay_buffer.dones = buffer_data["dones"]
+
+    print(f"Replay buffer loaded from {path}")
+
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
@@ -324,7 +382,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.seed
     )
 
-    if args.unsupervised_exploration:
+    if args.unsupervised_exploration and not args.exploration_load:
         knn_estimator = ExplorationRewardKNN(k=3)
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in range(args.total_explore_steps):
@@ -353,9 +411,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                                                                                           qf2_target,
                                                                                           alpha,
                                                                                           args.gamma,
-                                                                                          q_optimizer,
-                                                                                          reward_net,
-                                                                                          explore=True)
+                                                                                          q_optimizer
+                                                                                          )
 
                 if explore_step % args.policy_frequency == 0:  # TD 3 Delayed update support
                     for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
@@ -377,6 +434,51 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 print("SPS:", int(explore_step / (time.time() - start_time)))
                 writer.add_scalar("exploration/SPS", int(explore_step / (time.time() - start_time)), explore_step)
                 print(f"Exploration step: {explore_step}")
+
+        state_dict = {
+            "actor": actor,
+            "qf1": qf1,
+            "qf2": qf2,
+            "qf1_target": qf1_target,
+            "qf2_target": qf2_target,
+            "reward_net": reward_net,
+            "q_optimizer": q_optimizer,
+            "actor_optimizer": actor_optimizer,
+            "reward_optimizer": reward_optimizer
+        }
+        save_model_all(
+            run_name,
+            args.total_explore_steps,
+            state_dict
+        )
+        save_replay_buffer(
+            run_name,
+            args.total_explore_steps,
+            rb
+        )
+
+    if args.exploration_load:
+        load_replay_buffer(
+            rb,
+            path = args.path_to_replay_buffer
+        )
+        state_dict = {
+            "actor": actor,
+            "qf1": qf1,
+            "qf2": qf2,
+            "qf1_target": qf1_target,
+            "qf2_target": qf2_target,
+            "reward_net": reward_net,
+            "q_optimizer": q_optimizer,
+            "actor_optimizer": actor_optimizer,
+            "reward_optimizer": reward_optimizer
+        }
+        load_model_all(
+            state_dict,
+            path = args.path_to_model,
+            device = device
+        )
+
 
     obs, _ = envs.reset(seed=args.seed)
     for global_step in range(args.total_timesteps):
@@ -456,9 +558,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                                                                                       qf2_target,
                                                                                       alpha,
                                                                                       args.gamma,
-                                                                                      q_optimizer,
-                                                                                      reward_net,
-                                                                                      explore=False)
+                                                                                      q_optimizer
+                                                                                      )
 
             if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
                 for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
