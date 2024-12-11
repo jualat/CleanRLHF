@@ -22,6 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from teacher import Teacher
 
+
 @dataclass
 class Args:
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
@@ -106,6 +107,7 @@ class Args:
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
 
+
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         if capture_video and idx == 0:
@@ -121,25 +123,45 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
     return thunk
 
+
 def select_actions(obs, actor, device, explore_step, learning_start, envs):
     if explore_step < learning_start:
-        return np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
+        return np.array(
+            [envs.single_action_space.sample() for _ in range(envs.num_envs)]
+        )
     else:
         actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
         return actions.detach().cpu().numpy()
 
-def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer, reward_net, explore):
+
+def train_q_network(
+    data,
+    qf1,
+    qf2,
+    qf1_target,
+    qf2_target,
+    alpha,
+    gamma,
+    q_optimizer,
+    reward_net,
+    explore,
+):
     with torch.no_grad():
         if explore:
             real_rewards = data.rewards
         else:
             real_rewards = reward_net(data.observations, data.actions)
-        next_state_actions, next_state_log_pi, _ = actor.get_action(data.next_observations)
+        next_state_actions, next_state_log_pi, _ = actor.get_action(
+            data.next_observations
+        )
         qf1_next_target = qf1_target(data.next_observations, next_state_actions)
         qf2_next_target = qf2_target(data.next_observations, next_state_actions)
-        min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+        min_qf_next_target = (
+            torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
+        )
         next_q_value = real_rewards.flatten() + (1 - data.dones.flatten()) * gamma * (
-            min_qf_next_target).view(-1)
+            min_qf_next_target
+        ).view(-1)
 
     qf1_a_values = qf1(data.observations, data.actions).view(-1)
     qf2_a_values = qf2(data.observations, data.actions).view(-1)
@@ -153,6 +175,7 @@ def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_opti
     q_optimizer.step()
 
     return qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss
+
 
 def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
     pi, log_pi, _ = actor.get_action(data.observations)
@@ -175,15 +198,21 @@ def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
         alpha = log_alpha.exp().item()
     return actor_loss, alpha, alpha_loss
 
+
 def update_target_networks(source_net, target_net, tau):
     for param, target_param in zip(source_net.parameters(), target_net.parameters()):
         target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256)
+        self.fc1 = nn.Linear(
+            np.array(env.single_observation_space.shape).prod()
+            + np.prod(env.single_action_space.shape),
+            256,
+        )
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
@@ -208,10 +237,18 @@ class Actor(nn.Module):
         self.fc_logstd = nn.Linear(256, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
-            "action_scale", torch.tensor((env.single_action_space.high - env.single_action_space.low) / 2.0, dtype=torch.float32)
+            "action_scale",
+            torch.tensor(
+                (env.single_action_space.high - env.single_action_space.low) / 2.0,
+                dtype=torch.float32,
+            ),
         )
         self.register_buffer(
-            "action_bias", torch.tensor((env.single_action_space.high + env.single_action_space.low) / 2.0, dtype=torch.float32)
+            "action_bias",
+            torch.tensor(
+                (env.single_action_space.high + env.single_action_space.low) / 2.0,
+                dtype=torch.float32,
+            ),
         )
 
     def forward(self, x):
@@ -220,7 +257,9 @@ class Actor(nn.Module):
         mean = self.fc_mean(x)
         log_std = self.fc_logstd(x)
         log_std = torch.tanh(log_std)
-        log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (log_std + 1)  # From SpinUp / Denis Yarats
+        log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (
+            log_std + 1
+        )  # From SpinUp / Denis Yarats
 
         return mean, log_std
 
@@ -266,7 +305,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+        "|param|value|\n|-|-|\n%s"
+        % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
 
     # TRY NOT TO MODIFY: seeding
@@ -278,8 +318,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, args.seed, i, args.capture_video, run_name) for i in range(args.num_envs)])
-    assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
+    envs = gym.vector.SyncVectorEnv(
+        [
+            make_env(args.env_id, args.seed, i, args.capture_video, run_name)
+            for i in range(args.num_envs)
+        ]
+    )
+    assert isinstance(
+        envs.single_action_space, gym.spaces.Box
+    ), "only continuous action space is supported"
 
     max_action = float(envs.single_action_space.high[0])
 
@@ -290,12 +337,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     qf2_target = SoftQNetwork(envs).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
-    q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
+    q_optimizer = optim.Adam(
+        list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr
+    )
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
 
     # Automatic entropy tuning
     if args.autotune:
-        target_entropy = -torch.prod(torch.Tensor(envs.single_action_space.shape).to(device)).item()
+        target_entropy = -torch.prod(
+            torch.Tensor(envs.single_action_space.shape).to(device)
+        ).item()
         log_alpha = torch.zeros(1, requires_grad=True, device=device)
         alpha = log_alpha.exp().item()
         a_optimizer = optim.Adam([log_alpha], lr=args.q_lr)
@@ -313,9 +364,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    pref_buffer = PreferenceBuffer((args.buffer_size // args.teacher_feedback_frequency) * args.teacher_feedback_num_queries_per_session)
+    pref_buffer = PreferenceBuffer(
+        (args.buffer_size // args.teacher_feedback_frequency)
+        * args.teacher_feedback_num_queries_per_session
+    )
     reward_net = RewardNet(hidden_dim=256, env=envs).to(device)
-    reward_optimizer = optim.Adam(reward_net.parameters(), lr=args.teacher_learning_rate)
+    reward_optimizer = optim.Adam(
+        reward_net.parameters(), lr=args.teacher_learning_rate
+    )
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
     # Init Teacher
@@ -325,7 +381,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_epsilon,
         args.teacher_sim_delta_skip,
         args.teacher_sim_delta_equal,
-        args.seed
+        args.seed,
     )
 
     if args.unsupervised_exploration:
@@ -333,9 +389,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in range(args.total_explore_steps):
 
-            actions = select_actions(obs, actor, device, explore_step, args.explore_learning_starts, envs)
+            actions = select_actions(
+                obs, actor, device, explore_step, args.explore_learning_starts, envs
+            )
 
-            next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(actions)
+            next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(
+                actions
+            )
 
             real_next_obs = next_obs.copy()
             for idx, trunc in enumerate(truncations):
@@ -345,41 +405,72 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
 
-            rb.add(obs, real_next_obs, actions, intrinsic_reward, ground_truth_reward, terminations, infos)
+            rb.add(
+                obs,
+                real_next_obs,
+                actions,
+                intrinsic_reward,
+                ground_truth_reward,
+                terminations,
+                infos,
+            )
 
             obs = next_obs
             if explore_step > args.explore_learning_starts:
                 data = rb.sample(args.explore_batch_size)
-                qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
-                                                                                          qf1,
-                                                                                          qf2,
-                                                                                          qf1_target,
-                                                                                          qf2_target,
-                                                                                          alpha,
-                                                                                          args.gamma,
-                                                                                          q_optimizer,
-                                                                                          reward_net,
-                                                                                          explore=True)
+                (
+                    qf_loss,
+                    qf1_a_values,
+                    qf2_a_values,
+                    qf1_loss,
+                    qf2_loss,
+                ) = train_q_network(
+                    data,
+                    qf1,
+                    qf2,
+                    qf1_target,
+                    qf2_target,
+                    alpha,
+                    args.gamma,
+                    q_optimizer,
+                    reward_net,
+                    explore=True,
+                )
 
-                if explore_step % args.policy_frequency == 0:  # TD 3 Delayed update support
-                    for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                        actor_loss = update_actor(data,
-                                                  actor,
-                                                  qf1,
-                                                  qf2,
-                                                  alpha,
-                                                  actor_optimizer)
+                if (
+                    explore_step % args.policy_frequency == 0
+                ):  # TD 3 Delayed update support
+                    for _ in range(
+                        args.policy_frequency
+                    ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                        actor_loss = update_actor(
+                            data, actor, qf1, qf2, alpha, actor_optimizer
+                        )
 
             if explore_step % args.target_network_frequency == 0:
                 update_target_networks(qf1, qf1_target, args.tau)
                 update_target_networks(qf2, qf2_target, args.tau)
 
             if explore_step % 100 == 0:
-                writer.add_scalar("exploration/intrinsic_reward_mean", intrinsic_reward.mean(), explore_step)
-                writer.add_scalar("exploration/terminations", terminations.sum(), explore_step)
-                writer.add_scalar("exploration/state_coverage", len(knn_estimator.visited_states), explore_step)
+                writer.add_scalar(
+                    "exploration/intrinsic_reward_mean",
+                    intrinsic_reward.mean(),
+                    explore_step,
+                )
+                writer.add_scalar(
+                    "exploration/terminations", terminations.sum(), explore_step
+                )
+                writer.add_scalar(
+                    "exploration/state_coverage",
+                    len(knn_estimator.visited_states),
+                    explore_step,
+                )
                 print("SPS:", int(explore_step / (time.time() - start_time)))
-                writer.add_scalar("exploration/SPS", int(explore_step / (time.time() - start_time)), explore_step)
+                writer.add_scalar(
+                    "exploration/SPS",
+                    int(explore_step / (time.time() - start_time)),
+                    explore_step,
+                )
                 print(f"Exploration step: {explore_step}")
 
     obs, _ = envs.reset(seed=args.seed)
@@ -400,7 +491,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     video_recorder.record_trajectory(second_trajectory, run_name)
 
                 # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                preference = sim_teacher.give_preference(first_trajectory, second_trajectory)
+                preference = sim_teacher.give_preference(
+                    first_trajectory, second_trajectory
+                )
 
                 # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
                 if preference is None:
@@ -425,18 +518,28 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         ### AGENT LEARNING ###
 
-        actions = select_actions(obs, actor, device, global_step, args.learning_starts, envs)
+        actions = select_actions(
+            obs, actor, device, global_step, args.learning_starts, envs
+        )
 
         # TRY NOT TO MODIFY: execute the game and log data.
-        next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(actions)
+        next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
+            actions
+        )
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if infos and "final_info" in infos:
             for info in infos["final_info"]:
                 if info:
-                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                    writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+                    print(
+                        f"global_step={global_step}, episodic_return={info['episode']['r']}"
+                    )
+                    writer.add_scalar(
+                        "charts/episodic_return", info["episode"]["r"], global_step
+                    )
+                    writer.add_scalar(
+                        "charts/episodic_length", info["episode"]["l"], global_step
+                    )
                     break
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
@@ -446,7 +549,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs[idx] = infos["final_observation"][idx]
 
         rewards = reward_net.predict_reward(obs, actions)
-        rb.add(obs, real_next_obs, actions, rewards.squeeze(), groundTruthRewards, terminations, infos)
+        rb.add(
+            obs,
+            real_next_obs,
+            actions,
+            rewards.squeeze(),
+            groundTruthRewards,
+            terminations,
+            infos,
+        )
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
@@ -454,25 +565,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
             data = rb.sample(args.batch_size)
-            qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(data,
-                                                                                      qf1,
-                                                                                      qf2,
-                                                                                      qf1_target,
-                                                                                      qf2_target,
-                                                                                      alpha,
-                                                                                      args.gamma,
-                                                                                      q_optimizer,
-                                                                                      reward_net,
-                                                                                      explore=False)
+            qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss = train_q_network(
+                data,
+                qf1,
+                qf2,
+                qf1_target,
+                qf2_target,
+                alpha,
+                args.gamma,
+                q_optimizer,
+                reward_net,
+                explore=False,
+            )
 
             if global_step % args.policy_frequency == 0:  # TD 3 Delayed update support
-                for _ in range(args.policy_frequency):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                    actor_loss, alpha, alpha_loss = update_actor(data,
-                                                                 actor,
-                                                                 qf1,
-                                                                 qf2,
-                                                                 alpha,
-                                                                 actor_optimizer)
+                for _ in range(
+                    args.policy_frequency
+                ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
+                    actor_loss, alpha, alpha_loss = update_actor(
+                        data, actor, qf1, qf2, alpha, actor_optimizer
+                    )
 
             # update the target networks
             if global_step % args.target_network_frequency == 0:
@@ -480,17 +592,27 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 update_target_networks(qf2, qf2_target, args.tau)
 
             if global_step % 100 == 0:
-                writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
-                writer.add_scalar("losses/qf2_values", qf2_a_values.mean().item(), global_step)
+                writer.add_scalar(
+                    "losses/qf1_values", qf1_a_values.mean().item(), global_step
+                )
+                writer.add_scalar(
+                    "losses/qf2_values", qf2_a_values.mean().item(), global_step
+                )
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
                 writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                 writer.add_scalar("losses/alpha", alpha, global_step)
                 print("SPS:", int(global_step / (time.time() - start_time)))
-                writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+                writer.add_scalar(
+                    "charts/SPS",
+                    int(global_step / (time.time() - start_time)),
+                    global_step,
+                )
                 if args.autotune:
-                    writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
+                    writer.add_scalar(
+                        "losses/alpha_loss", alpha_loss.item(), global_step
+                    )
 
     envs.close()
     writer.close()
