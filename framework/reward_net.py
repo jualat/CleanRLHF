@@ -5,10 +5,15 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
-def gen_reward_net(hidden_dim, layers = 4, env=None):
-    reward_net = [nn.Linear(
-        np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape),
-                  hidden_dim)]
+
+def gen_reward_net(hidden_dim, layers=4, env=None):
+    reward_net = [
+        nn.Linear(
+            np.array(env.single_observation_space.shape).prod()
+            + np.prod(env.single_action_space.shape),
+            hidden_dim,
+        )
+    ]
     for _ in range(layers):
         reward_net.append(nn.Linear(hidden_dim, hidden_dim))
         reward_net.append(nn.LeakyReLU())
@@ -16,6 +21,7 @@ def gen_reward_net(hidden_dim, layers = 4, env=None):
     reward_net.append(nn.Tanh())
 
     return reward_net
+
 
 class RewardNet(nn.Module):
     def __init__(self, env, hidden_dim):
@@ -45,7 +51,10 @@ class RewardNet(nn.Module):
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
         # Compute binary cross entropy loss based on human feedback
         predictions = torch.clamp(predictions, epsilon, 1 - epsilon)
-        return -torch.mean(preferences * torch.log(predictions) + (1 - preferences) * torch.log(1 - predictions))
+        return -torch.mean(
+            preferences * torch.log(predictions)
+            + (1 - preferences) * torch.log(1 - predictions)
+        )
 
     def predict_reward(self, observations: np.ndarray, actions: np.ndarray):
         """
@@ -63,7 +72,18 @@ class RewardNet(nn.Module):
         rewards = self.forward(observations, actions)
         return rewards.cpu().detach().numpy()
 
-def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs, batch_size, env: Optional[VecNormalize] = None):
+
+def train_reward(
+    model,
+    optimizer,
+    writer,
+    pref_buffer,
+    rb,
+    global_step,
+    epochs,
+    batch_size,
+    env: Optional[VecNormalize] = None,
+):
     for epoch in range(epochs):
         prefs = pref_buffer.sample(batch_size)
         total_loss = 0.0
@@ -78,14 +98,18 @@ def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs,
             for single_model in model.ensemble:
                 optimizer.zero_grad()
 
-                r1 = single_model(torch.cat([t1.samples.observations, t1.samples.actions], dim=1))
-                r2 = single_model(torch.cat([t2.samples.observations, t2.samples.actions], dim=1))
+                r1 = single_model(
+                    torch.cat([t1.samples.observations, t1.samples.actions], dim=1)
+                )
+                r2 = single_model(
+                    torch.cat([t2.samples.observations, t2.samples.actions], dim=1)
+                )
 
                 prediction = model.preference_prob(r1, r2)
                 prediction = prediction.clone().detach().requires_grad_(True)
 
                 loss = model.preference_loss(prediction, pref)
-                assert loss != float('inf')
+                assert loss != float("inf")
                 ensemble_loss += loss
 
             ensemble_loss /= len(model.ensemble)
