@@ -595,6 +595,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
 
     except KeyboardInterrupt:
+        print("KeyboardInterrupt caught! Saving progress...")
+    finally:
         state_dict = {
             "actor": actor,
             "qf1": qf1,
@@ -616,6 +618,5 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             current_step,
             rb
         )
-    finally:
         envs.close()
         writer.close()
