@@ -141,12 +141,11 @@ class ReplayBuffer(SB3ReplayBuffer):
         :param reward_net: Reward network
         :return:
         """
-        # Convert the entire observations and actions arrays to NumPy arrays
-        observations = np.array(self.observations, dtype=np.float32).squeeze(axis=1)
-        actions = np.array(self.actions, dtype=np.float32).squeeze(axis=1)
+        observations = self.observations.reshape(self.n_envs * self.buffer_size, -1)
+        actions = self.actions.reshape(self.n_envs * self.buffer_size, -1)
 
         # Calculate the new rewards using the reward_net
-        new_rewards = reward_net.predict_reward(observations, actions)
+        new_rewards = reward_net.predict_reward(observations, actions).reshape(self.buffer_size, self.n_envs)
 
         # Update the rewards in the replay buffer
         self.rewards = new_rewards
