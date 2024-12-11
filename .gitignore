@@ -2,7 +2,5 @@
 .idea
 .DS_Store
 
-# pyenv
+#pyenv
 .python-version
-
-runs
