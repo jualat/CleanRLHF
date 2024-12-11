@@ -5,32 +5,47 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
+def gen_reward_net(hidden_dim = 256, layers =4, env=None):
+    reward_net = [nn.Linear(
+        np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape),
+                  hidden_dim)]
+    for _ in range(layers):
+        reward_net.append(nn.Linear(hidden_dim, hidden_dim))
+        reward_net.append(nn.LeakyReLU())
+    reward_net.append(nn.Linear(hidden_dim, 1))
+    reward_net.append(nn.Tanh())
+
+    return reward_net
 
 class RewardNet(nn.Module):
     def __init__(self, env, hidden_dim):
         super(RewardNet, self).__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc4 = nn.Linear(hidden_dim, 1)
+        self.ensemble = []
+        paramlst = []
+
+        for _ in range(3):
+            model = nn.Sequential(*gen_reward_net(hidden_dim, env=env))
+            self.ensemble.append(model)
+            paramlst.extend(model.parameters())
+
+        self.parameters = nn.ParameterList(paramlst)
 
     def forward(self, x, a):
-        # Concatenate observation and action
         x = torch.cat([x, a], 1)
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        x = self.fc4(x)
-        return x
+        x0 = self.ensemble[0](x)
+        x1 = self.ensemble[1](x)
+        x2 = self.ensemble[2](x)
+        #print(f"x0:{x0}, x1:{x1}, x2:{x2}")
+        return x0
 
     def preference_prob(self, r1, r2):
         # Probability based on Bradley-Terry model
         # r_{1,2} shape: (num_steps,)
-        exp1 = torch.exp(torch.sum(r1))
-        exp2 = torch.exp(torch.sum(r2))
-        prop1 = exp1 / (exp1 + exp2)
-        assert 0 <= prop1 <= 1
-        return prop1
+        exp1 = torch.exp(torch.clamp(torch.sum(r1)-torch.max(r1), max=85))
+        exp2 = torch.exp(torch.clamp(torch.sum(r2)-torch.max(r2), max=85))
+        prob1 = exp1 / (exp1 + exp2)
+        assert 0 <= prob1 <= 1
+        return prob1
 
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
         # Compute binary cross entropy loss based on human feedback
@@ -44,10 +59,10 @@ class RewardNet(nn.Module):
         :param action: The action as a numpy array
         :return: The predicted as a numpy array
         """
-
         # Convert observations and actions to tensors
-        observations = torch.tensor(observations, dtype=torch.float32).to(self.fc1.weight.device)
-        actions = torch.tensor(actions, dtype=torch.float32).to(self.fc1.weight.device)
+        device = next(self.parameters()).device
+        observations = torch.tensor(observations, dtype=torch.float32).to(device)
+        actions = torch.tensor(actions, dtype=torch.float32).to(device)
 
         # Forward pass through the network
         rewards = self.forward(observations, actions)
