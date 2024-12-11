@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
-def gen_reward_net(hidden_dim = 256, layers =4, env=None):
+def gen_reward_net(hidden_dim = 256, layers = 2, env=None):
     reward_net = [nn.Linear(
         np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape),
                   hidden_dim)]
@@ -41,8 +41,14 @@ class RewardNet(nn.Module):
     def preference_prob(self, r1, r2):
         # Probability based on Bradley-Terry model
         # r_{1,2} shape: (num_steps,)
-        exp1 = torch.exp(torch.clamp(torch.sum(r1)-torch.max(r1), max=85))
-        exp2 = torch.exp(torch.clamp(torch.sum(r2)-torch.max(r2), max=85))
+
+        if not r1.numel() == 0:
+            exp1 = torch.exp(torch.clamp(torch.sum(r1)-torch.max(r1), max=85))
+        else: exp1 = torch.tensor(0.0001)
+        if  not r2.numel() == 0:
+            exp2 = torch.exp(torch.clamp(torch.sum(r2)-torch.max(r2), max=85))
+        else: exp2 = torch.tensor(0.0001)
+
         prob1 = exp1 / (exp1 + exp2)
         assert 0 <= prob1 <= 1
         return prob1
