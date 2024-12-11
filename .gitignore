@@ -1,6 +1,5 @@
 # IDE-specific files
 .idea
 .DS_Store
-
 #pyenv
 .python-version
