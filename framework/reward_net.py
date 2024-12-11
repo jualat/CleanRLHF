@@ -9,7 +9,11 @@ from stable_baselines3.common.vec_env import VecNormalize
 class RewardNet(nn.Module):
     def __init__(self, env, hidden_dim):
         super(RewardNet, self).__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), hidden_dim)
+        self.fc1 = nn.Linear(
+            np.array(env.single_observation_space.shape).prod()
+            + np.prod(env.single_action_space.shape),
+            hidden_dim,
+        )
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, hidden_dim)
         self.fc4 = nn.Linear(hidden_dim, 1)
@@ -35,7 +39,10 @@ class RewardNet(nn.Module):
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
         # Compute binary cross entropy loss based on human feedback
         predictions = torch.clamp(predictions, epsilon, 1 - epsilon)
-        return -torch.mean(preferences * torch.log(predictions) + (1 - preferences) * torch.log(1 - predictions))
+        return -torch.mean(
+            preferences * torch.log(predictions)
+            + (1 - preferences) * torch.log(1 - predictions)
+        )
 
     def predict_reward(self, observations: np.ndarray, actions: np.ndarray):
         """
@@ -46,14 +53,27 @@ class RewardNet(nn.Module):
         """
 
         # Convert observations and actions to tensors
-        observations = torch.tensor(observations, dtype=torch.float32).to(self.fc1.weight.device)
+        observations = torch.tensor(observations, dtype=torch.float32).to(
+            self.fc1.weight.device
+        )
         actions = torch.tensor(actions, dtype=torch.float32).to(self.fc1.weight.device)
 
         # Forward pass through the network
         rewards = self.forward(observations, actions)
         return rewards.cpu().detach().numpy()
 
-def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs, batch_size, env: Optional[VecNormalize] = None):
+
+def train_reward(
+    model,
+    optimizer,
+    writer,
+    pref_buffer,
+    rb,
+    global_step,
+    epochs,
+    batch_size,
+    env: Optional[VecNormalize] = None,
+):
     for epoch in range(epochs):
         prefs = pref_buffer.sample(batch_size)
         total_loss = 0.0
@@ -73,7 +93,7 @@ def train_reward(model, optimizer, writer, pref_buffer, rb, global_step, epochs,
             prediction = prediction.clone().detach().requires_grad_(True)
 
             loss = model.preference_loss(prediction, pref)
-            assert loss != float('inf')
+            assert loss != float("inf")
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
