@@ -483,6 +483,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     alpha,
                     args.gamma,
                     q_optimizer,
+                    reward_net,
                 )
 
                 if (
@@ -663,6 +664,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     alpha,
                     args.gamma,
                     q_optimizer,
+                    reward_net,
                 )
 
                 if (
