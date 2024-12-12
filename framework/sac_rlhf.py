@@ -3,6 +3,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
+import logging
 
 import gymnasium as gym
 from gymnasium.experimental.wrappers.rendering import RecordVideoV0
@@ -44,6 +45,10 @@ class Args:
     num_envs: int = 12
     """the number of parallel environments to accelerate training. 
     Set this to the number of available CPU threads for best performance."""
+    log_file: bool = True
+    """if toggled, logger will write to a file"""
+    log_level: str = "DEBUG"
+    """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
@@ -193,7 +198,7 @@ def save_model_all(run_name: str, step: int,  state_dict: dict):
 
     total_state_dict = {name: obj.state_dict() for name, obj in state_dict.items()}
     torch.save(total_state_dict, out_path)
-    print(f"Saved all models and optimizers to {out_path}")
+    logging.debug(f"Saved all models and optimizers to {out_path}")
 
 def load_model_all(state_dict: dict, path: str, device):
     assert os.path.exists(path), "Path to model does not exist"
@@ -201,7 +206,7 @@ def load_model_all(state_dict: dict, path: str, device):
     for name, obj in state_dict.items():
         if name in checkpoint:
             obj.load_state_dict(checkpoint[name])
-    print(f"Models and optimizers loaded from {path}")
+    logging.debug(f"Models and optimizers loaded from {path}")
 
 def save_replay_buffer(run_name: str, step:int, replay_buffer :ReplayBuffer):
     model_folder = f"./models/{run_name}/{step}"
@@ -218,7 +223,7 @@ def save_replay_buffer(run_name: str, step:int, replay_buffer :ReplayBuffer):
     }
     with gzip.open(out_path, "wb") as f:
         pickle.dump(buffer_data, f)
-    print(f"Saved replay buffer to {out_path}")
+    logging.debug(f"Saved replay buffer to {out_path}")
 
 def load_replay_buffer(replay_buffer: ReplayBuffer, path:str):
     assert os.path.exists(path), "Path to replay buffer does not exist"
@@ -232,7 +237,7 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path:str):
     replay_buffer.ground_truth_rewards = buffer_data["ground_truth_rewards"]
     replay_buffer.dones = buffer_data["dones"]
 
-    print(f"Replay buffer loaded from {path}")
+    logging.debug(f"Replay buffer loaded from {path}")
 
 
 # ALGO LOGIC: initialize agent here:
@@ -307,6 +312,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", level=args.log_level.upper())
+    if args.log_file:
+        os.makedirs(os.path.join("runs", run_name), exist_ok=True)
+        logging.getLogger().addHandler(logging.FileHandler(filename=f"runs/{run_name}/logger.log"))
     if args.track:
         import wandb
 
@@ -434,9 +443,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar("exploration/intrinsic_reward_mean", intrinsic_reward.mean(), explore_step)
                 writer.add_scalar("exploration/terminations", terminations.sum(), explore_step)
                 writer.add_scalar("exploration/state_coverage", len(knn_estimator.visited_states), explore_step)
-                print("SPS:", int(explore_step / (time.time() - start_time)))
+                logging.debug(f"SPS: {int(explore_step / (time.time() - start_time))}")
                 writer.add_scalar("exploration/SPS", int(explore_step / (time.time() - start_time)), explore_step)
-                print(f"Exploration step: {explore_step}")
+                logging.debug(f"Exploration step: {explore_step}")
 
         state_dict = {
             "actor": actor,
@@ -494,7 +503,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     # Sample trajectories from replay buffer to query teacher
                     first_trajectory, second_trajectory = rb.sample_trajectories()
 
-                    print("step", global_step, i)
+                    logging.debug(f"step {global_step}, {i}")
 
                     # Create video of the two trajectories. For now, we only render if capture_video is True.
                     # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
@@ -524,7 +533,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 rb.relabel_rewards(reward_net)
-                print("Rewards relabeled")
+                logging.debug("Rewards relabeled")
 
             ### AGENT LEARNING ###
 
@@ -537,7 +546,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
                     if info:
-                        print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
+                        logging.debug(f"global_step={global_step}, episodic_return={info['episode']['r']}")
                         writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                         writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
                         break
@@ -589,13 +598,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     writer.add_scalar("losses/qf_loss", qf_loss.item() / 2.0, global_step)
                     writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                     writer.add_scalar("losses/alpha", alpha, global_step)
-                    print("SPS:", int(global_step / (time.time() - start_time)))
+                    logging.debug(f"SPS: {int(global_step / (time.time() - start_time))}")
                     writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
                     if args.autotune:
                         writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
 
     except KeyboardInterrupt:
-        print("KeyboardInterrupt caught! Saving progress...")
+        logging.warning("KeyboardInterrupt caught! Saving progress...")
     finally:
         state_dict = {
             "actor": actor,

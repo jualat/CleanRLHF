@@ -19,6 +19,7 @@ torch = ">=1.12.1"
 tyro = "^0.5.10"
 wandb = "^0.13.11"
 scipy = ">=1.14.1"
+logging = "^0.4.9.6"
 
 
 [build-system]
