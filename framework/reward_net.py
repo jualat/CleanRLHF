@@ -1,4 +1,5 @@
 from typing import Optional
+import logging
 
 import numpy as np
 import torch
@@ -121,6 +122,6 @@ def train_reward(
             writer.add_scalar("losses/reward_loss", ensemble_loss.item(), global_step)
 
         if epoch % 10 == 0:
-            print(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
+            logging.debug(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
         if epoch % 100 == 0:
-            print(f"Reward epoch {epoch}, Loss {loss.item()}")
+            logging.debug(f"Reward epoch {epoch}, Loss {loss.item()}")

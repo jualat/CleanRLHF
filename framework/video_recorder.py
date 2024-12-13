@@ -1,4 +1,5 @@
 import os
+import logging
 
 import gymnasium as gym
 from replay_buffer import ReplayBuffer, Trajectory
@@ -34,7 +35,7 @@ class VideoRecorder:
         os.makedirs(video_folder, exist_ok=True)
         out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
         if os.path.exists(out_path):
-            print(f"Skipping {out_path}")
+            logging.info(f"Skipping {out_path}")
             return
         env = gym.make(self.env_id, render_mode="rgb_array")
 

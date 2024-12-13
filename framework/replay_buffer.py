@@ -4,6 +4,7 @@ import numpy as np
 from gymnasium import spaces
 import torch
 from typing import Union, Optional, NamedTuple
+import logging
 
 from numpy import dtype
 from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
@@ -101,7 +102,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         # by adding 1.
         starts = np.concatenate(([0], done_indices[:-1] + 1)).astype(np.int32)
 
-        print("Done indices", done_indices)
+        logging.debug(f"Done indices {done_indices}")
 
         # The end indices are the done indices, including the last one.
         ends = done_indices + 1
