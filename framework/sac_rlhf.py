@@ -344,10 +344,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-    logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", datefmt="%d/%m/%Y %H:%M:%S", level=args.log_level.upper())
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%d/%m/%Y %H:%M:%S",
+        level=args.log_level.upper(),
+    )
     if args.log_file:
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
-        logging.getLogger().addHandler(logging.FileHandler(filename=f"runs/{run_name}/logger.log"))
+        logging.getLogger().addHandler(
+            logging.FileHandler(filename=f"runs/{run_name}/logger.log")
+        )
     if args.track:
         import wandb
 
@@ -624,7 +630,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
                     if info:
-                        logging.debug(f"global_step={global_step}, episodic_return={info['episode']['r']}")
+                        logging.debug(
+                            f"global_step={global_step}, episodic_return={info['episode']['r']}"
+                        )
                         writer.add_scalar(
                             "charts/episodic_return", info["episode"]["r"], global_step
                         )
@@ -705,7 +713,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         "losses/actor_loss", actor_loss.item(), global_step
                     )
                     writer.add_scalar("losses/alpha", alpha, global_step)
-                    logging.debug(f"SPS: {int(global_step / (time.time() - start_time))}")
+                    logging.debug(
+                        f"SPS: {int(global_step / (time.time() - start_time))}"
+                    )
                     writer.add_scalar(
                         "charts/SPS",
                         int(global_step / (time.time() - start_time)),
