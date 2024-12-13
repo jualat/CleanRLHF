@@ -149,7 +149,7 @@ def select_actions(obs, actor, device, step, learning_start, envs):
 
 
 def train_q_network(
-    data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer, reward_net
+    data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer
 ):
     with torch.no_grad():
         real_rewards = data.rewards
@@ -469,14 +469,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
-
+            dones = terminations | truncations
             rb.add(
                 obs,
                 real_next_obs,
                 actions,
                 intrinsic_reward,
                 ground_truth_reward,
-                terminations,
+                dones,
                 infos,
             )
 
@@ -498,7 +498,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     alpha,
                     args.gamma,
                     q_optimizer,
-                    reward_net,
                 )
 
                 if (
@@ -522,7 +521,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     explore_step,
                 )
                 writer.add_scalar(
-                    "exploration/terminations", terminations.sum(), explore_step
+                    "exploration/dones", terminations.sum() + truncations.sum(), explore_step
                 )
                 writer.add_scalar(
                     "exploration/state_coverage",
@@ -646,7 +645,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for idx, trunc in enumerate(truncations):
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
-
+            dones = terminations | truncations
             rewards = reward_net.predict_reward(obs, actions)
             rb.add(
                 obs,
@@ -654,7 +653,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions,
                 rewards.squeeze(),
                 groundTruthRewards,
-                terminations,
+                dones,
                 infos,
             )
 
@@ -678,8 +677,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     qf2_target,
                     alpha,
                     args.gamma,
-                    q_optimizer,
-                    reward_net,
+                    q_optimizer
                 )
 
                 if (
