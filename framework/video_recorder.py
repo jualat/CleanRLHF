@@ -4,6 +4,7 @@ import gymnasium as gym
 from replay_buffer import ReplayBuffer, Trajectory
 import cv2
 
+
 class VideoRecorder:
     """
     Records videos from the replay buffer by replaying the actions.
@@ -13,7 +14,9 @@ class VideoRecorder:
     :param seed: Seed for the environment
     :param env_id: The gym environment ID to use for replaying the actions
     """
-    def __init__(self,
+
+    def __init__(
+        self,
         rb: ReplayBuffer,
         seed: int,
         env_id: str,
@@ -42,7 +45,9 @@ class VideoRecorder:
         _, _ = env.reset(seed=self.seed)
         img = env.render()
 
-        writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (img.shape[1], img.shape[0]))
+        writer = cv2.VideoWriter(
+            out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0])
+        )
         writer.write(img)
 
         # Replay the actions

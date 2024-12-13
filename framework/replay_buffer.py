@@ -21,6 +21,7 @@ class ReplayBufferSampleHF(NamedTuple):
     rewards: torch.Tensor
     ground_truth_rewards: torch.Tensor
 
+
 class Trajectory(NamedTuple):
     replay_buffer_start_idx: int
     replay_buffer_end_idx: int
@@ -48,30 +49,38 @@ class ReplayBuffer(SB3ReplayBuffer):
         https://github.com/DLR-RM/stable-baselines3/issues/284
     """
 
-
-    def __init__(self,
+    def __init__(
+        self,
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
         device: Union[torch.device, str] = "auto",
         n_envs: int = 1,
         optimize_memory_usage: bool = False,
-        handle_timeout_termination: bool = True
+        handle_timeout_termination: bool = True,
     ):
-        super().__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs,
-                         optimize_memory_usage=optimize_memory_usage,
-                         handle_timeout_termination=handle_timeout_termination)
-        self.ground_truth_rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        super().__init__(
+            buffer_size,
+            observation_space,
+            action_space,
+            device,
+            n_envs=n_envs,
+            optimize_memory_usage=optimize_memory_usage,
+            handle_timeout_termination=handle_timeout_termination,
+        )
+        self.ground_truth_rewards = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
+        )
 
     def add(
-            self,
-            obs: np.ndarray,
-            next_obs: np.ndarray,
-            action: np.ndarray,
-            reward: np.ndarray,
-            ground_truth_rewards: np.ndarray,
-            done: np.ndarray,
-            infos: list[dict[str, any]],
+        self,
+        obs: np.ndarray,
+        next_obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        ground_truth_rewards: np.ndarray,
+        done: np.ndarray,
+        infos: list[dict[str, any]],
     ) -> None:
         super().add(obs, next_obs, action, reward, done, infos)
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
@@ -101,31 +110,56 @@ class ReplayBuffer(SB3ReplayBuffer):
         # Set replace=False to sample different trajectories
         indices = np.random.choice(len(done_indices), 2, replace=False)
 
-        first_trajectory = self.get_trajectory(int(starts[indices[0]]), int(ends[indices[0]]), env)
-        second_trajectory = self.get_trajectory(int(starts[indices[1]]), int(ends[indices[1]]), env)
+        first_trajectory = self.get_trajectory(
+            int(starts[indices[0]]), int(ends[indices[0]]), env
+        )
+        second_trajectory = self.get_trajectory(
+            int(starts[indices[1]]), int(ends[indices[1]]), env
+        )
 
         return first_trajectory, second_trajectory
 
-
-    def _get_samples(self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None) -> ReplayBufferSampleHF:
+    def _get_samples(
+        self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None
+    ) -> ReplayBufferSampleHF:
         # Sample randomly the env idx
         env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
 
         if self.optimize_memory_usage:
-            next_obs = self._normalize_obs(self.observations[(batch_inds + 1) % self.buffer_size, env_indices, :], env)
+            next_obs = self._normalize_obs(
+                self.observations[(batch_inds + 1) % self.buffer_size, env_indices, :],
+                env,
+            )
         else:
-            next_obs = self._normalize_obs(self.next_observations[batch_inds, env_indices, :], env)
+            next_obs = self._normalize_obs(
+                self.next_observations[batch_inds, env_indices, :], env
+            )
 
         return ReplayBufferSampleHF(
-            observations = self.to_torch(self._normalize_obs(self.observations[batch_inds, env_indices, :], env)),
-            actions = self.to_torch(self.actions[batch_inds, env_indices, :]),
-            next_observations = self.to_torch(next_obs),
-            dones = self.to_torch((self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1)),
-            rewards =  self.to_torch(self._normalize_reward(self.rewards[batch_inds, env_indices].reshape(-1, 1), env)),
-            ground_truth_rewards = self.to_torch(self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)),
+            observations=self.to_torch(
+                self._normalize_obs(self.observations[batch_inds, env_indices, :], env)
+            ),
+            actions=self.to_torch(self.actions[batch_inds, env_indices, :]),
+            next_observations=self.to_torch(next_obs),
+            dones=self.to_torch(
+                (
+                    self.dones[batch_inds, env_indices]
+                    * (1 - self.timeouts[batch_inds, env_indices])
+                ).reshape(-1, 1)
+            ),
+            rewards=self.to_torch(
+                self._normalize_reward(
+                    self.rewards[batch_inds, env_indices].reshape(-1, 1), env
+                )
+            ),
+            ground_truth_rewards=self.to_torch(
+                self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)
+            ),
         )
 
-    def get_trajectory(self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None):
+    def get_trajectory(
+        self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
+    ):
         trajectory_indices = np.arange(start_idx, end_idx)
         trajectory_samples = self._get_samples(trajectory_indices, env)
 
@@ -145,7 +179,9 @@ class ReplayBuffer(SB3ReplayBuffer):
         actions = self.actions.reshape(self.n_envs * self.buffer_size, -1)
 
         # Calculate the new rewards using the reward_net
-        new_rewards = reward_net.predict_reward(observations, actions).reshape(self.buffer_size, self.n_envs)
+        new_rewards = reward_net.predict_reward(observations, actions).reshape(
+            self.buffer_size, self.n_envs
+        )
 
         # Update the rewards in the replay buffer
         self.rewards = new_rewards
