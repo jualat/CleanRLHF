@@ -518,11 +518,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     intrinsic_reward.mean(),
                     explore_step,
                 )
-                writer.add_scalar(
-                    "exploration/dones",
-                    terminations.sum() + truncations.sum(),
-                    explore_step,
-                )
+
                 writer.add_scalar(
                     "exploration/state_coverage",
                     len(knn_estimator.visited_states),
@@ -535,6 +531,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     explore_step,
                 )
                 logging.debug(f"Exploration step: {explore_step}")
+
+            writer.add_scalar(
+                "exploration/dones",
+                terminations.sum() + truncations.sum(),
+                explore_step,
+            )
 
         state_dict = {
             "actor": actor,

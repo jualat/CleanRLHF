@@ -107,15 +107,23 @@ class ReplayBuffer(SB3ReplayBuffer):
         # The end indices are the done indices, including the last one.
         ends = done_indices + 1
 
+        valid_indices = [i for i in range(len(done_indices)) if ends[i] - starts[i] > 0]
+        if len(valid_indices) < 2:
+            raise ValueError("Not enough valid trajectories with non-zero steps.")
+
         # Randomly select indices for the trajectories
         # Set replace=False to sample different trajectories
-        indices = np.random.choice(len(done_indices), 2, replace=False)
+        indices = np.random.choice(valid_indices, 2, replace=False)
 
         first_trajectory = self.get_trajectory(
             int(starts[indices[0]]), int(ends[indices[0]]), env
         )
         second_trajectory = self.get_trajectory(
             int(starts[indices[1]]), int(ends[indices[1]]), env
+        )
+        logging.debug(
+            f"First trajectory length: {ends[indices[0]] - starts[indices[0]]}, "
+            f"Second trajectory length: {ends[indices[1]] - starts[indices[1]]}"
         )
 
         return first_trajectory, second_trajectory
