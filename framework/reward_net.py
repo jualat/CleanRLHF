@@ -63,6 +63,7 @@ class RewardNet(nn.Module):
         :param actions: The action as a numpy array
         :return: The predicted as a numpy array
         """
+
         # Convert observations and actions to tensors
         device = next(self.parameters()).device
         observations = torch.tensor(observations, dtype=torch.float32).to(device)
