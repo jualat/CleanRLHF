@@ -148,9 +148,7 @@ def select_actions(obs, actor, device, step, learning_start, envs):
         return actions.detach().cpu().numpy()
 
 
-def train_q_network(
-    data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer
-):
+def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer):
     with torch.no_grad():
         real_rewards = data.rewards
         next_state_actions, next_state_log_pi, _ = actor.get_action(
@@ -521,7 +519,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     explore_step,
                 )
                 writer.add_scalar(
-                    "exploration/dones", terminations.sum() + truncations.sum(), explore_step
+                    "exploration/dones",
+                    terminations.sum() + truncations.sum(),
+                    explore_step,
                 )
                 writer.add_scalar(
                     "exploration/state_coverage",
@@ -677,7 +677,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     qf2_target,
                     alpha,
                     args.gamma,
-                    q_optimizer
+                    q_optimizer,
                 )
 
                 if (
