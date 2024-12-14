@@ -123,6 +123,8 @@ def train_reward(
             total_loss += ensemble_loss.item()
 
             writer.add_scalar("losses/reward_loss", ensemble_loss.item(), global_step)
-
+        writer.add_scalar(
+            "losses/total_loss", total_loss / (batch_size * 0.5), global_step
+        )
         if epoch % 10 == 0:
             logging.debug(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
