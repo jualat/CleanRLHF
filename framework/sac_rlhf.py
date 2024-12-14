@@ -378,6 +378,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    logging.info(f"Using device: {device}")
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
@@ -611,6 +612,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     global_step,
                     args.teacher_update_epochs,
                     args.teacher_feedback_batch_size,
+                    device,
                 )
 
                 rb.relabel_rewards(reward_net)
@@ -640,6 +642,21 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         writer.add_scalar(
                             "charts/episodic_length", info["episode"]["l"], global_step
                         )
+
+                        if args.cuda and torch.cuda.is_available():
+                            allocated = torch.cuda.memory_allocated()
+                            reserved = torch.cuda.memory_reserved()
+                            logging.debug(
+                                f"Allocated cuda memory: {allocated / (1024 ** 2)} MB"
+                            )
+                            logging.debug(
+                                f"Reserved cuda memory: {reserved / (1024 ** 2)} MB"
+                            )
+                            writer.add_scalar(
+                                "hardware/cuda_memory",
+                                allocated / (1024**2),
+                                global_step,
+                            )
                         break
 
             # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
@@ -648,7 +665,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
             dones = terminations | truncations
-            rewards = reward_net.predict_reward(obs, actions)
+            with torch.no_grad():
+                rewards = reward_net.predict_reward(obs, actions)
             rb.add(
                 obs,
                 real_next_obs,

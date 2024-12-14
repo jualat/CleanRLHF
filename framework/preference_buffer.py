@@ -47,5 +47,5 @@ class PreferenceBuffer:
             raise ValueError("Preference buffer is empty, cannot sample.")
 
         # Randomly select indices to sample
-        indices = np.random.choice(self.size, batch_size, replace=False)
+        indices = np.random.choice(self.size, min(self.size, batch_size), replace=False)
         return self.buffer[indices]
