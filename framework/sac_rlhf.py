@@ -43,7 +43,7 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    num_envs: int = 8
+    num_envs: int = 12
     """the number of parallel environments to accelerate training. 
     Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
