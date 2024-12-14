@@ -42,10 +42,11 @@ class RewardNet(nn.Module):
     def preference_prob(self, r1, r2):
         # Probability based on Bradley-Terry model
         # r_{1,2} shape: (num_steps,)
+        device = next(self.parameters()).device
         softmax = nn.Softmax(dim=0)
         exp1 = torch.sum(r1)
         exp2 = torch.sum(r2)
-        prob = softmax(torch.stack([exp1, exp2]))
+        prob = softmax(torch.stack([exp1, exp2]).to(device))
         assert 0 <= prob[0] <= 1
         return prob[0]
 
@@ -84,6 +85,7 @@ def train_reward(
     global_step,
     epochs,
     batch_size,
+    device,
     env: Optional[VecNormalize] = None,
 ):
     for epoch in range(epochs):
@@ -91,20 +93,20 @@ def train_reward(
         total_loss = 0.0
         for pref_pair in prefs:
             t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
-            pref = torch.tensor(pref, dtype=torch.float32)
+            pref = torch.tensor(pref, dtype=torch.float32).to(device)
 
             t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
             t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
             ensemble_loss = 0.0
 
-            for single_model in model.ensemble:
-                optimizer.zero_grad()
+            optimizer.zero_grad()
 
+            for single_model in model.ensemble:
                 r1 = single_model(
-                    torch.cat([t1.samples.observations, t1.samples.actions], dim=1)
+                    torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(device)
                 )
                 r2 = single_model(
-                    torch.cat([t2.samples.observations, t2.samples.actions], dim=1)
+                    torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(device)
                 )
 
                 prediction = model.preference_prob(r1, r2)

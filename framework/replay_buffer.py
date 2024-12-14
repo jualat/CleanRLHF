@@ -188,9 +188,10 @@ class ReplayBuffer(SB3ReplayBuffer):
         actions = self.actions.reshape(self.n_envs * self.buffer_size, -1)
 
         # Calculate the new rewards using the reward_net
-        new_rewards = reward_net.predict_reward(observations, actions).reshape(
-            self.buffer_size, self.n_envs
-        )
+        with torch.no_grad():
+            new_rewards = reward_net.predict_reward(observations, actions).reshape(
+                self.buffer_size, self.n_envs
+            )
 
         # Update the rewards in the replay buffer
         self.rewards = new_rewards
