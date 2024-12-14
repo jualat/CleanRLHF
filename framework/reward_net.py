@@ -103,10 +103,14 @@ def train_reward(
 
             for single_model in model.ensemble:
                 r1 = single_model(
-                    torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(device)
+                    torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(
+                        device
+                    )
                 )
                 r2 = single_model(
-                    torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(device)
+                    torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(
+                        device
+                    )
                 )
 
                 prediction = model.preference_prob(r1, r2)
