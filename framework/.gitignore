@@ -10,3 +10,6 @@ runs/
 
 # Models
 models/
+
+# wandb
+wandb/

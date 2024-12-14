@@ -45,7 +45,7 @@ class RewardNet(nn.Module):
         softmax = nn.Softmax(dim=0)
         exp1 = torch.sum(r1)
         exp2 = torch.sum(r2)
-        prob = softmax(torch.tensor([exp1, exp2]))
+        prob = softmax(torch.stack([exp1, exp2]))
         assert 0 <= prob[0] <= 1
         return prob[0]
 
@@ -108,7 +108,9 @@ def train_reward(
                 )
 
                 prediction = model.preference_prob(r1, r2)
-                prediction = prediction.clone().detach().requires_grad_(True)
+                assert (
+                    prediction.requires_grad
+                ), "prediction does not require gradients!"
 
                 loss = model.preference_loss(prediction, pref)
                 assert loss != float("inf")
@@ -116,12 +118,13 @@ def train_reward(
 
             ensemble_loss /= len(model.ensemble)
             ensemble_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             total_loss += ensemble_loss.item()
 
             writer.add_scalar("losses/reward_loss", ensemble_loss.item(), global_step)
-
+        writer.add_scalar(
+            "losses/total_loss", total_loss / (batch_size * 0.5), global_step
+        )
         if epoch % 10 == 0:
             logging.debug(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
-        if epoch % 100 == 0:
-            logging.debug(f"Reward epoch {epoch}, Loss {loss.item()}")
