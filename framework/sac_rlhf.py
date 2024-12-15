@@ -48,7 +48,7 @@ class Args:
     Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
     """if toggled, logger will write to a file"""
-    log_level: str = "DEBUG"
+    log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
@@ -92,6 +92,8 @@ class Args:
     """the learning rate of the teacher"""
 
     # Simulated Teacher
+    preference_sampling: str = "disagree"
+    """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
     teacher_sim_beta: float = -1
     """this parameter controls how deterministic or random the teacher's preferences are"""
     teacher_sim_gamma: float = 1
@@ -211,7 +213,7 @@ def save_model_all(run_name: str, step: int, state_dict: dict):
 
     total_state_dict = {name: obj.state_dict() for name, obj in state_dict.items()}
     torch.save(total_state_dict, out_path)
-    logging.debug(f"Saved all models and optimizers to {out_path}")
+    logging.info(f"Saved all models and optimizers to {out_path}")
 
 
 def load_model_all(state_dict: dict, path: str, device):
@@ -220,7 +222,7 @@ def load_model_all(state_dict: dict, path: str, device):
     for name, obj in state_dict.items():
         if name in checkpoint:
             obj.load_state_dict(checkpoint[name])
-    logging.debug(f"Models and optimizers loaded from {path}")
+    logging.info(f"Models and optimizers loaded from {path}")
 
 
 def save_replay_buffer(run_name: str, step: int, replay_buffer: ReplayBuffer):
@@ -238,7 +240,7 @@ def save_replay_buffer(run_name: str, step: int, replay_buffer: ReplayBuffer):
     }
     with gzip.open(out_path, "wb") as f:
         pickle.dump(buffer_data, f)
-    logging.debug(f"Saved replay buffer to {out_path}")
+    logging.info(f"Saved replay buffer to {out_path}")
 
 
 def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
@@ -253,7 +255,40 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
     replay_buffer.ground_truth_rewards = buffer_data["ground_truth_rewards"]
     replay_buffer.dones = buffer_data["dones"]
 
-    logging.debug(f"Replay buffer loaded from {path}")
+    logging.info(f"Replay buffer loaded from {path}")
+
+
+def uniform_sampling(rb: ReplayBuffer, reward_net: RewardNet):
+    traj_mb1, traj_mb2 = rb.sample_trajectories()
+    return traj_mb1[0], traj_mb2[0]
+
+
+def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet):
+    traj_mb1, traj_mb2 = rb.sample_trajectories()
+
+    disagrees = []
+    for traj_1, traj_2 in zip(traj_mb1, traj_mb2):
+        probs = []
+        for member in range(len(reward_net.ensemble)):
+            probs.append(reward_net.preference_prob_hat_member(traj_1, traj_2, member))
+        disagrees.append(np.std(probs, axis=0))
+
+    disagrees_argmax = max(enumerate(disagrees), key=lambda x: x[1])[0]
+    return traj_mb1[disagrees_argmax], traj_mb2[disagrees_argmax]
+
+
+def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet):
+    traj_mb1, traj_mb2 = rb.sample_trajectories()
+
+    entropies = []
+    for traj_1, traj_2 in zip(traj_mb1, traj_mb2):
+        probs = []
+        for member in range(len(reward_net.ensemble)):
+            probs.append(reward_net.preference_prob_hat_member(traj_1, traj_2, member))
+        entropies.append(np.mean(probs, axis=0))
+
+    entropies_argmax = max(enumerate(entropies), key=lambda x: x[1])[0]
+    return traj_mb1[entropies_argmax], traj_mb2[entropies_argmax]
 
 
 # ALGO LOGIC: initialize agent here:
@@ -525,13 +560,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     len(knn_estimator.visited_states),
                     explore_step,
                 )
-                logging.debug(f"SPS: {int(explore_step / (time.time() - start_time))}")
+                logging.info(f"SPS: {int(explore_step / (time.time() - start_time))}")
                 writer.add_scalar(
                     "exploration/SPS",
                     int(explore_step / (time.time() - start_time)),
                     explore_step,
                 )
-                logging.debug(f"Exploration step: {explore_step}")
+                logging.info(f"Exploration step: {explore_step}")
 
             writer.add_scalar(
                 "exploration/dones",
@@ -581,9 +616,20 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             ):
                 for i in range(args.teacher_feedback_num_queries_per_session):
                     # Sample trajectories from replay buffer to query teacher
-                    first_trajectory, second_trajectory = rb.sample_trajectories()
+                    if args.preference_sampling == "uniform":
+                        first_trajectory, second_trajectory = uniform_sampling(
+                            rb, reward_net
+                        )
+                    elif args.preference_sampling == "disagree":
+                        first_trajectory, second_trajectory = disagreement_sampling(
+                            rb, reward_net
+                        )
+                    elif args.preference_sampling == "entropy":
+                        first_trajectory, second_trajectory = entropy_sampling(
+                            rb, reward_net
+                        )
 
-                    logging.debug(f"step {global_step}, {i}")
+                    logging.info(f"step {global_step}, {i}")
 
                     # Create video of the two trajectories. For now, we only render if capture_video is True.
                     # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
@@ -616,7 +662,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 rb.relabel_rewards(reward_net)
-                logging.debug("Rewards relabeled")
+                logging.info("Rewards relabeled")
 
             ### AGENT LEARNING ###
 
@@ -633,7 +679,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
                     if info:
-                        logging.debug(
+                        logging.info(
                             f"global_step={global_step}, episodic_return={info['episode']['r']}"
                         )
                         writer.add_scalar(
@@ -646,10 +692,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         if args.cuda and torch.cuda.is_available():
                             allocated = torch.cuda.memory_allocated()
                             reserved = torch.cuda.memory_reserved()
-                            logging.debug(
+                            logging.info(
                                 f"Allocated cuda memory: {allocated / (1024 ** 2)} MB"
                             )
-                            logging.debug(
+                            logging.info(
                                 f"Reserved cuda memory: {reserved / (1024 ** 2)} MB"
                             )
                             writer.add_scalar(
@@ -731,7 +777,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         "losses/actor_loss", actor_loss.item(), global_step
                     )
                     writer.add_scalar("losses/alpha", alpha, global_step)
-                    logging.debug(
+                    logging.info(
                         f"SPS: {int(global_step / (time.time() - start_time))}"
                     )
                     writer.add_scalar(
