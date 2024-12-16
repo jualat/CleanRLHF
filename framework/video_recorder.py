@@ -1,8 +1,10 @@
 import os
+import logging
 
 import gymnasium as gym
 from replay_buffer import ReplayBuffer, Trajectory
 import cv2
+
 
 class VideoRecorder:
     """
@@ -13,7 +15,9 @@ class VideoRecorder:
     :param seed: Seed for the environment
     :param env_id: The gym environment ID to use for replaying the actions
     """
-    def __init__(self,
+
+    def __init__(
+        self,
         rb: ReplayBuffer,
         seed: int,
         env_id: str,
@@ -31,7 +35,7 @@ class VideoRecorder:
         os.makedirs(video_folder, exist_ok=True)
         out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
         if os.path.exists(out_path):
-            print(f"Skipping {out_path}")
+            logging.info(f"Skipping {out_path}")
             return
         env = gym.make(self.env_id, render_mode="rgb_array")
 
@@ -42,7 +46,9 @@ class VideoRecorder:
         _, _ = env.reset(seed=self.seed)
         img = env.render()
 
-        writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (img.shape[1], img.shape[0]))
+        writer = cv2.VideoWriter(
+            out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0])
+        )
         writer.write(img)
 
         # Replay the actions

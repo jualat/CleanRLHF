@@ -29,3 +29,13 @@ xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v4 --capture-video
 ```
 
 For a full list of available command-line arguments, take a look at the `sac_rlhf.py` script.
+
+### Tracking
+
+Use the `--track  --wandb-project-name HopperTest --wandb-entity cleanRLHF` flag to activate tracking via Weights &
+Biases
+
+```bash
+wandb login
+python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-entity cleanRLHF
+```

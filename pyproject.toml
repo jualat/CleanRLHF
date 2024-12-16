@@ -2,7 +2,7 @@
 name = "cleanrlhf"
 version = "0.1.0"
 description = ""
-authors = ["Benjamin Kuen <b.kuen@campus.lmu.de>"]
+authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -20,6 +20,8 @@ tyro = "^0.5.10"
 numpy = "<2.0"
 wandb = "^0.13.11"
 scipy = ">=1.14.1"
+pre-commit = "^4.0.1"
+logging = "^0.4.9.6"
 
 [build-system]
 requires = ["poetry-core"]

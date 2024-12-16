@@ -1,6 +1,7 @@
 from replay_buffer import Trajectory
 import numpy as np
 
+
 class PreferenceBuffer:
     def __init__(self, buffer_size):
         self.buffer_size = buffer_size
@@ -9,7 +10,12 @@ class PreferenceBuffer:
         self.size = 0
         self.next_idx = 0
 
-    def add(self, first_trajectory: Trajectory, second_trajectory: Trajectory, preference: float):
+    def add(
+        self,
+        first_trajectory: Trajectory,
+        second_trajectory: Trajectory,
+        preference: float,
+    ):
         """
         Adds a new preference to the buffer. If the buffer is full, it overwrites the oldest entry.
 
@@ -41,5 +47,5 @@ class PreferenceBuffer:
             raise ValueError("Preference buffer is empty, cannot sample.")
 
         # Randomly select indices to sample
-        indices = np.random.choice(self.size, batch_size, replace=False)
+        indices = np.random.choice(self.size, min(self.size, batch_size), replace=False)
         return self.buffer[indices]
