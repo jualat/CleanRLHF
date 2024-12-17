@@ -21,8 +21,8 @@ class PerformanceMetrics:
             predictions (list or np.array): Predicted values.
             ground_truths (list or np.array): Corresponding ground truth values.
         """
-        self.predictions.extend(predictions)
-        self.ground_truths.extend(ground_truths)
+        self.predictions.append(predictions[0])
+        self.ground_truths.append(ground_truths[0])
 
     def reset(self):
         """

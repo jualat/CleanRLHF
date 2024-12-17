@@ -52,8 +52,6 @@ class Args:
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
-    measure_performance: bool = True
-    """flag to enable pearson correlation performance measurements"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
@@ -732,6 +730,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             dones = terminations | truncations
             with torch.no_grad():
                 rewards = reward_net.predict_reward(obs, actions)
+            writer.add_scalar(
+                "charts/predicted_rewards",
+                rewards[0],
+                global_step,
+            )
+            writer.add_scalar(
+                "charts/groudTruthRewards",
+                groundTruthRewards[0],
+                global_step,
+            )
             rb.add(
                 obs,
                 real_next_obs,
@@ -780,9 +788,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     update_target_networks(qf1, qf1_target, args.tau)
                     update_target_networks(qf2, qf2_target, args.tau)
 
-                if args.measure_performance:
-                    rewards_flattened = rewards.flatten()
-                    metrics.add_rewards(rewards.flatten(), groundTruthRewards)
+                metrics.add_rewards(rewards.flatten(), groundTruthRewards)
 
                 if global_step % 100 == 0:
                     writer.add_scalar(
@@ -812,13 +818,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         writer.add_scalar(
                             "losses/alpha_loss", alpha_loss.item(), global_step
                         )
-                    if args.measure_performance:
-                        writer.add_scalar(
-                            "charts/pearson_correlation",
-                            metrics.compute_pearson_correlation(),
-                            global_step,
-                        )
-                        metrics.reset()
+                    writer.add_scalar(
+                        "charts/pearson_correlation",
+                        metrics.compute_pearson_correlation(),
+                        global_step,
+                    )
+                    metrics.reset()
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
