@@ -55,7 +55,7 @@ class ExplorationRewardKNN:
 
         # Removing NaNs and infinite values in order to ensure the system remains robust
         if not np.all(np.isfinite(intrinsic_rewards)):
-            logging.debug(f"Non-finite intrinsic rewards detected: {intrinsic_rewards}")
+            logging.info(f"Non-finite intrinsic rewards detected: {intrinsic_rewards}")
             intrinsic_rewards = np.nan_to_num(
                 intrinsic_rewards, nan=0.0, posinf=1e6, neginf=-1e6
             )
