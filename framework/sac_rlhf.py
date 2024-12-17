@@ -82,6 +82,20 @@ class Args:
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
 
+    ## Arguments for the neural networks
+    reward_net_hidden_dim: int = 256
+    """the dimension of the hidden layers in the reward network"""
+    reward_net_hidden_layers: int = 4
+    """the number of hidden layers in the reward network"""
+    actor_net_hidden_dim: int = 256
+    """the dimension of the hidden layers in the actor network"""
+    actor_net_hidden_layers: int = 4
+    """the number of hidden layers in the actor network"""
+    soft_q_net_hidden_dim: int = 256
+    """the dimension of the hidden layers in the SoftQNetwork"""
+    soft_q_net_hidden_layers: int = 2
+    """the number of hidden layers in the SoftQNetwork"""
+
     # Human feedback arguments
     teacher_feedback_frequency: int = 5000
     """the frequency of teacher feedback (every K iterations)"""
@@ -261,21 +275,26 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
 
 # ALGO LOGIC: initialize agent here:
 class SoftQNetwork(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, hidden_dim, hidden_layers):
         super().__init__()
-        self.fc1 = nn.Linear(
+        self.fc_first = nn.Linear(
             np.array(env.single_observation_space.shape).prod()
             + np.prod(env.single_action_space.shape),
-            256,
+            hidden_dim,
         )
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
+
+        self.hidden_layers = nn.ModuleList()
+        for _ in range(hidden_layers):
+            self.hidden_layers.append(nn.Linear(hidden_dim, hidden_dim))
+
+        self.fc_last = nn.Linear(hidden_dim, 1)
 
     def forward(self, x, a):
-        x = torch.cat([x, a], 1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = torch.cat([x, a], dim=1)
+        x = F.relu(self.fc_first(x))
+        for layer in self.hidden_layers:
+            x = F.relu(layer(x))
+        x = self.fc_last(x)
         return x
 
 
@@ -284,12 +303,17 @@ LOG_STD_MIN = -5
 
 
 class Actor(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, hidden_dim, hidden_layers):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.single_observation_space.shape).prod(), 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mean = nn.Linear(256, np.prod(env.single_action_space.shape))
-        self.fc_logstd = nn.Linear(256, np.prod(env.single_action_space.shape))
+        self.fc_first = nn.Linear(
+            np.array(env.single_observation_space.shape).prod(), hidden_dim
+        )
+        self.hidden_layers = nn.ModuleList()
+        for _ in range(hidden_layers):
+            self.hidden_layers.append(nn.Linear(hidden_dim, hidden_dim))
+            self.hidden_layers.append(nn.ReLU())
+        self.fc_mean = nn.Linear(hidden_dim, np.prod(env.single_action_space.shape))
+        self.fc_logstd = nn.Linear(hidden_dim, np.prod(env.single_action_space.shape))
         # action rescaling
         self.register_buffer(
             "action_scale",
@@ -307,8 +331,9 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc_first(x))
+        for layer in self.hidden_layers:
+            x = layer(x)
         mean = self.fc_mean(x)
         log_std = self.fc_logstd(x)
         log_std = torch.tanh(log_std)
@@ -396,11 +421,31 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     max_action = float(envs.single_action_space.high[0])
 
-    actor = Actor(envs).to(device)
-    qf1 = SoftQNetwork(envs).to(device)
-    qf2 = SoftQNetwork(envs).to(device)
-    qf1_target = SoftQNetwork(envs).to(device)
-    qf2_target = SoftQNetwork(envs).to(device)
+    actor = Actor(
+        env=envs,
+        hidden_dim=args.actor_net_hidden_dim,
+        hidden_layers=args.actor_net_hidden_layers,
+    ).to(device)
+    qf1 = SoftQNetwork(
+        envs,
+        hidden_dim=args.soft_q_net_hidden_dim,
+        hidden_layers=args.soft_q_net_hidden_layers,
+    ).to(device)
+    qf2 = SoftQNetwork(
+        envs,
+        hidden_dim=args.soft_q_net_hidden_dim,
+        hidden_layers=args.soft_q_net_hidden_layers,
+    ).to(device)
+    qf1_target = SoftQNetwork(
+        envs,
+        hidden_dim=args.soft_q_net_hidden_dim,
+        hidden_layers=args.soft_q_net_hidden_layers,
+    ).to(device)
+    qf2_target = SoftQNetwork(
+        envs,
+        hidden_dim=args.soft_q_net_hidden_dim,
+        hidden_layers=args.soft_q_net_hidden_layers,
+    ).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(
@@ -435,7 +480,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         (args.buffer_size // args.teacher_feedback_frequency)
         * args.teacher_feedback_num_queries_per_session
     )
-    reward_net = RewardNet(hidden_dim=128, env=envs).to(device)
+    reward_net = RewardNet(
+        hidden_dim=args.reward_net_hidden_dim,
+        hidden_layers=args.reward_net_hidden_layers,
+        env=envs,
+    ).to(device)
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate
     )
