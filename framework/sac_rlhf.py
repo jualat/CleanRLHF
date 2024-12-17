@@ -274,7 +274,7 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
 class SoftQNetwork(nn.Module):
     def __init__(self, env, hidden_dim, hidden_layers):
         super().__init__()
-        self.fc1 = nn.Linear(
+        self.fc_first = nn.Linear(
             np.array(env.single_observation_space.shape).prod()
             + np.prod(env.single_action_space.shape),
             hidden_dim,
@@ -288,7 +288,7 @@ class SoftQNetwork(nn.Module):
 
     def forward(self, x, a):
         x = torch.cat([x, a], dim=1)
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc_first(x))
         for layer in self.hidden_layers:
             x = F.relu(layer(x))
         x = self.fc_last(x)
@@ -302,7 +302,7 @@ LOG_STD_MIN = -5
 class Actor(nn.Module):
     def __init__(self, env, hidden_dim, hidden_layers):
         super().__init__()
-        self.fc1 = nn.Linear(
+        self.fc_first = nn.Linear(
             np.array(env.single_observation_space.shape).prod(), hidden_dim
         )
         self.hidden_layers = nn.ModuleList()
@@ -328,7 +328,7 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc_first(x))
         for layer in self.hidden_layers:
             x = layer(x)
         mean = self.fc_mean(x)
