@@ -87,7 +87,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
 
     def sample_trajectories(
-        self, env: Optional[VecNormalize] = None, mb_size: int = 20
+        self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
     ) -> tuple[List[Trajectory], List[Trajectory]]:
         """
         Sample trajectories from the replay buffer.
@@ -95,43 +95,16 @@ class ReplayBuffer(SB3ReplayBuffer):
         :param mb_size: amount of pairs of trajectories to be sampled
         :return: two lists of mb_size many trajectories
         """
-        N_ROWS, _ = self.dones.shape
-        traj_dones = self.dones.flatten(order="F").astype(np.int32)
-        done_indices = np.where(traj_dones == 1)[0].astype(np.int32)
 
-        if len(done_indices) < 2:
-            raise ValueError("Replay buffer doesn't contain at least 2 trajectories.")
+        indices = np.random.choice(self.pos, 2 * mb_size, replace=False)
 
-        # Compute start and end indices for each trajectory
-        # First trajectory starts at index 0 and all done indices except the last one are transformed to start indices
-        # by adding 1.
-        starts = np.concatenate(([0], done_indices[:-1] + 1)).astype(np.int32)
-
-        logging.debug(f"Done indices {done_indices}")
-
-        # The end indices are the done indices, including the last one.
-        ends = done_indices + 1
-
-        valid_indices = [
-            i
-            for i in range(len(done_indices))
-            if ends[i] % N_ROWS - starts[i] % N_ROWS > 0
-        ]
-        if len(valid_indices) < 2 * mb_size:
-            raise ValueError("Not enough valid trajectories with non-zero steps.")
-
-        # Randomly select indices for the trajectories
-        # Set replace=False to sample different trajectories
-        indices = np.random.choice(valid_indices, 2 * mb_size, replace=False)
-        len_traj = min([ends[i] - starts[i] for i in indices])
-        equal_len_ends = starts + len_traj
         trajectories = [
             self.get_trajectory(
-                int(starts[indices[i]]) % N_ROWS,
-                int(equal_len_ends[indices[i]]) % N_ROWS,
+                start,
+                (start + traj_len) % self.pos,
                 env,
             )
-            for i in range(2 * mb_size)
+            for start in indices
         ]
         logging.debug(f"trajectory length: {len_traj}, ")
 
