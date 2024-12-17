@@ -37,7 +37,7 @@ python3 framework/sac_rlhf.py --env_id Walker2d
 ```
 
 # Tensorboard
-By running `tensorboard --logdir=runs` a local instance of TensorBoard will be started (http://localhost:6007/)
+By running `tensorboard --logdir=runs` a local instance of TensorBoard will be started (http://localhost:6006/)
 
 ## Performance metrics
 ### Pearson correlation
