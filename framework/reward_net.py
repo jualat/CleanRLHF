@@ -7,7 +7,7 @@ import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
 
-def gen_reward_net(hidden_dim, layers=4, env=None):
+def gen_reward_net(hidden_dim, layers, env=None):
     reward_net = [
         nn.Linear(
             np.array(env.single_observation_space.shape).prod()
@@ -25,12 +25,12 @@ def gen_reward_net(hidden_dim, layers=4, env=None):
 
 
 class RewardNet(nn.Module):
-    def __init__(self, env, hidden_dim):
+    def __init__(self, env, hidden_dim, hidden_layers):
         super(RewardNet, self).__init__()
         self.ensemble = nn.ModuleList()
 
         for _ in range(3):
-            model = nn.Sequential(*gen_reward_net(hidden_dim, env=env))
+            model = nn.Sequential(*gen_reward_net(hidden_dim, hidden_layers, env=env))
             self.ensemble.append(model)
 
     def forward(self, x, a):
