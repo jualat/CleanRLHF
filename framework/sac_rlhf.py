@@ -23,6 +23,7 @@ from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from torch.utils.tensorboard import SummaryWriter
 from teacher import Teacher
+from sampling import uniform_sampling, disagreement_sampling, entropy_sampling
 
 
 @dataclass
@@ -256,39 +257,6 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
     replay_buffer.dones = buffer_data["dones"]
 
     logging.info(f"Replay buffer loaded from {path}")
-
-
-def uniform_sampling(rb: ReplayBuffer, reward_net: RewardNet):
-    traj_mb1, traj_mb2 = rb.sample_trajectories()
-    return traj_mb1[0], traj_mb2[0]
-
-
-def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet):
-    traj_mb1, traj_mb2 = rb.sample_trajectories()
-
-    disagrees = []
-    for traj_1, traj_2 in zip(traj_mb1, traj_mb2):
-        probs = []
-        for member in range(len(reward_net.ensemble)):
-            probs.append(reward_net.preference_prob_hat_member(traj_1, traj_2, member))
-        disagrees.append(np.std(probs, axis=0))
-
-    disagrees_argmax = max(enumerate(disagrees), key=lambda x: x[1])[0]
-    return traj_mb1[disagrees_argmax], traj_mb2[disagrees_argmax]
-
-
-def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet):
-    traj_mb1, traj_mb2 = rb.sample_trajectories()
-
-    entropies = []
-    for traj_1, traj_2 in zip(traj_mb1, traj_mb2):
-        probs = []
-        for member in range(len(reward_net.ensemble)):
-            probs.append(reward_net.preference_prob_hat_member(traj_1, traj_2, member))
-        entropies.append(np.mean(probs, axis=0))
-
-    entropies_argmax = max(enumerate(entropies), key=lambda x: x[1])[0]
-    return traj_mb1[entropies_argmax], traj_mb2[entropies_argmax]
 
 
 # ALGO LOGIC: initialize agent here:
@@ -617,9 +585,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for i in range(args.teacher_feedback_num_queries_per_session):
                     # Sample trajectories from replay buffer to query teacher
                     if args.preference_sampling == "uniform":
-                        first_trajectory, second_trajectory = uniform_sampling(
-                            rb, reward_net
-                        )
+                        first_trajectory, second_trajectory = uniform_sampling(rb)
                     elif args.preference_sampling == "disagree":
                         first_trajectory, second_trajectory = disagreement_sampling(
                             rb, reward_net
