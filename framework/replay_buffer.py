@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 from gymnasium import spaces
 import torch
-from typing import Union, Optional, NamedTuple
+from typing import Union, Optional, NamedTuple, List
 import logging
 
 from numpy import dtype
@@ -86,13 +86,18 @@ class ReplayBuffer(SB3ReplayBuffer):
         super().add(obs, next_obs, action, reward, done, infos)
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
 
-    def sample_trajectories(self, env: Optional[VecNormalize] = None):
+    def sample_trajectories(
+        self, env: Optional[VecNormalize] = None, mb_size: int = 20
+    ) -> tuple[List[Trajectory], List[Trajectory]]:
         """
         Sample trajectories from the replay buffer.
         :param env: associated gym VecEnv to normalize the observations/rewards when sampling
-        :return: batch size many trajectories
+        :param mb_size: amount of pairs of trajectories to be sampled
+        :return: two lists of mb_size many trajectories
         """
-        done_indices = np.where(self.dones == 1)[0].astype(np.int32)
+        N_ROWS, _ = self.dones.shape
+        traj_dones = self.dones.flatten(order="F").astype(np.int32)
+        done_indices = np.where(traj_dones == 1)[0].astype(np.int32)
 
         if len(done_indices) < 2:
             raise ValueError("Replay buffer doesn't contain at least 2 trajectories.")
@@ -107,26 +112,30 @@ class ReplayBuffer(SB3ReplayBuffer):
         # The end indices are the done indices, including the last one.
         ends = done_indices + 1
 
-        valid_indices = [i for i in range(len(done_indices)) if ends[i] - starts[i] > 0]
-        if len(valid_indices) < 2:
+        valid_indices = [
+            i
+            for i in range(len(done_indices))
+            if ends[i] % N_ROWS - starts[i] % N_ROWS > 0
+        ]
+        if len(valid_indices) < 2 * mb_size:
             raise ValueError("Not enough valid trajectories with non-zero steps.")
 
         # Randomly select indices for the trajectories
         # Set replace=False to sample different trajectories
-        indices = np.random.choice(valid_indices, 2, replace=False)
+        indices = np.random.choice(valid_indices, 2 * mb_size, replace=False)
+        len_traj = min([ends[i] - starts[i] for i in indices])
+        equal_len_ends = starts + len_traj
+        trajectories = [
+            self.get_trajectory(
+                int(starts[indices[i]]) % N_ROWS,
+                int(equal_len_ends[indices[i]]) % N_ROWS,
+                env,
+            )
+            for i in range(2 * mb_size)
+        ]
+        logging.debug(f"trajectory length: {len_traj}, ")
 
-        first_trajectory = self.get_trajectory(
-            int(starts[indices[0]]), int(ends[indices[0]]), env
-        )
-        second_trajectory = self.get_trajectory(
-            int(starts[indices[1]]), int(ends[indices[1]]), env
-        )
-        logging.debug(
-            f"First trajectory length: {ends[indices[0]] - starts[indices[0]]}, "
-            f"Second trajectory length: {ends[indices[1]] - starts[indices[1]]}"
-        )
-
-        return first_trajectory, second_trajectory
+        return trajectories[:mb_size], trajectories[mb_size:]
 
     def _get_samples(
         self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None

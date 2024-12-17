@@ -75,6 +75,57 @@ class RewardNet(nn.Module):
         rewards = self.forward(observations, actions)
         return rewards.cpu().detach().numpy()
 
+    def predict_reward_member(
+        self, observations: np.ndarray, actions: np.ndarray, member: int = -1
+    ):
+        # Convert observations and actions to tensors
+        device = next(self.parameters()).device
+        observations = torch.tensor(observations, dtype=torch.float32).to(device)
+        actions = torch.tensor(actions, dtype=torch.float32).to(device)
+
+        x = torch.cat([observations, actions], 1)
+        rewards = self.ensemble[member](x)
+        return rewards.cpu().detach().numpy()
+
+    def preference_prob_hat_member(self, traj1, traj2, member: int = -1):
+        softmax = nn.Softmax(dim=0)
+        r1 = self.predict_reward_member(
+            traj1.samples.observations,
+            traj1.samples.actions,
+            member=member,
+        )
+        r2 = self.predict_reward_member(
+            traj2.samples.observations,
+            traj2.samples.actions,
+            member=member,
+        )
+        exp1 = np.sum(r1)
+        exp2 = np.sum(r2)
+        prob = softmax(torch.tensor([exp1, exp2]))
+        assert 0 <= prob[0] <= 1
+        return prob[0]
+
+    def preference_hat_entropy_member(self, traj1, traj2, member: int = -1):
+        r1 = self.predict_reward_member(
+            traj1.samples.observations,
+            traj1.samples.actions,
+            member=member,
+        )
+        r2 = self.predict_reward_member(
+            traj2.samples.observations,
+            traj2.samples.actions,
+            member=member,
+        )
+        r_hat1 = r1.sum(axis=1)
+        r_hat2 = r2.sum(axis=1)
+        r_hat = torch.cat([r_hat1, r_hat2], axis=-1)
+
+        ent = nn.functional.softmax(r_hat, dim=-1) * nn.functional.log_softmax(
+            r_hat, dim=-1
+        )
+        ent = ent.sum(axis=-1).abs()
+        return ent
+
 
 def train_reward(
     model,
@@ -133,4 +184,4 @@ def train_reward(
             "losses/total_loss", total_loss / (batch_size * 0.5), global_step
         )
         if epoch % 10 == 0:
-            logging.debug(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
+            logging.info(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
