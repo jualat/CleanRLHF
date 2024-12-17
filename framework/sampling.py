@@ -5,13 +5,13 @@ from replay_buffer import ReplayBuffer
 from reward_net import RewardNet
 
 
-def uniform_sampling(rb: ReplayBuffer):
-    traj_mb1, traj_mb2 = rb.sample_trajectories()
+def uniform_sampling(rb: ReplayBuffer, traj_len: int):
+    traj_mb1, traj_mb2 = rb.sample_trajectories(traj_len=traj_len)
     return traj_mb1[0], traj_mb2[0]
 
 
-def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet):
-    traj_mb1, traj_mb2 = rb.sample_trajectories()
+def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
+    traj_mb1, traj_mb2 = rb.sample_trajectories(traj_len=traj_len)
 
     disagrees = []
     with torch.no_grad():
@@ -27,8 +27,8 @@ def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet):
     return traj_mb1[disagrees_argmax], traj_mb2[disagrees_argmax]
 
 
-def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet):
-    traj_mb1, traj_mb2 = rb.sample_trajectories()
+def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
+    traj_mb1, traj_mb2 = rb.sample_trajectories(traj_len=traj_len)
 
     entropies = []
     with torch.no_grad():
