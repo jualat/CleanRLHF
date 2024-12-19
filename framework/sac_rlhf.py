@@ -108,6 +108,8 @@ class Args:
     """the learning rate of the teacher"""
 
     # Simulated Teacher
+    trajectory_length: int = 32
+    """the length of the trajectories that are sampled for human feedback"""
     preference_sampling: str = "disagree"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
     teacher_sim_beta: float = -1
@@ -636,14 +638,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 for i in range(args.teacher_feedback_num_queries_per_session):
                     # Sample trajectories from replay buffer to query teacher
                     if args.preference_sampling == "uniform":
-                        first_trajectory, second_trajectory = uniform_sampling(rb)
+                        first_trajectory, second_trajectory = uniform_sampling(
+                            rb, args.trajectory_length
+                        )
                     elif args.preference_sampling == "disagree":
                         first_trajectory, second_trajectory = disagreement_sampling(
-                            rb, reward_net
+                            rb, reward_net, args.trajectory_length
                         )
                     elif args.preference_sampling == "entropy":
                         first_trajectory, second_trajectory = entropy_sampling(
-                            rb, reward_net
+                            rb, reward_net, args.trajectory_length
                         )
 
                     logging.info(f"step {global_step}, {i}")
