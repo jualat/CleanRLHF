@@ -16,6 +16,7 @@ import tyro
 import pickle
 import gzip
 
+from performance_metrics import PerformanceMetrics
 from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
 from preference_buffer import PreferenceBuffer
@@ -454,6 +455,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr
     )
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
+    metrics = PerformanceMetrics()
 
     # Automatic entropy tuning
     if args.autotune:
@@ -732,6 +734,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             dones = terminations | truncations
             with torch.no_grad():
                 rewards = reward_net.predict_reward(obs, actions)
+            writer.add_scalar(
+                "charts/predicted_rewards",
+                rewards[0],
+                global_step,
+            )
+            writer.add_scalar(
+                "charts/groudTruthRewards",
+                groundTruthRewards[0],
+                global_step,
+            )
             rb.add(
                 obs,
                 real_next_obs,
@@ -780,6 +792,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     update_target_networks(qf1, qf1_target, args.tau)
                     update_target_networks(qf2, qf2_target, args.tau)
 
+                metrics.add_rewards(rewards.flatten(), groundTruthRewards)
+
                 if global_step % 100 == 0:
                     writer.add_scalar(
                         "losses/qf1_values", qf1_a_values.mean().item(), global_step
@@ -808,6 +822,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         writer.add_scalar(
                             "losses/alpha_loss", alpha_loss.item(), global_step
                         )
+                    writer.add_scalar(
+                        "charts/pearson_correlation",
+                        metrics.compute_pearson_correlation(),
+                        global_step,
+                    )
+                    metrics.reset()
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
