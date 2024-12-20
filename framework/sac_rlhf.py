@@ -489,7 +489,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         env=envs,
     ).to(device)
     reward_optimizer = optim.Adam(
-        reward_net.parameters(), lr=args.teacher_learning_rate
+        reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 

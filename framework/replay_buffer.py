@@ -169,6 +169,10 @@ class ReplayBuffer(SB3ReplayBuffer):
         observations = self.observations.reshape(self.n_envs * self.buffer_size, -1)
         actions = self.actions.reshape(self.n_envs * self.buffer_size, -1)
 
+        # Sample a set of indices before relabeling for comparison
+        sample_indices = np.random.randint(0, self.pos, size=10)
+        old_rewards = self.rewards[sample_indices].copy()
+
         # Calculate the new rewards using the reward_net
         with torch.no_grad():
             new_rewards = reward_net.predict_reward(observations, actions).reshape(
@@ -177,3 +181,11 @@ class ReplayBuffer(SB3ReplayBuffer):
 
         # Update the rewards in the replay buffer
         self.rewards = new_rewards
+
+        # Check the new rewards at the same indices
+        new_rewards = self.rewards[sample_indices]
+        for i in range(len(sample_indices)):
+            idx = sample_indices[i]
+            print(f"Buffer Index {idx}: Old Reward = {old_rewards[i]}, New Reward = {new_rewards[i]}")
+
+        assert not np.allclose(old_rewards, new_rewards), "No change in rewards after relabeling!"
