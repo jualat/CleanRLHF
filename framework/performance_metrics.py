@@ -47,9 +47,7 @@ class PerformanceMetrics:
         dev_ground_truths = self.ground_truths - np.mean(self.ground_truths)
 
         numerator = np.sum(dev_predictions * dev_ground_truths)
-        denominator = np.sqrt(
-            np.sum(dev_predictions**2) * np.sum(dev_ground_truths**2)
-        )
+        denominator = np.sqrt(np.sum(dev_predictions**2) * np.sum(dev_ground_truths**2))
 
         if denominator == 0:
             return 0

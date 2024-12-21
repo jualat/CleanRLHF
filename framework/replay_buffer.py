@@ -6,10 +6,8 @@ import torch
 from typing import Union, Optional, NamedTuple, List
 import logging
 
-from numpy import dtype
 from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
 from stable_baselines3.common.vec_env import VecNormalize
-from sympy.codegen.ast import int32
 
 from reward_net import RewardNet
 
@@ -96,7 +94,10 @@ class ReplayBuffer(SB3ReplayBuffer):
         :return: two lists of mb_size many trajectories
         """
 
-        indices = np.random.choice(self.pos, 2 * mb_size, replace=False)
+        try:
+            indices = np.random.choice(self.pos, 2 * mb_size, replace=False)
+        except ValueError:
+            indices = np.random.choice(self.pos, 2 * mb_size, replace=True)
 
         trajectories = [
             self.get_trajectory(
@@ -186,6 +187,10 @@ class ReplayBuffer(SB3ReplayBuffer):
         new_rewards = self.rewards[sample_indices]
         for i in range(len(sample_indices)):
             idx = sample_indices[i]
-            print(f"Buffer Index {idx}: Old Reward = {old_rewards[i]}, New Reward = {new_rewards[i]}")
+            logging.debug(
+                f"Buffer Index {idx}: Old Reward = {old_rewards[i]}, New Reward = {new_rewards[i]}"
+            )
 
-        assert not np.allclose(old_rewards, new_rewards), "No change in rewards after relabeling!"
+        assert not np.allclose(
+            old_rewards, new_rewards
+        ), "No change in rewards after relabeling!"
