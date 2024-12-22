@@ -29,11 +29,11 @@ class VideoRecorder:
     def record_trajectory(self, trajectory: Trajectory, run_name: str, fps=30):
         start_idx = trajectory.replay_buffer_start_idx
         end_idx = trajectory.replay_buffer_end_idx
-
+        env_idx = trajectory.samples.env_idx
         # Ensure the directory for videos exists
         video_folder = f"./videos/{run_name}/trajectories"
         os.makedirs(video_folder, exist_ok=True)
-        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}.mp4"
+        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}_{env_idx}.mp4"
         if os.path.exists(out_path):
             logging.info(f"Skipping {out_path}")
             return

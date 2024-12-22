@@ -23,6 +23,7 @@ class ReplayBufferSampleHF(NamedTuple):
     ground_truth_rewards: torch.Tensor
     qpos: torch.Tensor
     qvel: torch.Tensor
+    env_idx: int
 
 
 class Trajectory(NamedTuple):
@@ -155,6 +156,7 @@ class ReplayBuffer(SB3ReplayBuffer):
             ),
             qpos=self.to_torch(self.qpos[batch_inds, env_indices, :]),
             qvel=self.to_torch(self.qvel[batch_inds, env_indices, :]),
+            env_idx=env_indices,
         )
 
     def get_trajectory(
