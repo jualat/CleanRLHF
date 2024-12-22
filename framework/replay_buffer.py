@@ -21,6 +21,8 @@ class ReplayBufferSampleHF(NamedTuple):
     dones: torch.Tensor
     rewards: torch.Tensor
     ground_truth_rewards: torch.Tensor
+    qpos: torch.Tensor
+    qvel: torch.Tensor
 
 
 class Trajectory(NamedTuple):
@@ -72,6 +74,8 @@ class ReplayBuffer(SB3ReplayBuffer):
         self.ground_truth_rewards = np.zeros(
             (self.buffer_size, self.n_envs), dtype=np.float32
         )
+        self.qpos = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
+        self.qvel = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
 
     def add(
         self,
@@ -82,9 +86,13 @@ class ReplayBuffer(SB3ReplayBuffer):
         ground_truth_rewards: np.ndarray,
         done: np.ndarray,
         infos: list[dict[str, any]],
+        qpos: np.ndarray,
+        qvel: np.ndarray,
     ) -> None:
         super().add(obs, next_obs, action, reward, done, infos)
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
+        self.qpos[self.pos, 0] = qpos  # shape (6,)
+        self.qvel[self.pos, 0] = qvel  # shape (6,)
 
     def sample_trajectories(
         self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
@@ -96,12 +104,12 @@ class ReplayBuffer(SB3ReplayBuffer):
         :return: two lists of mb_size many trajectories
         """
 
-        indices = np.random.choice(self.pos, 2 * mb_size, replace=False)
+        indices = np.random.choice(self.pos - 32, 2 * mb_size, replace=False)
 
         trajectories = [
             self.get_trajectory(
                 start,
-                (start + traj_len) % self.pos,
+                (start + traj_len),
                 env,
             )
             for start in indices
@@ -146,11 +154,17 @@ class ReplayBuffer(SB3ReplayBuffer):
             ground_truth_rewards=self.to_torch(
                 self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)
             ),
+            qpos=self.to_torch(self.qpos[batch_inds, 0, :]),
+            qvel=self.to_torch(self.qvel[batch_inds, 0, :])
         )
 
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
     ):
+        # Short fix for issue that our sample functions generate start_idx > end_idx
+        if start_idx > end_idx:
+            start_idx, end_idx = end_idx, start_idx
+        assert end_idx - start_idx == 32, f"{end_idx - start_idx} != 32"
         trajectory_indices = np.arange(start_idx, end_idx)
         trajectory_samples = self._get_samples(trajectory_indices, env)
 

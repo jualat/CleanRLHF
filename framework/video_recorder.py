@@ -38,27 +38,28 @@ class VideoRecorder:
             logging.info(f"Skipping {out_path}")
             return
         env = gym.make(self.env_id, render_mode="rgb_array")
+             # Start the video at the first observation of that trajectory
+        qpos_list = trajectory.samples.qpos
+        qvel_list = trajectory.samples.qvel
 
-        # Extract actions and dones from the replay buffer slice
-        actions = trajectory.samples.actions
+        # env.reset has to be called to be able to render
+        env.reset()
 
-        # Reset the environment with a fixed seed for reproducibility
-        _, _ = env.reset(seed=self.seed)
+        # Set state from mujoco positions
+        env.unwrapped.set_state(qpos_list[0], qvel_list[0])
+
         img = env.render()
-
         writer = cv2.VideoWriter(
             out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0])
         )
         writer.write(img)
 
         # Replay the actions
-        for action in actions:
-            action = action.detach().cpu().numpy()
+        for i in range(1, len(qpos_list)):
+            env.unwrapped.set_state(qpos_list[i], qvel_list[i])
+            img = env.render()
+            writer.write(img)
 
-            # Step the environment with the recorded action
-            _, _, _, _, _ = env.step(action)
-
-            # Save the rendered image to the video file
-            writer.write(env.render())
         # Close the environment to ensure the video file is finalized
+        writer.release()
         env.close()

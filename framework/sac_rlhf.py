@@ -521,7 +521,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for idx, trunc in enumerate(truncations):
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
-
+            single_env = envs.envs[0]
+            qpos = single_env.unwrapped.data.qpos.copy()
+            qvel = single_env.unwrapped.data.qvel.copy()
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
             dones = terminations | truncations
@@ -533,6 +535,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 ground_truth_reward,
                 dones,
                 infos,
+                qpos,
+                qvel,
             )
 
             obs = next_obs
@@ -695,7 +699,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
                 actions
             )
-
+            single_env = envs.envs[0]
+            qpos = single_env.unwrapped.data.qpos.copy()
+            qvel = single_env.unwrapped.data.qvel.copy()
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
@@ -752,6 +758,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 groundTruthRewards,
                 dones,
                 infos,
+                qpos,
+                qvel,
             )
 
             # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
