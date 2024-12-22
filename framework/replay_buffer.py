@@ -161,10 +161,7 @@ class ReplayBuffer(SB3ReplayBuffer):
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
     ):
-        # Short fix for issue that our sample functions generate start_idx > end_idx
-        if start_idx > end_idx:
-            start_idx, end_idx = end_idx, start_idx
-        assert end_idx - start_idx == 32, f"{end_idx - start_idx} != 32"
+
         trajectory_indices = np.arange(start_idx, end_idx)
         trajectory_samples = self._get_samples(trajectory_indices, env)
 
