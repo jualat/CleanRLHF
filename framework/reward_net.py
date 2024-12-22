@@ -99,9 +99,9 @@ class RewardNet(nn.Module):
             traj2.samples.actions,
             member=member,
         )
-        exp1 = np.sum(r1)
-        exp2 = np.sum(r2)
-        prob = softmax(torch.tensor([exp1, exp2]))
+        exp1 = r1.sum()
+        exp2 = r2.sum()
+        prob = softmax(torch.stack([exp1, exp2]))
         assert 0 <= prob[0] <= 1
         return prob[0]
 
