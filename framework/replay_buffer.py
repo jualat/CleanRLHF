@@ -155,7 +155,7 @@ class ReplayBuffer(SB3ReplayBuffer):
                 self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)
             ),
             qpos=self.to_torch(self.qpos[batch_inds, 0, :]),
-            qvel=self.to_torch(self.qvel[batch_inds, 0, :])
+            qvel=self.to_torch(self.qvel[batch_inds, 0, :]),
         )
 
     def get_trajectory(

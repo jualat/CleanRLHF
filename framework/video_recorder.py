@@ -38,7 +38,7 @@ class VideoRecorder:
             logging.info(f"Skipping {out_path}")
             return
         env = gym.make(self.env_id, render_mode="rgb_array")
-             # Start the video at the first observation of that trajectory
+        # Start the video at the first observation of that trajectory
         qpos_list = trajectory.samples.qpos
         qvel_list = trajectory.samples.qvel
 
