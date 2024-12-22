@@ -110,7 +110,7 @@ class Args:
     # Simulated Teacher
     trajectory_length: int = 32
     """the length of the trajectories that are sampled for human feedback"""
-    preference_sampling: str = "disagree"
+    preference_sampling: str = "uniform"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
     teacher_sim_beta: float = -1
     """this parameter controls how deterministic or random the teacher's preferences are"""
@@ -502,6 +502,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
+    qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
+    qvel = np.zeros_like(qpos)
+
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
         knn_estimator = ExplorationRewardKNN(k=3)
@@ -521,9 +524,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for idx, trunc in enumerate(truncations):
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
-            single_env = envs.envs[0]
-            qpos = single_env.unwrapped.data.qpos.copy()
-            qvel = single_env.unwrapped.data.qvel.copy()
+            for idx in range(args.num_envs):
+                single_env = envs.envs[idx]
+                qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                qvel[idx] = single_env.unwrapped.data.qvel.copy()
+
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
             dones = terminations | truncations
@@ -699,9 +704,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
                 actions
             )
-            single_env = envs.envs[0]
-            qpos = single_env.unwrapped.data.qpos.copy()
-            qvel = single_env.unwrapped.data.qvel.copy()
+            for idx in range(args.num_envs):
+                single_env = envs.envs[idx]
+                qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                qvel[idx] = single_env.unwrapped.data.qvel.copy()
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:

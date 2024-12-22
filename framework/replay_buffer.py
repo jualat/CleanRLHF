@@ -91,8 +91,8 @@ class ReplayBuffer(SB3ReplayBuffer):
     ) -> None:
         super().add(obs, next_obs, action, reward, done, infos)
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
-        self.qpos[self.pos, 0] = qpos  # shape (6,)
-        self.qvel[self.pos, 0] = qvel  # shape (6,)
+        self.qpos[self.pos] = qpos
+        self.qvel[self.pos] = qvel
 
     def sample_trajectories(
         self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
@@ -115,14 +115,13 @@ class ReplayBuffer(SB3ReplayBuffer):
             for start in indices
         ]
         logging.debug(f"trajectory length: {traj_len}, ")
-
         return trajectories[:mb_size], trajectories[mb_size:]
 
     def _get_samples(
         self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None
     ) -> ReplayBufferSampleHF:
         # Sample randomly the env idx
-        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
+        env_indices = np.random.randint(0, high=self.n_envs)
 
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(
@@ -154,14 +153,13 @@ class ReplayBuffer(SB3ReplayBuffer):
             ground_truth_rewards=self.to_torch(
                 self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)
             ),
-            qpos=self.to_torch(self.qpos[batch_inds, 0, :]),
-            qvel=self.to_torch(self.qvel[batch_inds, 0, :]),
+            qpos=self.to_torch(self.qpos[batch_inds, env_indices, :]),
+            qvel=self.to_torch(self.qvel[batch_inds, env_indices, :]),
         )
 
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
     ):
-
         trajectory_indices = np.arange(start_idx, end_idx)
         trajectory_samples = self._get_samples(trajectory_indices, env)
 
