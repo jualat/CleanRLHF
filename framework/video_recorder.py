@@ -30,36 +30,67 @@ class VideoRecorder:
         start_idx = trajectory.replay_buffer_start_idx
         end_idx = trajectory.replay_buffer_end_idx
         env_idx = trajectory.samples.env_idx
+
         # Ensure the directory for videos exists
         video_folder = f"./videos/{run_name}/trajectories"
         os.makedirs(video_folder, exist_ok=True)
         out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}_{env_idx}.mp4"
+
         if os.path.exists(out_path):
             logging.info(f"Skipping {out_path}")
             return
         env = gym.make(self.env_id, render_mode="rgb_array")
-        # Start the video at the first observation of that trajectory
-        qpos_list = trajectory.samples.qpos
-        qvel_list = trajectory.samples.qvel
+        writer = None
 
-        # env.reset has to be called to be able to render
-        env.reset()
+        try:
+            self._initialize_env_state(env, trajectory)
+            writer = self._initialize_writer(env, out_path, fps)
+            self._write_trajectory_to_video(env, trajectory, writer)
+        except Exception as e:
+            logging.error(
+                f"Error recording trajectory (start_idx={start_idx}, end_idx={end_idx}, env_idx={env_idx}): {e}"
+            )
+        finally:
+            if writer:
+                writer.release()
+            env.close()
 
-        # Set state from mujoco positions
-        env.unwrapped.set_state(qpos_list[0], qvel_list[0])
+    def _is_mujoco_env(self, env) -> bool:
+        # Try to check the internal `mujoco` attribute
+        return hasattr(env.unwrapped, "model") and hasattr(
+            env.unwrapped, "do_simulation"
+        )
 
+    def _initialize_env_state(self, env, trajectory):
+        """Initialize the environment state based on Mujoco or non-Mujoco trajectories."""
+        if self._is_mujoco_env(env):
+            qpos_list = trajectory.samples.qpos
+            qvel_list = trajectory.samples.qvel
+            env.reset(seed=self.seed)
+            env.unwrapped.set_state(qpos_list[0], qvel_list[0])
+        else:
+            env.reset(seed=self.seed)
+            if hasattr(env, "state"):
+                env.state = trajectory.samples.observations[0]
+
+    def _initialize_writer(self, env, out_path, fps):
+        """Initialize the video writer."""
         img = env.render()
-        writer = cv2.VideoWriter(
+        return cv2.VideoWriter(
             out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (img.shape[1], img.shape[0])
         )
-        writer.write(img)
 
-        # Replay the actions
-        for i in range(1, len(qpos_list)):
-            env.unwrapped.set_state(qpos_list[i], qvel_list[i])
-            img = env.render()
-            writer.write(img)
-
-        # Close the environment to ensure the video file is finalized
-        writer.release()
-        env.close()
+    def _write_trajectory_to_video(self, env, trajectory, writer):
+        """Write the trajectory to a video file."""
+        if self._is_mujoco_env(env):
+            qpos_list = trajectory.samples.qpos
+            qvel_list = trajectory.samples.qvel
+            for i in range(1, len(qpos_list)):
+                env.unwrapped.set_state(qpos_list[i], qvel_list[i])
+                writer.write(env.render())
+        else:
+            actions = trajectory.samples.actions
+            for action in actions:
+                action = action.detach().cpu().numpy()
+                env.step(action)
+                writer.write(env.render())

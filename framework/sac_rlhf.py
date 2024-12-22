@@ -118,7 +118,7 @@ class Args:
     """the discount factor gamma, which models myopic behavior"""
     teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    teacher_sim_delta_skip: float = 0
+    teacher_sim_delta_skip: float = 1e-7
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
@@ -274,6 +274,11 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
     replay_buffer.dones = buffer_data["dones"]
 
     logging.info(f"Replay buffer loaded from {path}")
+
+
+def is_mujoco_env(env):
+    # Try to check the internal `mujoco` attribute
+    return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")
 
 
 # ALGO LOGIC: initialize agent here:
@@ -524,10 +529,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for idx, trunc in enumerate(truncations):
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
-            for idx in range(args.num_envs):
-                single_env = envs.envs[idx]
-                qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                qvel[idx] = single_env.unwrapped.data.qvel.copy()
+            if is_mujoco_env(envs.envs[0]):
+                for idx in range(args.num_envs):
+                    single_env = envs.envs[idx]
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -704,10 +710,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
                 actions
             )
-            for idx in range(args.num_envs):
-                single_env = envs.envs[idx]
-                qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                qvel[idx] = single_env.unwrapped.data.qvel.copy()
+            if is_mujoco_env(envs.envs[0]):
+                for idx in range(args.num_envs):
+                    single_env = envs.envs[idx]
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
