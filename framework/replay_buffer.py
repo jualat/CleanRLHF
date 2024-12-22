@@ -104,7 +104,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         :return: two lists of mb_size many trajectories
         """
 
-        indices = np.random.choice(self.pos - 32, 2 * mb_size, replace=False)
+        indices = np.random.choice(self.pos - traj_len, 2 * mb_size, replace=False)
 
         trajectories = [
             self.get_trajectory(
