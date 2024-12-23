@@ -100,13 +100,20 @@ class ReplayBuffer(SB3ReplayBuffer):
         Sample trajectories from the replay buffer.
         :param env: associated gym VecEnv to normalize the observations/rewards when sampling
         :param mb_size: amount of pairs of trajectories to be sampled
+        :param traj_len: length of trajectories
         :return: two lists of mb_size many trajectories
         """
+        max_valid_index = min(self.buffer_size, self.pos) - traj_len
+        if max_valid_index <= 0:
+            raise ValueError(
+                f"Not enough valid data in buffer to sample trajectories. "
+                f"self.pos={self.pos}, traj_len={traj_len}, capacity={self.buffer_size}"
+            )
 
-        try:
-            indices = np.random.choice(self.pos - traj_len, 2 * mb_size, replace=False)
-        except ValueError:
-            indices = np.random.choice(self.pos - traj_len, 2 * mb_size, replace=True)
+        if max_valid_index >= 2 * mb_size:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=False)
+        else:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=True)
 
         trajectories = [
             self.get_trajectory(
