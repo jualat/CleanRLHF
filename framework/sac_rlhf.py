@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import logging
 
 import gymnasium as gym
-from gymnasium.experimental.wrappers.rendering import RecordVideoV0
 import numpy as np
 import torch
 import torch.nn as nn
@@ -110,7 +109,7 @@ class Args:
     # Simulated Teacher
     trajectory_length: int = 32
     """the length of the trajectories that are sampled for human feedback"""
-    preference_sampling: str = "uniform"
+    preference_sampling: str = "disagree"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
     teacher_sim_beta: float = -1
     """this parameter controls how deterministic or random the teacher's preferences are"""
@@ -142,15 +141,9 @@ class Args:
     """path to model"""
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_id, seed):
     def thunk():
-        if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
-            # You've to use experimental wrappers to record video to avoid black screen issue:
-            # https://github.com/Farama-Foundation/Gymnasium/issues/455#issuecomment-1517900688
-            env = RecordVideoV0(env, f"videos/{run_name}")
-        else:
-            env = gym.make(env_id)
+        env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
@@ -418,10 +411,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [
-            make_env(args.env_id, args.seed, i, args.capture_video, run_name)
-            for i in range(args.num_envs)
-        ]
+        [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
     )
     assert isinstance(
         envs.single_action_space, gym.spaces.Box
@@ -641,7 +631,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     try:
         obs, _ = envs.reset(seed=args.seed)
-        for global_step in range(args.total_timesteps):
+        total_steps = (
+            args.total_timesteps - args.total_explore_steps
+            if args.exploration_load or args.unsupervised_exploration
+            else args.total_timesteps
+        )
+        for global_step in range(total_steps):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
