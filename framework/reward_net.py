@@ -18,8 +18,8 @@ def gen_reward_net(hidden_dim, layers, env=None):
     for _ in range(layers):
         reward_net.append(nn.Linear(hidden_dim, hidden_dim))
         reward_net.append(nn.LeakyReLU())
+    reward_net.append(nn.Dropout(p=0.1))
     reward_net.append(nn.Linear(hidden_dim, 1))
-    reward_net.append(nn.Tanh())
 
     return reward_net
 
