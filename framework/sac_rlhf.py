@@ -42,9 +42,9 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = "cleanRLHF"
     """the entity (team) of wandb's project"""
-    capture_video: bool = False
+    capture_video: bool = True
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    num_envs: int = 12
+    num_envs: int = 1
     """the number of parallel environments to accelerate training. 
     Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
@@ -95,7 +95,7 @@ class Args:
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 5000
+    teacher_feedback_frequency: int = 10000
     """the frequency of teacher feedback (every K iterations)"""
     teacher_feedback_num_queries_per_session: int = 100
     """the number of queries per feedback session"""
@@ -107,7 +107,7 @@ class Args:
     """the learning rate of the teacher"""
 
     # Simulated Teacher
-    trajectory_length: int = 32
+    trajectory_length: int = 64
     """the length of the trajectories that are sampled for human feedback"""
     preference_sampling: str = "disagree"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
@@ -471,6 +471,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         device,
         handle_timeout_termination=False,
         n_envs=1,
+        seed=args.seed,
     )
     start_time = time.time()
 

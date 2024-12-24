@@ -60,6 +60,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         n_envs: int = 1,
         optimize_memory_usage: bool = False,
         handle_timeout_termination: bool = True,
+        seed: int = None,
     ):
         super().__init__(
             buffer_size,
@@ -75,6 +76,13 @@ class ReplayBuffer(SB3ReplayBuffer):
         )
         self.qpos = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
         self.qvel = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
+        self.seed = seed
+
+        if seed is not None:
+            np.random.seed(seed)
+            self.torch_generator = torch.Generator().manual_seed(seed)
+        else:
+            self.torch_generator = None
 
     def add(
         self,
