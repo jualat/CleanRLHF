@@ -2,11 +2,13 @@ import os
 import random
 
 import cv2
+import pandas as pd
 import torch
 import numpy as np
 import gymnasium as gym
 import tyro
 from scipy.stats import norm
+from plotnine import ggplot, aes, geom_point, geom_line, labs
 
 from sac_rlhf import Actor, load_model_all
 from dataclasses import dataclass
@@ -33,6 +35,10 @@ class Args:
     """lowest x percent"""
     render: bool = True
     """render the videos"""
+    actor_net_hidden_dim: int = 256
+    """the dimension of the hidden layers in the actor network"""
+    actor_net_hidden_layers: int = 4
+    """the number of hidden layers in the actor network"""
 
 
 class Evaluation:
@@ -45,6 +51,8 @@ class Evaluation:
         seed=None,
         torch_deterministic=True,
         run_name=None,
+        hidden_dim=256,
+        hidden_layers=4,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.render = render
@@ -57,7 +65,9 @@ class Evaluation:
         self.env = gym.wrappers.RecordEpisodeStatistics(self.env)
 
         if path_to_model:
-            self.actor = Actor(gym.vector.SyncVectorEnv([lambda: self.env]), 256, 4)
+            self.actor = Actor(
+                gym.vector.SyncVectorEnv([lambda: self.env]), hidden_dim, hidden_layers
+            )
             state_dict = {"actor": self.actor}
             load_model_all(state_dict, path_to_model, self.device)
         else:
@@ -68,10 +78,11 @@ class Evaluation:
             np.random.seed(seed)
             torch.manual_seed(seed)
             self.env.action_space.seed(seed)
-
         torch.backends.cudnn.deterministic = torch_deterministic
 
-    def evaluate_policy(self, episodes=30, fps=30, confidence=0.95, lowest_x_pct=0.1):
+    def evaluate_policy(
+        self, episodes=30, fps=30, confidence=0.95, lowest_x_pct=0.1, step=None
+    ):
         actor = self.actor
         env = self.env
         run_name = self.run_name
@@ -85,7 +96,10 @@ class Evaluation:
             done = False
             total_episode_reward = 0
             if self.render:
-                out_path = f"{video_folder}/{episode}.mp4"
+                if step is not None:
+                    out_path = f"{video_folder}/{episode}_{step}.mp4"
+                else:
+                    out_path = f"{video_folder}/{episode}.mp4"
                 img = env.render()
                 writer = cv2.VideoWriter(
                     out_path,
@@ -109,6 +123,10 @@ class Evaluation:
 
             if self.render:
                 writer.release()
+                os.rename(
+                    out_path,
+                    out_path.replace(".mp4", f"_{total_episode_reward:.2f}.mp4"),
+                )
             episode_rewards.append(total_episode_reward)
 
         mean_episode_reward = np.mean(episode_rewards)
@@ -128,7 +146,24 @@ class Evaluation:
             "min_reward": min(episode_rewards),
             "median_reward": np.median(episode_rewards),
             f"lowest_{lowest_x_pct}_pct": np.quantile(episode_rewards, lowest_x_pct),
+            "episode_rewards": episode_rewards,
+            "episode": list(range(episodes)),
         }
+
+    def plot(self, eval_dict, step):
+        if step:
+            out_path = f"./models/{self.run_name}/evaluation_{step}.png"
+        else:
+            out_path = f"./models/{self.run_name}/evaluation.png"
+        df = pd.DataFrame(eval_dict)
+        (
+            ggplot(df, aes(x="episode", y="episode_rewards"))
+            + geom_point(aes(color="'Episode Rewards'"))
+            + geom_line(
+                aes(x="episode", y="mean_reward", color="'Mean Reward'"), alpha=0.7
+            )
+            + labs(title="Evaluation", x="Episode", y="Episode Reward", color="Legend")
+        ).save(out_path, width=10, height=6, dpi=300)
 
 
 if __name__ == "__main__":
@@ -141,6 +176,8 @@ if __name__ == "__main__":
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=args.run_name,
+        hidden_layers=args.actor_net_hidden_layers,
+        hidden_dim=args.actor_net_hidden_dim,
     )
 
     eval_dict = evaluation.evaluate_policy(
@@ -150,3 +187,4 @@ if __name__ == "__main__":
     )
 
     print(eval_dict)
+    evaluation.plot(eval_dict)

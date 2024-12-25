@@ -22,6 +22,7 @@ wandb = "^0.13.11"
 scipy = ">=1.14.1"
 pre-commit = "^4.0.1"
 logging = "^0.4.9.6"
+plotnine = "^0.14.4"
 
 [build-system]
 requires = ["poetry-core"]
