@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import gymnasium as gym
 import tyro
+from scipy.stats import norm
 
 from sac_rlhf import Actor, load_model_all
 from dataclasses import dataclass
@@ -24,6 +25,14 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     run_name: str = ""
     """name of the run"""
+    episodes: int = 30
+    """number of episodes to run"""
+    confidence: float = 0.95
+    """confidence interval"""
+    lowest_x_percent: float = 0.1
+    """lowest x percent"""
+    render: bool = True
+    """render the videos"""
 
 
 class Evaluation:
@@ -62,7 +71,7 @@ class Evaluation:
 
         torch.backends.cudnn.deterministic = torch_deterministic
 
-    def evaluate_policy(self, episodes=10, fps=30):
+    def evaluate_policy(self, episodes=30, fps=30, confidence=0.95, lowest_x_pct=0.1):
         actor = self.actor
         env = self.env
         run_name = self.run_name
@@ -104,15 +113,22 @@ class Evaluation:
 
         mean_episode_reward = np.mean(episode_rewards)
         std_episode_reward = np.std(episode_rewards)
-        confidence_interval = 1.96 * std_episode_reward / np.sqrt(episodes)
+        alpha = 1 - confidence
+        z_value = norm.ppf(1 - alpha / 2)
+        confidence_interval = z_value * std_episode_reward / np.sqrt(episodes)
         left_confidence_interval = mean_episode_reward - confidence_interval
         right_confidence_interval = mean_episode_reward + confidence_interval
 
-        return (
-            mean_episode_reward,
-            std_episode_reward,
-            (left_confidence_interval, right_confidence_interval),
-        )
+        return {
+            "mean_reward": mean_episode_reward,
+            "std_reward": std_episode_reward,
+            "ci_left": left_confidence_interval,
+            "ci_right": right_confidence_interval,
+            "max_reward": max(episode_rewards),
+            "min_reward": min(episode_rewards),
+            "median_reward": np.median(episode_rewards),
+            f"lowest_{lowest_x_pct}_pct": np.quantile(episode_rewards, lowest_x_pct),
+        }
 
 
 if __name__ == "__main__":
@@ -121,11 +137,16 @@ if __name__ == "__main__":
     evaluation = Evaluation(
         path_to_model=args.path_to_model,
         env_id=args.env_id,
-        render=True,
+        render=args.render,
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=args.run_name,
     )
-    mean, std, conf = evaluation.evaluate_policy()
-    print(f"{mean} +- {std}")
-    print(conf)
+
+    eval_dict = evaluation.evaluate_policy(
+        episodes=args.episodes,
+        confidence=args.confidence,
+        lowest_x_pct=args.lowest_x_percent,
+    )
+
+    print(eval_dict)
