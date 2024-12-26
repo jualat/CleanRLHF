@@ -21,7 +21,18 @@ def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int
                 probs.append(
                     reward_net.preference_prob_hat_member(traj_1, traj_2, member)
                 )
-            disagrees.append(np.std(probs, axis=0))
+            if isinstance(probs, list):
+                probs_numpy = np.array(
+                    [
+                        p.cpu().numpy() if isinstance(p, torch.Tensor) else p
+                        for p in probs
+                    ]
+                )
+            elif isinstance(probs, torch.Tensor):
+                probs_numpy = probs.cpu().numpy()
+            else:
+                probs_numpy = np.array(probs)
+            disagrees.append(np.std(probs_numpy, axis=0))
 
     disagrees_argmax = max(enumerate(disagrees), key=lambda x: x[1])[0]
     return traj_mb1[disagrees_argmax], traj_mb2[disagrees_argmax]
@@ -38,7 +49,18 @@ def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
                 probs.append(
                     reward_net.preference_hat_entropy_member(traj_1, traj_2, member)
                 )
-            entropies.append(np.mean(probs, axis=0))
+            if isinstance(probs, list):
+                probs_numpy = np.array(
+                    [
+                        p.cpu().numpy() if isinstance(p, torch.Tensor) else p
+                        for p in probs
+                    ]
+                )
+            elif isinstance(probs, torch.Tensor):
+                probs_numpy = probs.cpu().numpy()
+            else:
+                probs_numpy = np.array(probs)
+            entropies.append(np.mean(probs_numpy, axis=0))
 
     entropies_argmax = max(enumerate(entropies), key=lambda x: x[1])[0]
     return traj_mb1[entropies_argmax], traj_mb2[entropies_argmax]
