@@ -2,6 +2,8 @@ import os
 import logging
 
 import gymnasium as gym
+import torch
+
 from replay_buffer import ReplayBuffer, Trajectory
 import cv2
 
@@ -48,7 +50,8 @@ class VideoRecorder:
             self._write_trajectory_to_video(env, trajectory, writer)
         except Exception as e:
             logging.error(
-                f"Error recording trajectory (start_idx={start_idx}, end_idx={end_idx}, env_idx={env_idx}): {e}"
+                f"Error recording trajectory (start_idx={start_idx}, end_idx={end_idx}, env_idx={env_idx}): {e}",
+                exc_info=True,
             )
         finally:
             if writer:
@@ -67,7 +70,17 @@ class VideoRecorder:
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             env.reset(seed=self.seed)
-            env.unwrapped.set_state(qpos_list[0], qvel_list[0])
+            qpos = (
+                qpos_list[0].cpu().numpy()
+                if isinstance(qpos_list[0], torch.Tensor)
+                else qpos_list[0]
+            )
+            qvel = (
+                qvel_list[0].cpu().numpy()
+                if isinstance(qvel_list[0], torch.Tensor)
+                else qvel_list[0]
+            )
+            env.unwrapped.set_state(qpos, qvel)
         else:
             env.reset(seed=self.seed)
             if hasattr(env, "state"):
@@ -86,11 +99,23 @@ class VideoRecorder:
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             for i in range(1, len(qpos_list)):
-                env.unwrapped.set_state(qpos_list[i], qvel_list[i])
+                print(type(qpos_list[i]))
+                qpos = (
+                    qpos_list[i].cpu().numpy()
+                    if isinstance(qpos_list[i], torch.Tensor)
+                    else qpos_list[i]
+                )
+                qvel = (
+                    qvel_list[i].cpu().numpy()
+                    if isinstance(qvel_list[i], torch.Tensor)
+                    else qvel_list[i]
+                )
+                env.unwrapped.set_state(qpos, qvel)
                 writer.write(env.render())
         else:
             actions = trajectory.samples.actions
             for action in actions:
-                action = action.detach().cpu().numpy()
+                if isinstance(action, torch.Tensor):
+                    action = action.detach().cpu().numpy()
                 env.step(action)
                 writer.write(env.render())

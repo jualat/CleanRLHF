@@ -37,7 +37,7 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    track: bool = False
+    track: bool = True
     """if toggled, this experiment will be tracked with Weights and Biases"""
     wandb_project_name: str = ""
     """the wandb's project name"""
@@ -96,15 +96,15 @@ class Args:
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 10000
+    teacher_feedback_frequency: int = 35000
     """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 100
+    teacher_feedback_num_queries_per_session: int = 50
     """the number of queries per feedback session"""
     teacher_update_epochs: int = 20
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
-    teacher_learning_rate: float = 1e-3
+    teacher_learning_rate: float = 3e-4
     """the learning rate of the teacher"""
 
     # Simulated Teacher
@@ -116,11 +116,11 @@ class Args:
     """this parameter controls how deterministic or random the teacher's preferences are"""
     teacher_sim_gamma: float = 1
     """the discount factor gamma, which models myopic behavior"""
-    teacher_sim_epsilon: float = 0
+    teacher_sim_epsilon: float = 0.05
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
     teacher_sim_delta_skip: float = 1e-7
     """skip two trajectories if neither segment demonstrates the desired behavior"""
-    teacher_sim_delta_equal: float = 0
+    teacher_sim_delta_equal: float = 1
     """the range of two trajectories being equal"""
 
     # Unsupervised Exploration
