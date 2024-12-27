@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import logging
 
 import gymnasium as gym
-from gymnasium.experimental.wrappers.rendering import RecordVideoV0
 import numpy as np
 import torch
 import torch.nn as nn
@@ -16,6 +15,7 @@ import tyro
 import pickle
 import gzip
 
+from tqdm import trange
 from performance_metrics import PerformanceMetrics
 from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
@@ -118,7 +118,7 @@ class Args:
     """the discount factor gamma, which models myopic behavior"""
     teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    teacher_sim_delta_skip: float = 0
+    teacher_sim_delta_skip: float = 1e-7
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
@@ -142,15 +142,9 @@ class Args:
     """path to model"""
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_id, seed):
     def thunk():
-        if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
-            # You've to use experimental wrappers to record video to avoid black screen issue:
-            # https://github.com/Farama-Foundation/Gymnasium/issues/455#issuecomment-1517900688
-            env = RecordVideoV0(env, f"videos/{run_name}")
-        else:
-            env = gym.make(env_id)
+        env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
@@ -274,6 +268,11 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
     replay_buffer.dones = buffer_data["dones"]
 
     logging.info(f"Replay buffer loaded from {path}")
+
+
+def is_mujoco_env(env):
+    # Try to check the internal `mujoco` attribute
+    return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")
 
 
 # ALGO LOGIC: initialize agent here:
@@ -413,10 +412,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [
-            make_env(args.env_id, args.seed, i, args.capture_video, run_name)
-            for i in range(args.num_envs)
-        ]
+        [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
     )
     assert isinstance(
         envs.single_action_space, gym.spaces.Box
@@ -502,12 +498,17 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
+    qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
+    qvel = np.zeros_like(qpos)
+
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
         knn_estimator = ExplorationRewardKNN(k=3)
         current_step += 1
         obs, _ = envs.reset(seed=args.seed)
-        for explore_step in range(args.total_explore_steps):
+        for explore_step in trange(
+            args.total_explore_steps, desc="Exploration step", unit="steps"
+        ):
 
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
@@ -521,6 +522,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for idx, trunc in enumerate(truncations):
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
+            if is_mujoco_env(envs.envs[0]):
+                for idx in range(args.num_envs):
+                    single_env = envs.envs[idx]
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -533,6 +539,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 ground_truth_reward,
                 dones,
                 infos,
+                qpos,
+                qvel,
             )
 
             obs = next_obs
@@ -581,13 +589,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     len(knn_estimator.visited_states),
                     explore_step,
                 )
-                logging.info(f"SPS: {int(explore_step / (time.time() - start_time))}")
+                logging.debug(f"SPS: {int(explore_step / (time.time() - start_time))}")
                 writer.add_scalar(
                     "exploration/SPS",
                     int(explore_step / (time.time() - start_time)),
                     explore_step,
                 )
-                logging.info(f"Exploration step: {explore_step}")
+                logging.debug(f"Exploration step: {explore_step}")
 
             writer.add_scalar(
                 "exploration/dones",
@@ -626,7 +634,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     try:
         obs, _ = envs.reset(seed=args.seed)
-        for global_step in range(args.total_timesteps):
+        total_steps = (
+            args.total_timesteps - args.total_explore_steps
+            if args.exploration_load or args.unsupervised_exploration
+            else args.total_timesteps
+        )
+        for global_step in trange(total_steps, desc="Training steps", unit="steps"):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
@@ -635,7 +648,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                for i in range(args.teacher_feedback_num_queries_per_session):
+                for i in trange(
+                    args.teacher_feedback_num_queries_per_session,
+                    desc="Queries",
+                    unit="queries",
+                ):
                     # Sample trajectories from replay buffer to query teacher
                     if args.preference_sampling == "uniform":
                         first_trajectory, second_trajectory = uniform_sampling(
@@ -650,7 +667,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                             rb, reward_net, args.trajectory_length
                         )
 
-                    logging.info(f"step {global_step}, {i}")
+                    logging.debug(f"step {global_step}, {i}")
 
                     # Create video of the two trajectories. For now, we only render if capture_video is True.
                     # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
@@ -695,7 +712,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
                 actions
             )
-
+            if is_mujoco_env(envs.envs[0]):
+                for idx in range(args.num_envs):
+                    single_env = envs.envs[idx]
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
@@ -754,6 +775,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 groundTruthRewards[env_idx : env_idx + 1],
                 dones[env_idx : env_idx + 1],
                 single_env_info,
+                qpos,
+                qvel,
             )
 
             # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
@@ -812,7 +835,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         "losses/actor_loss", actor_loss.item(), global_step
                     )
                     writer.add_scalar("losses/alpha", alpha, global_step)
-                    logging.info(
+                    logging.debug(
                         f"SPS: {int(global_step / (time.time() - start_time))}"
                     )
                     writer.add_scalar(

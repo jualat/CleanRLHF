@@ -85,7 +85,7 @@ class RewardNet(nn.Module):
 
         x = torch.cat([observations, actions], 1)
         rewards = self.ensemble[member](x)
-        return rewards.cpu().detach().numpy()
+        return rewards
 
     def preference_prob_hat_member(self, traj1, traj2, member: int = -1):
         softmax = nn.Softmax(dim=0)
@@ -99,9 +99,9 @@ class RewardNet(nn.Module):
             traj2.samples.actions,
             member=member,
         )
-        exp1 = np.sum(r1)
-        exp2 = np.sum(r2)
-        prob = softmax(torch.tensor([exp1, exp2]))
+        exp1 = r1.sum()
+        exp2 = r2.sum()
+        prob = softmax(torch.stack([exp1, exp2]))
         assert 0 <= prob[0] <= 1
         return prob[0]
 
@@ -116,14 +116,14 @@ class RewardNet(nn.Module):
             traj2.samples.actions,
             member=member,
         )
-        r_hat1 = r1.sum(axis=1)
-        r_hat2 = r2.sum(axis=1)
-        r_hat = torch.cat([r_hat1, r_hat2], axis=-1)
+        r_hat1 = r1.sum(dim=1)
+        r_hat2 = r2.sum(dim=1)
+        r_hat = torch.cat([r_hat1, r_hat2], dim=-1)
 
         ent = nn.functional.softmax(r_hat, dim=-1) * nn.functional.log_softmax(
             r_hat, dim=-1
         )
-        ent = ent.sum(axis=-1).abs()
+        ent = -ent.sum(dim=-1)
         return ent
 
 
