@@ -15,6 +15,7 @@ import tyro
 import pickle
 import gzip
 
+from tqdm import trange
 from performance_metrics import PerformanceMetrics
 from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
@@ -505,7 +506,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         knn_estimator = ExplorationRewardKNN(k=3)
         current_step += 1
         obs, _ = envs.reset(seed=args.seed)
-        for explore_step in range(args.total_explore_steps):
+        for explore_step in trange(
+            args.total_explore_steps, desc="Exploration step", unit="steps"
+        ):
 
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
@@ -586,13 +589,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     len(knn_estimator.visited_states),
                     explore_step,
                 )
-                logging.info(f"SPS: {int(explore_step / (time.time() - start_time))}")
+                logging.debug(f"SPS: {int(explore_step / (time.time() - start_time))}")
                 writer.add_scalar(
                     "exploration/SPS",
                     int(explore_step / (time.time() - start_time)),
                     explore_step,
                 )
-                logging.info(f"Exploration step: {explore_step}")
+                logging.debug(f"Exploration step: {explore_step}")
 
             writer.add_scalar(
                 "exploration/dones",
@@ -636,7 +639,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if args.exploration_load or args.unsupervised_exploration
             else args.total_timesteps
         )
-        for global_step in range(total_steps):
+        for global_step in trange(total_steps, desc="Training steps", unit="steps"):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
@@ -645,7 +648,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                for i in range(args.teacher_feedback_num_queries_per_session):
+                for i in trange(
+                    args.teacher_feedback_num_queries_per_session,
+                    desc="Queries",
+                    unit="queries",
+                ):
                     # Sample trajectories from replay buffer to query teacher
                     if args.preference_sampling == "uniform":
                         first_trajectory, second_trajectory = uniform_sampling(
@@ -660,7 +667,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                             rb, reward_net, args.trajectory_length
                         )
 
-                    logging.info(f"step {global_step}, {i}")
+                    logging.debug(f"step {global_step}, {i}")
 
                     # Create video of the two trajectories. For now, we only render if capture_video is True.
                     # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
@@ -826,7 +833,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         "losses/actor_loss", actor_loss.item(), global_step
                     )
                     writer.add_scalar("losses/alpha", alpha, global_step)
-                    logging.info(
+                    logging.debug(
                         f"SPS: {int(global_step / (time.time() - start_time))}"
                     )
                     writer.add_scalar(
