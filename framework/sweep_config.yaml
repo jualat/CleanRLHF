@@ -1,0 +1,136 @@
+program: sac_rlhf.py
+method: random
+metric:
+  goal: maximize
+  name: "evaluate/mean"
+parameters:
+  teacher_feedback_num_queries_per_session:
+    max: 100
+    min: 25
+    distribution: int_uniform
+  teacher_feedback_batch_size:
+    values: [16, 32, 64]
+  teacher_feedback_frequency:
+    max: 70000
+    min: 20000
+    distribution: int_uniform
+  unsupervised_exploration:
+    values:
+      - "true"
+  target_network_frequency:
+    values: 1
+  soft_q_net_hidden_layers:
+    values: 4
+  reward_net_hidden_layers:
+    max: 5
+    min: 3
+    distribution: int_uniform
+  teacher_sim_delta_equal:
+    max: 1
+    min: 0
+    distribution: int_uniform
+  explore_learning_starts:
+    max: 1024
+    min: 256
+    distribution: int_uniform
+  actor_net_hidden_layers:
+    values: 4
+  teacher_sim_delta_skip:
+    values: 0
+  teacher_update_epochs:
+    max: 20
+    min: 5
+    distribution: int_uniform
+  teacher_learning_rate:
+    max: 0.001
+    min: 0.0001
+    distribution: uniform
+  soft_q_net_hidden_dim:
+    values: 256
+  reward_net_hidden_dim:
+    values: [512, 256, 128]
+  actor_net_hidden_dim:
+    values: 256
+  total_explore_steps:
+    values: 10000
+  torch_deterministic:
+    values:
+      - "true"
+  teacher_sim_epsilon:
+    max: 0.05
+    min: 0.0
+    distribution: uniform
+  preference_sampling:
+    values:
+      - disagree
+      - uniform
+      - entropy
+    distribution: categorical
+  wandb_project_name:
+    values:
+      - Hopper-tuning
+  explore_batch_size:
+    values: [128, 256]
+  trajectory_length:
+    values: [32, 64, 128]
+  teacher_sim_gamma:
+    values: 1
+  teacher_sim_beta:
+    values: -1
+  policy_frequency:
+    values: 2
+  exploration_load:
+    values:
+      - "false"
+  total_timesteps:
+    values: 1000000
+  learning_starts:
+    values: 5000
+  capture_video:
+    values:
+      - "false"
+  wandb_entity:
+    values:
+      - cleanRLHF
+  buffer_size:
+    values: 1000000
+  batch_size:
+    values: [512, 256, 128]
+  policy_lr:
+    max: 0.0006
+    min: 0.00015
+    distribution: uniform
+  log_level:
+    values:
+      - INFO
+  num_envs:
+    values: 1
+  log_file:
+    values:
+      - "true"
+  autotune:
+    values:
+      - "true"
+  env_id:
+    values:
+      - Hopper-v4
+  track:
+    values:
+      - "true"
+  gamma:
+    max: 0.995
+    min: 0.9
+    distribution: uniform
+  alpha:
+    values: 0.2
+  seed:
+    values: 1
+  q_lr:
+    max: 0.001
+    min: 0.0005
+    distribution: uniform
+  cuda:
+    values:
+      - "true"
+  tau:
+    values: 0.005

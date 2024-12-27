@@ -10,16 +10,15 @@ import tyro
 from scipy.stats import norm
 from plotnine import ggplot, aes, geom_point, geom_line, labs
 
-from sac_rlhf import Actor, load_model_all
+from actor import Actor
+from env import load_model_all
 from dataclasses import dataclass
 from tqdm import trange
 
 
 @dataclass
 class Args:
-    path_to_model: str = (
-        "./models/Hopper-v4__sac_rlhf__1__1735189523/990001/checkpoint.pth"
-    )
+    path_to_model: str = ""
     """path to model"""
     env_id: str = "Hopper-v4"
     """the environment of the policy"""
