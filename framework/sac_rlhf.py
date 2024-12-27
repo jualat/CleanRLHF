@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import logging
 
 import gymnasium as gym
-from gymnasium.experimental.wrappers.rendering import RecordVideoV0
 import numpy as np
 import torch
 import torch.nn as nn
@@ -119,7 +118,7 @@ class Args:
     """the discount factor gamma, which models myopic behavior"""
     teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    teacher_sim_delta_skip: float = 0
+    teacher_sim_delta_skip: float = 1e-7
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
@@ -143,15 +142,9 @@ class Args:
     """path to model"""
 
 
-def make_env(env_id, seed, idx, capture_video, run_name):
+def make_env(env_id, seed):
     def thunk():
-        if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
-            # You've to use experimental wrappers to record video to avoid black screen issue:
-            # https://github.com/Farama-Foundation/Gymnasium/issues/455#issuecomment-1517900688
-            env = RecordVideoV0(env, f"videos/{run_name}")
-        else:
-            env = gym.make(env_id)
+        env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
@@ -275,6 +268,11 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
     replay_buffer.dones = buffer_data["dones"]
 
     logging.info(f"Replay buffer loaded from {path}")
+
+
+def is_mujoco_env(env):
+    # Try to check the internal `mujoco` attribute
+    return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")
 
 
 # ALGO LOGIC: initialize agent here:
@@ -414,10 +412,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [
-            make_env(args.env_id, args.seed, i, args.capture_video, run_name)
-            for i in range(args.num_envs)
-        ]
+        [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
     )
     assert isinstance(
         envs.single_action_space, gym.spaces.Box
@@ -503,6 +498,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
+    qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
+    qvel = np.zeros_like(qpos)
+
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
         knn_estimator = ExplorationRewardKNN(k=3)
@@ -524,6 +522,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for idx, trunc in enumerate(truncations):
                 if trunc:
                     real_next_obs[idx] = infos["final_observation"][idx]
+            if is_mujoco_env(envs.envs[0]):
+                for idx in range(args.num_envs):
+                    single_env = envs.envs[idx]
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -536,6 +539,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 ground_truth_reward,
                 dones,
                 infos,
+                qpos,
+                qvel,
             )
 
             obs = next_obs
@@ -629,8 +634,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     try:
         obs, _ = envs.reset(seed=args.seed)
+        total_steps = (
+            args.total_timesteps - args.total_explore_steps
+            if args.exploration_load or args.unsupervised_exploration
+            else args.total_timesteps
+        )
         for global_step in trange(
-            args.total_timesteps, desc="Training steps", unit="steps"
+            total_steps, desc="Training steps", unit="steps"
         ):
             ### REWARD LEARNING ###
             current_step += 1
@@ -704,7 +714,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
                 actions
             )
-
+            if is_mujoco_env(envs.envs[0]):
+                for idx in range(args.num_envs):
+                    single_env = envs.envs[idx]
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if infos and "final_info" in infos:
                 for info in infos["final_info"]:
@@ -761,6 +775,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 groundTruthRewards,
                 dones,
                 infos,
+                qpos,
+                qvel,
             )
 
             # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
