@@ -1,4 +1,6 @@
 program: sac_rlhf.py
+project: Hopper-sweep
+entity: cleanRLHF
 method: random
 metric:
   goal: maximize

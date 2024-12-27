@@ -19,6 +19,20 @@ class Args:
     """configuration filename"""
 
 
+def expand_range(param):
+    """
+    Expands a parameter with a range (min, max) into a list of integers.
+    """
+    if isinstance(param, dict) and "min" in param and "max" in param:
+        return list(range(param["min"], param["max"] + 1))
+    elif isinstance(param, dict) and "values" in param:
+        return param["values"]
+    else:
+        raise ValueError(
+            "Invalid parameter format. Must include 'min'/'max' or 'values'."
+        )
+
+
 def generate_yaml_valid_config(config_filename="sweep_config.yaml"):
     """
     Generates valid configurations from a YAML file based on parameter constraints.
@@ -40,11 +54,17 @@ def generate_yaml_valid_config(config_filename="sweep_config.yaml"):
     try:
         values = sweep_config["parameters"]
         total_timesteps = values["total_timesteps"]
-        teacher_feedback_frequency_values = values["teacher_feedback_frequency"]
-        teacher_feedback_num_queries_per_session_values = values[
-            "teacher_feedback_num_queries_per_session"
-        ]
-        teacher_feedback_batch_size_values = values["teacher_feedback_batch_size"]
+        if isinstance(total_timesteps, dict) and "values" in total_timesteps:
+            total_timesteps = total_timesteps["values"]  # Extract the integer value
+        teacher_feedback_frequency_values = expand_range(
+            values["teacher_feedback_frequency"]
+        )
+        teacher_feedback_num_queries_per_session_values = expand_range(
+            values["teacher_feedback_num_queries_per_session"]
+        )
+        teacher_feedback_batch_size_values = expand_range(
+            values["teacher_feedback_batch_size"]
+        )
 
     except KeyError as e:
         raise ValueError(f"Missing required parameter: {e}")
@@ -114,10 +134,12 @@ def main():
     config_filename = args.config_filename
     valid_data = generate_yaml_valid_config(config_filename)
     set_valid_yaml_values(config_filename, valid_data)
-    with open(config_filename, "r") as file:
-        sweep_config = yaml.safe_load(file)
-    sweep_id = wandb.sweep(sweep=sweep_config, project=args.project_name)
-    wandb.agent(sweep_id=sweep_id, function=wrapped_train, count=args.sweep_count)
+    # with open(config_filename, "r") as file:
+
+
+#     sweep_config = yaml.safe_load(file)
+# sweep_id = wandb.sweep(sweep=sweep_config, project=args.project_name)
+# wandb.agent(sweep_id=sweep_id, function=wrapped_train, count=args.sweep_count)
 
 
 def wrapped_train():
