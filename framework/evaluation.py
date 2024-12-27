@@ -64,7 +64,6 @@ class Evaluation:
             self.env = gym.make(env_id, render_mode="rgb_array")
         else:
             self.env = gym.make(env_id)
-        self.env = gym.wrappers.RecordEpisodeStatistics(self.env)
 
         if path_to_model:
             self.actor = Actor(
