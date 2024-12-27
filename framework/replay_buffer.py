@@ -21,6 +21,9 @@ class ReplayBufferSampleHF(NamedTuple):
     dones: torch.Tensor
     rewards: torch.Tensor
     ground_truth_rewards: torch.Tensor
+    qpos: torch.Tensor
+    qvel: torch.Tensor
+    env_idx: int
 
 
 class Trajectory(NamedTuple):
@@ -72,6 +75,8 @@ class ReplayBuffer(SB3ReplayBuffer):
         self.ground_truth_rewards = np.zeros(
             (self.buffer_size, self.n_envs), dtype=np.float32
         )
+        self.qpos = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
+        self.qvel = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
 
     def add(
         self,
@@ -82,9 +87,13 @@ class ReplayBuffer(SB3ReplayBuffer):
         ground_truth_rewards: np.ndarray,
         done: np.ndarray,
         infos: list[dict[str, any]],
+        qpos: np.ndarray,
+        qvel: np.ndarray,
     ) -> None:
         super().add(obs, next_obs, action, reward, done, infos)
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
+        self.qpos[self.pos] = qpos
+        self.qvel[self.pos] = qvel
 
     def sample_trajectories(
         self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
@@ -93,28 +102,37 @@ class ReplayBuffer(SB3ReplayBuffer):
         Sample trajectories from the replay buffer.
         :param env: associated gym VecEnv to normalize the observations/rewards when sampling
         :param mb_size: amount of pairs of trajectories to be sampled
+        :param traj_len: length of trajectories
         :return: two lists of mb_size many trajectories
         """
+        max_valid_index = min(self.buffer_size, self.pos) - traj_len
+        if max_valid_index <= 0:
+            raise ValueError(
+                f"Not enough valid data in buffer to sample trajectories. "
+                f"self.pos={self.pos}, traj_len={traj_len}, capacity={self.buffer_size}"
+            )
 
-        indices = np.random.choice(self.pos, 2 * mb_size, replace=False)
+        if max_valid_index >= 2 * mb_size:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=False)
+        else:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=True)
 
         trajectories = [
             self.get_trajectory(
                 start,
-                (start + traj_len) % self.pos,
+                (start + traj_len),
                 env,
             )
             for start in indices
         ]
         logging.debug(f"trajectory length: {traj_len}, ")
-
         return trajectories[:mb_size], trajectories[mb_size:]
 
     def _get_samples(
         self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None
     ) -> ReplayBufferSampleHF:
         # Sample randomly the env idx
-        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
+        env_indices = np.random.randint(0, high=self.n_envs)
 
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(
@@ -146,6 +164,9 @@ class ReplayBuffer(SB3ReplayBuffer):
             ground_truth_rewards=self.to_torch(
                 self.ground_truth_rewards[batch_inds, env_indices].reshape(-1, 1)
             ),
+            qpos=self.to_torch(self.qpos[batch_inds, env_indices, :]),
+            qvel=self.to_torch(self.qvel[batch_inds, env_indices, :]),
+            env_idx=env_indices,
         )
 
     def get_trajectory(
