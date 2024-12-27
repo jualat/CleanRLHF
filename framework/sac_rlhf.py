@@ -639,9 +639,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if args.exploration_load or args.unsupervised_exploration
             else args.total_timesteps
         )
-        for global_step in trange(
-            total_steps, desc="Training steps", unit="steps"
-        ):
+        for global_step in trange(total_steps, desc="Training steps", unit="steps"):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
