@@ -471,7 +471,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         envs.single_action_space,
         device,
         handle_timeout_termination=False,
-        n_envs=args.num_envs,
+        n_envs=1,
     )
     start_time = time.time()
 
@@ -485,7 +485,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         env=envs,
     ).to(device)
     reward_optimizer = optim.Adam(
-        reward_net.parameters(), lr=args.teacher_learning_rate
+        reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
     video_recorder = VideoRecorder(rb, args.seed, args.env_id)
 
@@ -765,14 +765,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 groundTruthRewards[0],
                 global_step,
             )
+            env_idx = 0
+            single_env_info = {key: value[env_idx] for key, value in infos.items()}
             rb.add(
-                obs,
-                real_next_obs,
-                actions,
-                rewards.squeeze(),
-                groundTruthRewards,
-                dones,
-                infos,
+                obs[env_idx : env_idx + 1],
+                real_next_obs[env_idx : env_idx + 1],
+                actions[env_idx : env_idx + 1],
+                rewards[env_idx : env_idx + 1].squeeze(),
+                groundTruthRewards[env_idx : env_idx + 1],
+                dones[env_idx : env_idx + 1],
+                single_env_info,
                 qpos,
                 qvel,
             )
