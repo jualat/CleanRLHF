@@ -684,8 +684,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
                 evaluate.plot(eval_dict, global_step)
                 writer.add_scalar(
-                    "evaluate/mean", eval_dict["median_reward"], global_step
+                    "evaluate/mean", eval_dict["mean_reward"], global_step
                 )
+                writer.add_scalar("evaluate/std", eval_dict["std_reward"], global_step)
+                writer.add_scalar("evaluate/max", eval_dict["max_reward"], global_step)
+                writer.add_scalar("evaluate/min", eval_dict["min_reward"], global_step)
+                writer.add_scalar("evaluate/median", eval_dict["median"], global_step)
         evaluate.actor = actor.eval()
         evaluate.change_render(True)
         eval_dict = evaluate.evaluate_policy(
@@ -693,8 +697,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         )
         evaluate.plot(eval_dict, args.total_timesteps)
         writer.add_scalar(
-            "evaluate/mean", eval_dict["median_reward"], args.total_timesteps
+            "evaluate/mean", eval_dict["mean_reward"], args.total_timesteps
         )
+        writer.add_scalar("evaluate/std", eval_dict["std_reward"], args.total_timesteps)
+        writer.add_scalar("evaluate/max", eval_dict["max_reward"], args.total_timesteps)
+        writer.add_scalar("evaluate/min", eval_dict["min_reward"], args.total_timesteps)
+        writer.add_scalar("evaluate/median", eval_dict["median"], args.total_timesteps)
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
