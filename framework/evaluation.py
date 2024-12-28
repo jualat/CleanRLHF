@@ -187,6 +187,9 @@ class Evaluation:
         else:
             self.env = gym.make(self.env_id)
 
+    def set_actor(self, actor):
+        self.actor = actor.eval()
+
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
