@@ -698,12 +698,18 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
                 break
 
-        evaluate.actor = actor.eval()
-        evaluate.render = True
-        eval_dict = evaluate.evaluate_policy(
+        evaluate_final = Evaluation(
+            actor=actor,
+            env_id=args.env_id,
+            render=True,
+            seed=args.seed,
+            torch_deterministic=args.torch_deterministic,
+            run_name=run_name,
+        )
+        eval_dict = evaluate_final.evaluate_policy(
             episodes=args.evaluation_episodes, step=args.total_timesteps
         )
-        evaluate.plot(eval_dict, args.total_timesteps)
+        evaluate_final.plot(eval_dict, args.total_timesteps)
         writer.add_scalar(
             "evaluate/mean", eval_dict["median_reward"], args.total_timesteps
         )
