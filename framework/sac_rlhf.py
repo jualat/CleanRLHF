@@ -722,7 +722,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         writer.add_scalar("evaluate/std", eval_dict["std_reward"], args.total_timesteps)
         writer.add_scalar("evaluate/max", eval_dict["max_reward"], args.total_timesteps)
         writer.add_scalar("evaluate/min", eval_dict["min_reward"], args.total_timesteps)
-        writer.add_scalar("evaluate/median", eval_dict["median"], args.total_timesteps)
+        writer.add_scalar(
+            "evaluate/median", eval_dict["median_reward"], args.total_timesteps
+        )
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
     finally:
