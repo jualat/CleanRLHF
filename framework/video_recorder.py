@@ -1,10 +1,11 @@
 import os
 import logging
-
+import cv2
 import gymnasium as gym
 import torch
+
 from replay_buffer import ReplayBuffer, Trajectory
-import cv2
+from env import is_mujoco_env
 
 
 class VideoRecorder:
@@ -56,15 +57,9 @@ class VideoRecorder:
                 writer.release()
             env.close()
 
-    def _is_mujoco_env(self, env) -> bool:
-        # Try to check the internal `mujoco` attribute
-        return hasattr(env.unwrapped, "model") and hasattr(
-            env.unwrapped, "do_simulation"
-        )
-
     def _initialize_env_state(self, env, trajectory):
         """Initialize the environment state based on Mujoco or non-Mujoco trajectories."""
-        if self._is_mujoco_env(env):
+        if is_mujoco_env(env):
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             env.reset(seed=self.seed)
@@ -93,7 +88,7 @@ class VideoRecorder:
 
     def _write_trajectory_to_video(self, env, trajectory, writer):
         """Write the trajectory to a video file."""
-        if self._is_mujoco_env(env):
+        if is_mujoco_env(env):
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             for i in range(1, len(qpos_list)):

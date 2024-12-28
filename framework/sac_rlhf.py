@@ -29,8 +29,10 @@ from env import (
     save_model_all,
     load_replay_buffer,
     load_model_all,
+    is_mujoco_env,
 )
 from critic import SoftQNetwork, train_q_network
+from evaluation import Evaluation
 
 
 @dataclass
@@ -86,6 +88,12 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
+
+    ## Evaluation
+    evaluation_frequency: int = 10000
+    """the frequency of evaluation"""
+    evaluation_episodes: int = 30
+    """the number of evaluation episodes"""
 
     ## Arguments for the neural networks
     reward_net_hidden_dim: int = 256
@@ -287,6 +295,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
     qvel = np.zeros_like(qpos)
+
+    evaluate = Evaluation(
+        actor=actor,
+        env_id=args.env_id,
+        render=False,
+        seed=args.seed,
+        torch_deterministic=args.torch_deterministic,
+        run_name=run_name,
+    )
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -660,6 +677,24 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         global_step,
                     )
                     metrics.reset()
+            if global_step % args.evaluation_frequency == 0:
+                evaluate.actor = actor.eval()
+                eval_dict = evaluate.evaluate_policy(
+                    episodes=args.evaluation_episodes, step=global_step
+                )
+                evaluate.plot(eval_dict, global_step)
+                writer.add_scalar(
+                    "evaluate/mean", eval_dict["median_reward"], global_step
+                )
+        evaluate.actor = actor.eval()
+        evaluate.change_render(True)
+        eval_dict = evaluate.evaluate_policy(
+            episodes=args.evaluation_episodes, step=args.total_timesteps
+        )
+        evaluate.plot(eval_dict, args.total_timesteps)
+        writer.add_scalar(
+            "evaluate/mean", eval_dict["median_reward"], args.total_timesteps
+        )
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")

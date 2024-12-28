@@ -1,16 +1,16 @@
 import os
 import random
-
 import cv2
 import pandas as pd
 import torch
 import numpy as np
 import gymnasium as gym
 import tyro
+
 from scipy.stats import norm
 from plotnine import ggplot, aes, geom_point, geom_line, labs
-
-from sac_rlhf import Actor, load_model_all
+from actor import Actor
+from env import load_model_all
 from dataclasses import dataclass
 from tqdm import trange
 
@@ -58,11 +58,11 @@ class Evaluation:
         self.render = render
         self.seed = seed
         self.run_name = run_name
+        self.env_id = env_id
         if render:
             self.env = gym.make(env_id, render_mode="rgb_array")
         else:
             self.env = gym.make(env_id)
-        self.env = gym.wrappers.RecordEpisodeStatistics(self.env)
 
         if path_to_model:
             self.actor = Actor(
@@ -164,6 +164,13 @@ class Evaluation:
             )
             + labs(title="Evaluation", x="Episode", y="Episode Reward", color="Legend")
         ).save(out_path, width=10, height=6, dpi=300)
+
+    def change_render(self, render):
+        self.render = render
+        if render:
+            self.env = gym.make(self.env_id, render_mode="rgb_array")
+        else:
+            self.env = gym.make(self.env_id)
 
 
 if __name__ == "__main__":
