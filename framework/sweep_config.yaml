@@ -1,21 +1,17 @@
 program: sac_rlhf.py
 entity: cleanRLHF
 project: Hopper-tuning
-method: random
+method: bayes
 metric:
   goal: maximize
   name: "evaluate/mean"
 parameters:
   teacher_feedback_num_queries_per_session:
-    max: 60
-    min: 25
-    distribution: int_uniform
+    values: [50]
   teacher_feedback_batch_size:
-    values: [16, 32, 64]
+    values: [16, 32]
   teacher_feedback_frequency:
-    max: 70000
-    min: 30000
-    distribution: int_uniform
+    values: [35714]
   unsupervised_exploration:
     values: [true]
   target_network_frequency:
@@ -24,16 +20,14 @@ parameters:
     values: [4]
   reward_net_hidden_layers:
     max: 5
-    min: 3
+    min: 2
     distribution: int_uniform
   teacher_sim_delta_equal:
     max: 1
     min: 0
     distribution: int_uniform
   explore_learning_starts:
-    max: 1024
-    min: 256
-    distribution: int_uniform
+    values: [512]
   actor_net_hidden_layers:
     values: [4]
   teacher_sim_delta_skip:
@@ -43,13 +37,13 @@ parameters:
     min: 5
     distribution: int_uniform
   teacher_learning_rate:
-    max: 0.001
     min: 0.0001
+    max: 0.001
     distribution: uniform
   soft_q_net_hidden_dim:
     values: [256]
   reward_net_hidden_dim:
-    values: [512, 256, 128]
+    values: [256, 128]
   actor_net_hidden_dim:
     values: [256]
   total_explore_steps:
@@ -68,9 +62,9 @@ parameters:
   wandb_project_name:
     values: ["Hopper-tuning"]
   explore_batch_size:
-    values: [128, 256]
+    values: [256]
   trajectory_length:
-    values: [32, 64, 128]
+    values: [32, 64]
   teacher_sim_gamma:
     values: [1]
   teacher_sim_beta:
@@ -90,11 +84,9 @@ parameters:
   buffer_size:
     values: [1000000]
   batch_size:
-    values: [512, 256, 128]
+    values: [256]
   policy_lr:
-    max: 0.0006
-    min: 0.00015
-    distribution: uniform
+    values: [3e-4]
   log_level:
     values: ["INFO"]
   num_envs:
@@ -109,16 +101,14 @@ parameters:
     values: [true]
   gamma:
     max: 0.995
-    min: 0.9
+    min: 0.95
     distribution: uniform
   alpha:
     values: [0.2]
   seed:
-    values: [1]
+    values: [1, 2, 3]
   q_lr:
-    max: 0.001
-    min: 0.0005
-    distribution: uniform
+    values: [0.001]
   cuda:
     values: [true]
   tau:

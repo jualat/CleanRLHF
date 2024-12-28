@@ -10,13 +10,13 @@ from dataclasses import dataclass, fields, replace
 class BaseArgs:
     project_name: str = "Hopper-tuning"
     """project name"""
-    sweep_count: int = 5
+    sweep_count: int = 3
     """sweep count"""
     config_filename: str = "sweep_config.yaml"
     """configuration filename"""
     entity: str = "cleanRLHF"
     """wandb entity name"""
-    sweep_id: str = "okurpxxa"
+    sweep_id: str = ""
     """sweep id"""
 
 

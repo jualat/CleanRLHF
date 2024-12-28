@@ -13,7 +13,7 @@ import torch.optim as optim
 import tyro
 
 from tqdm import trange
-from framework.evaluation import Evaluation
+from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
 from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
@@ -45,9 +45,9 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    track: bool = False
+    track: bool = True
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = ""
+    wandb_project_name: str = "Hopper-tuning"
     """the wandb's project name"""
     wandb_entity: str = "cleanRLHF"
     """the entity (team) of wandb's project"""
@@ -94,9 +94,9 @@ class Args:
     """the number of evaluation episodes"""
 
     ## Arguments for the neural networks
-    reward_net_hidden_dim: int = 256
+    reward_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the reward network"""
-    reward_net_hidden_layers: int = 4
+    reward_net_hidden_layers: int = 3
     """the number of hidden layers in the reward network"""
     actor_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
@@ -108,15 +108,15 @@ class Args:
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 35000
+    teacher_feedback_frequency: int = 50000
     """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 50
+    teacher_feedback_num_queries_per_session: int = 70
     """the number of queries per feedback session"""
     teacher_update_epochs: int = 20
     """the amount of gradient steps to take on the teacher feedback"""
-    teacher_feedback_batch_size: int = 32
+    teacher_feedback_batch_size: int = 64
     """the batch size of the teacher feedback sampled from the feedback buffer"""
-    teacher_learning_rate: float = 3e-4
+    teacher_learning_rate: float = 7e-4
     """the learning rate of the teacher"""
 
     # Simulated Teacher
@@ -446,6 +446,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
+        last_mean = 0
         obs, _ = envs.reset(seed=args.seed)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
@@ -677,15 +678,25 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     )
                     metrics.reset()
 
-            if global_step % args.save_freq == 0:
+            if global_step % args.evaluation_frequency == 0:
                 evaluate.actor = actor.eval()
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes, step=global_step
                 )
-                evaluate.plot(eval_dict, global_step)
+                last_mean = eval_dict["median_reward"]
+                # evaluate.plot(eval_dict, global_step)
                 writer.add_scalar(
                     "evaluate/mean", eval_dict["median_reward"], global_step
                 )
+            if global_step >= 500000 and last_mean < 1000:
+                wandb.log(
+                    {
+                        "global_step": global_step,
+                        "status": "stopped",
+                        "last_mean": last_mean,
+                    }
+                )
+                break
 
         evaluate.actor = actor.eval()
         evaluate.render = True

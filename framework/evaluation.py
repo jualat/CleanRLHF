@@ -26,7 +26,7 @@ class Args:
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
-    run_name: str = "Hopper-v4__sac_rlhf__1__1735189523"
+    run_name: str = ""
     """name of the run"""
     episodes: int = 100
     """number of episodes to run"""
