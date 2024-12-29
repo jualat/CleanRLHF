@@ -136,10 +136,10 @@ class Evaluation:
                         f"{video_folder}/{episode}_{step}.mp4",
                         f"{video_folder}/{total_episode_reward:.2f}_{episode}_{step}.mp4",
                     )
-                    os.rename(
-                        out_path,
-                        renamed_path,
-                    )
+                os.rename(
+                    out_path,
+                    renamed_path,
+                )
                 video_paths.append(new_path)
             episode_rewards.append(total_episode_reward)
 
