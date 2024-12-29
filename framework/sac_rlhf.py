@@ -39,7 +39,7 @@ from critic import SoftQNetwork, train_q_network
 class Args:
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 1
+    seed: int = 2
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
@@ -64,11 +64,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the environment id of the task"""
-    total_timesteps: int = 1000000
+    total_timesteps: int = 1000
     """total timesteps of the experiments"""
     buffer_size: int = int(total_timesteps)
     """the replay memory buffer size"""
-    gamma: float = 0.99
+    gamma: float = 0.9938807631220488
     """the discount factor gamma"""
     tau: float = 0.005
     """target smoothing coefficient (default: 0.005)"""
@@ -96,7 +96,7 @@ class Args:
     ## Arguments for the neural networks
     reward_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the reward network"""
-    reward_net_hidden_layers: int = 3
+    reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
     actor_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
@@ -104,23 +104,23 @@ class Args:
     """the number of hidden layers in the actor network"""
     soft_q_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the SoftQNetwork"""
-    soft_q_net_hidden_layers: int = 2
+    soft_q_net_hidden_layers: int = 4
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 50000
+    teacher_feedback_frequency: int = 35714
     """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 70
+    teacher_feedback_num_queries_per_session: int = 50
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 20
+    teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
-    teacher_feedback_batch_size: int = 64
+    teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
-    teacher_learning_rate: float = 7e-4
+    teacher_learning_rate: float = 0.0008238604610524445
     """the learning rate of the teacher"""
 
     # Simulated Teacher
-    trajectory_length: int = 32
+    trajectory_length: int = 64
     """the length of the trajectories that are sampled for human feedback"""
     preference_sampling: str = "disagree"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
@@ -128,7 +128,7 @@ class Args:
     """this parameter controls how deterministic or random the teacher's preferences are"""
     teacher_sim_gamma: float = 1
     """the discount factor gamma, which models myopic behavior"""
-    teacher_sim_epsilon: float = 0
+    teacher_sim_epsilon: float = 0.022112501622616784
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
     teacher_sim_delta_skip: float = 0
     """skip two trajectories if neither segment demonstrates the desired behavior"""
@@ -136,7 +136,7 @@ class Args:
     """the range of two trajectories being equal"""
 
     # Unsupervised Exploration
-    unsupervised_exploration: bool = True
+    unsupervised_exploration: bool = False
     """toggle the unsupervised exploration"""
     total_explore_steps: int = 10000
     """total number of explore steps"""
@@ -679,7 +679,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     metrics.reset()
 
             if global_step % args.evaluation_frequency == 0:
-                evaluate.actor = actor.eval()
+                evaluate.set_actor(actor)
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes, step=global_step
                 )
@@ -704,18 +704,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
                 break
 
-        evaluate_final = Evaluation(
-            actor=actor,
-            env_id=args.env_id,
-            render=True,
-            seed=args.seed,
-            torch_deterministic=args.torch_deterministic,
-            run_name=run_name,
-        )
-        eval_dict = evaluate_final.evaluate_policy(
+        evaluate.set_actor(actor)
+        evaluate.change_render(True)
+        eval_dict = evaluate.evaluate_policy(
             episodes=args.evaluation_episodes, step=args.total_timesteps
         )
-        evaluate_final.plot(eval_dict, args.total_timesteps)
+        evaluate.plot(eval_dict, args.total_timesteps)
         writer.add_scalar(
             "evaluate/mean", eval_dict["mean_reward"], args.total_timesteps
         )

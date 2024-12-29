@@ -125,14 +125,23 @@ class Evaluation:
 
             if self.render:
                 writer.release()
-                renamed_path = out_path.replace(
-                    f"{episode}", f"{total_episode_reward:.2f}_{episode}"
-                )
+                if step is None:
+                    new = f"{total_episode_reward:.2f}_{episode}.mp4"
+                    renamed_path = out_path.replace(
+                        f"{video_folder}/{episode}.mp4",
+                        f"{video_folder}/{total_episode_reward:.2f}_{episode}.mp4",
+                    )
+                else:
+                    new = f"{total_episode_reward:.2f}_{episode}_{step}.mp4"
+                    renamed_path = out_path.replace(
+                        f"{video_folder}/{episode}_{step}.mp4",
+                        f"{video_folder}/{total_episode_reward:.2f}_{episode}_{step}.mp4",
+                    )
                 os.rename(
                     out_path,
                     renamed_path,
                 )
-                video_paths.append(renamed_path)
+                video_paths.append(new)
             episode_rewards.append(total_episode_reward)
 
         mean_episode_reward = np.mean(episode_rewards)
@@ -143,13 +152,19 @@ class Evaluation:
         left_confidence_interval = mean_episode_reward - confidence_interval
         right_confidence_interval = mean_episode_reward + confidence_interval
 
-        best_video_path = max(video_paths, key=lambda x: x[0])[1]
-        worst_video_path = min(video_paths, key=lambda x: x[0])[1]
         if self.render:
+            best_video = max(video_paths, key=lambda f: float(f.split("_")[0]))
+            print("Best video by reward:", best_video)
+            worst_video = min(video_paths, key=lambda f: float(f.split("_")[0]))
+            print("Worst video by reward:", worst_video)
             wandb.log(
                 {
-                    "Best Video": wandb.Video(best_video_path, fps=fps, format="mp4"),
-                    "Worst Video": wandb.Video(worst_video_path, fps=fps, format="mp4"),
+                    "Best Video": wandb.Video(
+                        f"{video_folder}/{best_video}", fps=fps, format="mp4"
+                    ),
+                    "Worst Video": wandb.Video(
+                        f"{video_folder}/{worst_video}", fps=fps, format="mp4"
+                    ),
                 }
             )
         return {
@@ -166,10 +181,12 @@ class Evaluation:
         }
 
     def plot(self, eval_dict, step=None):
+        model_folder = f"./models/{self.run_name}"
+        os.makedirs(model_folder, exist_ok=True)
         if step is not None:
-            out_path = f"./models/{self.run_name}/evaluation_{step}.png"
+            out_path = f"{model_folder}/evaluation_{step}.png"
         else:
-            out_path = f"./models/{self.run_name}/evaluation.png"
+            out_path = f"{model_folder}/evaluation.png"
         df = pd.DataFrame(eval_dict)
         (
             ggplot(df, aes(x="episode", y="episode_rewards"))
