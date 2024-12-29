@@ -677,8 +677,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         global_step,
                     )
                     metrics.reset()
-            if global_step % args.evaluation_frequency == 0:
-                evaluate.actor = actor.eval()
+            if global_step % args.evaluation_frequency == 0 and (
+                args.exploration_load or args.unsupervised_exploration
+            ):
+                evaluate.set_actor(actor)
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes, step=global_step
                 )
