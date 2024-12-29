@@ -69,6 +69,6 @@ def make_env(env_id, seed):
     return thunk
 
 
-def is_mujoco_env(env):
+def is_mujoco_env(env) -> bool:
     # Try to check the internal `mujoco` attribute
     return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")

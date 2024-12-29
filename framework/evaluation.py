@@ -1,15 +1,15 @@
 import os
 import random
-
 import cv2
 import pandas as pd
 import torch
 import numpy as np
 import gymnasium as gym
 import tyro
+import wandb
+
 from scipy.stats import norm
 from plotnine import ggplot, aes, geom_point, geom_line, labs
-
 from actor import Actor
 from env import load_model_all
 from dataclasses import dataclass
@@ -28,7 +28,7 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     run_name: str = ""
     """name of the run"""
-    episodes: int = 100
+    episodes: int = 30
     """number of episodes to run"""
     confidence: float = 0.95
     """confidence interval"""
@@ -59,6 +59,7 @@ class Evaluation:
         self.render = render
         self.seed = seed
         self.run_name = run_name
+        self.env_id = env_id
         if render:
             self.env = gym.make(env_id, render_mode="rgb_array")
         else:
@@ -91,6 +92,7 @@ class Evaluation:
             os.makedirs(video_folder, exist_ok=True)
 
         episode_rewards = []
+        video_paths = []
         for episode in trange(episodes, unit="episodes", desc="Evaluating"):
             obs, _ = env.reset(seed=self.seed)
             done = False
@@ -123,10 +125,14 @@ class Evaluation:
 
             if self.render:
                 writer.release()
+                renamed_path = out_path.replace(
+                    f"{episode}", f"{total_episode_reward:.2f}_{episode}"
+                )
                 os.rename(
                     out_path,
-                    out_path.replace(".mp4", f"_{total_episode_reward:.2f}.mp4"),
+                    renamed_path,
                 )
+                video_paths.append(renamed_path)
             episode_rewards.append(total_episode_reward)
 
         mean_episode_reward = np.mean(episode_rewards)
@@ -137,6 +143,15 @@ class Evaluation:
         left_confidence_interval = mean_episode_reward - confidence_interval
         right_confidence_interval = mean_episode_reward + confidence_interval
 
+        best_video_path = max(video_paths, key=lambda x: x[0])[1]
+        worst_video_path = min(video_paths, key=lambda x: x[0])[1]
+        if self.render:
+            wandb.log(
+                {
+                    "Best Video": wandb.Video(best_video_path, fps=fps, format="mp4"),
+                    "Worst Video": wandb.Video(worst_video_path, fps=fps, format="mp4"),
+                }
+            )
         return {
             "mean_reward": mean_episode_reward,
             "std_reward": std_episode_reward,
@@ -164,6 +179,16 @@ class Evaluation:
             )
             + labs(title="Evaluation", x="Episode", y="Episode Reward", color="Legend")
         ).save(out_path, width=10, height=6, dpi=300)
+
+    def change_render(self, render):
+        self.render = render
+        if render:
+            self.env = gym.make(self.env_id, render_mode="rgb_array")
+        else:
+            self.env = gym.make(self.env_id)
+
+    def set_actor(self, actor):
+        self.actor = actor.eval()
 
 
 if __name__ == "__main__":

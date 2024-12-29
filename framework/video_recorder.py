@@ -1,9 +1,8 @@
 import os
 import logging
+import cv2
 import gymnasium as gym
 import torch
-import cv2
-
 from replay_buffer import ReplayBuffer, Trajectory
 from env import is_mujoco_env
 
