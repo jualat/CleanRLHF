@@ -13,7 +13,6 @@ import torch.optim as optim
 import tyro
 
 from tqdm import trange
-from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
 from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
@@ -33,13 +32,14 @@ from env import (
     is_mujoco_env,
 )
 from critic import SoftQNetwork, train_q_network
+from evaluation import Evaluation
 
 
 @dataclass
 class Args:
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 2
+    seed: int = 1
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
@@ -64,7 +64,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the environment id of the task"""
-    total_timesteps: int = 1000
+    total_timesteps: int = 1000000
     """total timesteps of the experiments"""
     buffer_size: int = int(total_timesteps)
     """the replay memory buffer size"""
@@ -88,7 +88,9 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
-    evaluation_frequency: int = 20000
+
+    ## Evaluation
+    evaluation_frequency: int = 10000
     """the frequency of evaluation"""
     evaluation_episodes: int = 30
     """the number of evaluation episodes"""
@@ -136,7 +138,7 @@ class Args:
     """the range of two trajectories being equal"""
 
     # Unsupervised Exploration
-    unsupervised_exploration: bool = False
+    unsupervised_exploration: bool = True
     """toggle the unsupervised exploration"""
     total_explore_steps: int = 10000
     """total number of explore steps"""
@@ -298,7 +300,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     evaluate = Evaluation(
         actor=actor,
         env_id=args.env_id,
-        render=False,
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
@@ -677,11 +678,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         global_step,
                     )
                     metrics.reset()
-
-            if global_step % args.evaluation_frequency == 0:
-                evaluate.set_actor(actor)
+            if global_step % args.evaluation_frequency == 0 and (
+                args.exploration_load or args.unsupervised_exploration
+            ):
                 eval_dict = evaluate.evaluate_policy(
-                    episodes=args.evaluation_episodes, step=global_step
+                    episodes=args.evaluation_episodes,
+                    step=global_step,
+                    actor=actor,
+                    render=False,
                 )
                 last_mean = eval_dict["mean_reward"]
                 # evaluate.plot(eval_dict, global_step)
@@ -704,10 +708,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
                 break
 
-        evaluate.set_actor(actor)
-        evaluate.change_render(True)
         eval_dict = evaluate.evaluate_policy(
-            episodes=args.evaluation_episodes, step=args.total_timesteps
+            episodes=args.evaluation_episodes,
+            step=args.total_timesteps,
+            actor=actor,
+            render=True,
+            track=args.track,
         )
         evaluate.plot(eval_dict, args.total_timesteps)
         writer.add_scalar(
@@ -719,6 +725,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         writer.add_scalar(
             "evaluate/median", eval_dict["median_reward"], args.total_timesteps
         )
+
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
     finally:
