@@ -1,6 +1,6 @@
 import os
 import random
-import cv2
+import imageio
 import pandas as pd
 import torch
 import numpy as np
@@ -48,7 +48,6 @@ class Evaluation:
         path_to_model=None,
         actor=None,
         env_id="Hopper-v4",
-        render=False,
         seed=None,
         torch_deterministic=True,
         run_name=None,
@@ -56,14 +55,9 @@ class Evaluation:
         hidden_layers=4,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.render = render
         self.seed = seed
         self.run_name = run_name
         self.env_id = env_id
-        if render:
-            self.env = gym.make(env_id, render_mode="rgb_array")
-        else:
-            self.env = gym.make(env_id)
 
         if path_to_model:
             self.actor = Actor(
@@ -78,16 +72,23 @@ class Evaluation:
             random.seed(seed)
             np.random.seed(seed)
             torch.manual_seed(seed)
-            self.env.action_space.seed(seed)
         torch.backends.cudnn.deterministic = torch_deterministic
 
     def evaluate_policy(
-        self, episodes=30, fps=30, confidence=0.95, lowest_x_pct=0.1, step=None
+        self,
+        episodes=30,
+        fps=30,
+        confidence=0.95,
+        lowest_x_pct=0.1,
+        step=None,
+        render=False,
+        actor=None,
+        track=False,
     ):
-        actor = self.actor
-        env = self.env
+        actor = actor.eval() if actor is not None else self.actor
+        env = self.make_env(render=render)
         run_name = self.run_name
-        if self.render:
+        if render:
             video_folder = f"./videos/{run_name}/evaluation"
             os.makedirs(video_folder, exist_ok=True)
 
@@ -97,19 +98,10 @@ class Evaluation:
             obs, _ = env.reset(seed=self.seed)
             done = False
             total_episode_reward = 0
-            if self.render:
-                if step is not None:
-                    out_path = f"{video_folder}/{episode}_{step}.mp4"
-                else:
-                    out_path = f"{video_folder}/{episode}.mp4"
+            if render:
+                images = []
                 img = env.render()
-                writer = cv2.VideoWriter(
-                    out_path,
-                    cv2.VideoWriter_fourcc(*"mp4v"),
-                    fps,
-                    (img.shape[1], img.shape[0]),
-                )
-                writer.write(img)
+                images.append(img)
 
             while not done:
                 action, _, _ = actor.get_action(
@@ -118,31 +110,22 @@ class Evaluation:
                 obs, reward, termination, truncation, _ = env.step(
                     action.detach().cpu().numpy().squeeze(0)
                 )
-                if self.render:
-                    writer.write(env.render())
+                if render:
+                    images.append(env.render())
                 total_episode_reward += reward
                 done = termination or truncation
 
-            if self.render:
-                if step is None:
-                    new_path = f"{total_episode_reward:.2f}_{episode}.mp4"
-                    renamed_path = out_path.replace(
-                        f"{video_folder}/{episode}.mp4",
-                        f"{video_folder}/{total_episode_reward:.2f}_{episode}.mp4",
-                    )
+            if render:
+                if step is not None:
+                    reward_path = f"{total_episode_reward:.0f}_{episode}_{step}.mp4"
+                    out_path = os.path.join(video_folder, reward_path)
                 else:
-                    new_path = f"{total_episode_reward:.2f}_{episode}_{step}.mp4"
-                    renamed_path = out_path.replace(
-                        f"{video_folder}/{episode}_{step}.mp4",
-                        f"{video_folder}/{total_episode_reward:.2f}_{episode}_{step}.mp4",
-                    )
-                os.rename(
-                    out_path,
-                    renamed_path,
-                )
-                video_paths.append(new_path)
+                    reward_path = f"{total_episode_reward:.0f}_{episode}.mp4"
+                    out_path = os.path.join(video_folder, reward_path)
+                imageio.mimsave(uri=out_path, ims=images, fps=fps)
+                video_paths.append(reward_path)
             episode_rewards.append(total_episode_reward)
-
+        env.close()
         mean_episode_reward = np.mean(episode_rewards)
         std_episode_reward = np.std(episode_rewards)
         alpha = 1 - confidence
@@ -151,9 +134,17 @@ class Evaluation:
         left_confidence_interval = mean_episode_reward - confidence_interval
         right_confidence_interval = mean_episode_reward + confidence_interval
 
-        if self.render:
+        if render and track:
             best_video = max(video_paths, key=lambda f: float(f.split("_")[0]))
             worst_video = min(video_paths, key=lambda f: float(f.split("_")[0]))
+            best_video_path = os.path.join(video_folder, best_video)
+            worst_video_path = os.path.join(video_folder, worst_video)
+            wandb.log(
+                {
+                    "Best Video": wandb.Video(best_video_path, fps=fps, format="mp4"),
+                    "Worst Video": wandb.Video(worst_video_path, fps=fps, format="mp4"),
+                }
+            )
 
         return {
             "mean_reward": mean_episode_reward,
@@ -185,15 +176,13 @@ class Evaluation:
             + labs(title="Evaluation", x="Episode", y="Episode Reward", color="Legend")
         ).save(out_path, width=10, height=6, dpi=300)
 
-    def change_render(self, render):
-        self.render = render
+    def make_env(self, render):
         if render:
-            self.env = gym.make(self.env_id, render_mode="rgb_array")
+            env = gym.make(self.env_id, render_mode="rgb_array")
         else:
-            self.env = gym.make(self.env_id)
-
-    def set_actor(self, actor):
-        self.actor = actor.eval()
+            env = gym.make(self.env_id)
+        env.action_space.seed(self.seed)
+        return env
 
 
 if __name__ == "__main__":
@@ -202,7 +191,6 @@ if __name__ == "__main__":
     evaluation = Evaluation(
         path_to_model=args.path_to_model,
         env_id=args.env_id,
-        render=args.render,
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=args.run_name,
@@ -214,6 +202,7 @@ if __name__ == "__main__":
         episodes=args.episodes,
         confidence=args.confidence,
         lowest_x_pct=args.lowest_x_percent,
+        render=args.render,
     )
 
     print(eval_dict)

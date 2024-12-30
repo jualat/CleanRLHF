@@ -299,7 +299,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     evaluate = Evaluation(
         actor=actor,
         env_id=args.env_id,
-        render=False,
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
@@ -680,9 +679,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if global_step % args.evaluation_frequency == 0 and (
                 args.exploration_load or args.unsupervised_exploration
             ):
-                evaluate.set_actor(actor)
                 eval_dict = evaluate.evaluate_policy(
-                    episodes=args.evaluation_episodes, step=global_step
+                    episodes=args.evaluation_episodes,
+                    step=global_step,
+                    actor=actor,
+                    render=False,
                 )
                 evaluate.plot(eval_dict, global_step)
                 writer.add_scalar(
@@ -694,10 +695,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar(
                     "evaluate/median", eval_dict["median_reward"], global_step
                 )
-        evaluate.set_actor(actor)
-        evaluate.change_render(True)
         eval_dict = evaluate.evaluate_policy(
-            episodes=args.evaluation_episodes, step=args.total_timesteps
+            episodes=args.evaluation_episodes,
+            step=args.total_timesteps,
+            actor=actor,
+            render=True,
+            track=args.track,
         )
         evaluate.plot(eval_dict, args.total_timesteps)
         writer.add_scalar(
