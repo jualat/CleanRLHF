@@ -41,14 +41,11 @@ def main():
 
 
 def wrapped_train():
-    # Initialize the W&B run
     run = wandb.init()
 
     try:
-        # Access sweep configuration
         config = wandb.config
 
-        # Create Args object with sweep parameters
         cmd_args = replace(
             Args(),
             **{
@@ -58,14 +55,11 @@ def wrapped_train():
             }
         )
 
-        # Pass Args to the train function in sac_rlhf.py
         train(cmd_args)
     except Exception as e:
-        # Log errors to W&B
         wandb.log({"error": str(e)})
         raise e
     finally:
-        # Finish the W&B run
         run.finish()
 
 
