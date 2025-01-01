@@ -260,6 +260,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         alpha = args.alpha
 
     envs.single_observation_space.dtype = np.float32
+
+    if is_mujoco_env(envs.envs[0]):
+        qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
+        qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
+    else:
+        qpos = np.zeros(2)
+        qvel = np.zeros(2)
+
     rb = ReplayBuffer(
         args.buffer_size,
         envs.single_observation_space,
@@ -267,6 +275,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         device,
         handle_timeout_termination=False,
         n_envs=1,
+        qpos_shape=qpos.shape[1],
+        qvel_shape=qvel.shape[1],
     )
     start_time = time.time()
 
@@ -293,8 +303,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
-    qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
-    qvel = np.zeros_like(qpos)
 
     evaluate = Evaluation(
         actor=actor,
