@@ -58,10 +58,10 @@ class Evaluation:
         self.seed = seed
         self.run_name = run_name
         self.env_id = env_id
-
+        env = gym.make(self.env_id)
         if path_to_model:
             self.actor = Actor(
-                gym.vector.SyncVectorEnv([lambda: self.env]), hidden_dim, hidden_layers
+                gym.vector.SyncVectorEnv([lambda: env]), hidden_dim, hidden_layers
             )
             state_dict = {"actor": self.actor}
             load_model_all(state_dict, path_to_model, self.device)
@@ -159,7 +159,7 @@ class Evaluation:
             "episode": list(range(episodes)),
         }
 
-    def plot(self, eval_dict, step):
+    def plot(self, eval_dict, step=None):
         model_folder = f"./models/{self.run_name}"
         os.makedirs(model_folder, exist_ok=True)
         if step is not None:

@@ -265,8 +265,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
         qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
     else:
-        qpos = np.zeros(2)
-        qvel = np.zeros(2)
+        qpos = np.zeros((2, 2))
+        qvel = np.zeros((2, 2))
 
     rb = ReplayBuffer(
         args.buffer_size,
