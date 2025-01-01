@@ -61,6 +61,8 @@ class ReplayBuffer(SB3ReplayBuffer):
         optimize_memory_usage: bool = False,
         handle_timeout_termination: bool = True,
         seed: int = None,
+        qpos_shape: int = 1,
+        qvel_shape: int = 1,
     ):
         super().__init__(
             buffer_size,
@@ -74,8 +76,12 @@ class ReplayBuffer(SB3ReplayBuffer):
         self.ground_truth_rewards = np.zeros(
             (self.buffer_size, self.n_envs), dtype=np.float32
         )
-        self.qpos = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
-        self.qvel = np.zeros((self.buffer_size, self.n_envs, 6), dtype=np.float32)
+        self.qpos = np.zeros(
+            (self.buffer_size, self.n_envs, qpos_shape), dtype=np.float32
+        )
+        self.qvel = np.zeros(
+            (self.buffer_size, self.n_envs, qvel_shape), dtype=np.float32
+        )
         self.seed = seed
 
         if seed is not None:

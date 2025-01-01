@@ -45,9 +45,9 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    track: bool = True
+    track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "Hopper-tuning"
+    wandb_project_name: str = "SwimmerTest"
     """the wandb's project name"""
     wandb_entity: str = "cleanRLHF"
     """the entity (team) of wandb's project"""
@@ -62,7 +62,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v4"
+    env_id: str = "Ant-v4"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -130,7 +130,7 @@ class Args:
     """this parameter controls how deterministic or random the teacher's preferences are"""
     teacher_sim_gamma: float = 1
     """the discount factor gamma, which models myopic behavior"""
-    teacher_sim_epsilon: float = 0.022112501622616784
+    teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
     teacher_sim_delta_skip: float = 0
     """skip two trajectories if neither segment demonstrates the desired behavior"""
@@ -260,6 +260,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         alpha = args.alpha
 
     envs.single_observation_space.dtype = np.float32
+    if is_mujoco_env(envs.envs[0]):
+        qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
+        qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
+    else:
+        qpos = np.zeros(2)
+        qvel = np.zeros(2)
+
     rb = ReplayBuffer(
         args.buffer_size,
         envs.single_observation_space,
@@ -268,6 +275,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         handle_timeout_termination=False,
         n_envs=1,
         seed=args.seed,
+        qpos_shape=qpos.shape[1],
+        qvel_shape=qvel.shape[1],
     )
     start_time = time.time()
 
@@ -294,8 +303,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
-    qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
-    qvel = np.zeros_like(qpos)
 
     evaluate = Evaluation(
         actor=actor,
@@ -679,7 +686,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     )
                     metrics.reset()
             if global_step % args.evaluation_frequency == 0 and (
-                args.exploration_load or args.unsupervised_exploration
+                global_step != 0
+                or args.exploration_load
+                or args.unsupervised_exploration
             ):
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,
@@ -698,7 +707,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar(
                     "evaluate/median", eval_dict["median_reward"], global_step
                 )
-            if global_step >= 500000 and last_mean < 1000:
+            if global_step >= 500000 and last_mean < 1000 and False:
                 wandb.log(
                     {
                         "global_step": global_step,
