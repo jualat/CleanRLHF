@@ -677,13 +677,24 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     )
                     metrics.reset()
             if global_step % args.evaluation_frequency == 0 and (
-                args.exploration_load or args.unsupervised_exploration
+                global_step != 0
+                or args.exploration_load
+                or args.unsupervised_exploration
             ):
+                render = (
+                    True if global_step % 100000 == 0 and global_step != 0 else False
+                )
+                track = (
+                    True
+                    if global_step % 100000 == 0 and global_step != 0 and args.track
+                    else False
+                )
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,
                     step=global_step,
                     actor=actor,
-                    render=False,
+                    render=render,
+                    track=track,
                 )
                 evaluate.plot(eval_dict, global_step)
                 writer.add_scalar(
