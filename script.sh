@@ -1,6 +1,6 @@
 python3 sac_rlhf.py --env-id Ant-v4 \
-  --num-envs=12 \
-  --no-capture_video \
+  --num-envs=1 \
+  --capture_video \
   --preference_sampling=uniform \
   --teacher-sim-delta-skip=-1e7 \
   --total_explore_steps=5000 \

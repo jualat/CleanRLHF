@@ -10,6 +10,17 @@ import {
   BreadcrumbSeparator
 } from "~/components/ui/breadcrumb";
 import {Outlet} from "react-router";
+import path from "path";
+import fs from "fs";
+
+export const loader = async () => {
+  const directoryPath = path.join(process.cwd(), './public/vids');
+  const files = fs.readdirSync(directoryPath, {encoding: 'utf-8'});
+
+  return {
+    runs: files
+  }
+}
 
 export default function Page() {
   return (
@@ -20,19 +31,6 @@ export default function Page() {
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Building Your Application
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
           </div>
         </header>
         <Outlet />
