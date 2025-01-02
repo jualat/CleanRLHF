@@ -4,16 +4,13 @@ import random
 import time
 from dataclasses import dataclass
 import logging
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import tyro
-import pickle
-import gzip
 
 from tqdm import trange
 from performance_metrics import PerformanceMetrics
@@ -25,6 +22,17 @@ from reward_net import RewardNet, train_reward
 from torch.utils.tensorboard import SummaryWriter
 from teacher import Teacher
 from sampling import uniform_sampling, disagreement_sampling, entropy_sampling
+from actor import Actor, select_actions, update_actor, update_target_networks
+from env import (
+    make_env,
+    save_replay_buffer,
+    save_model_all,
+    load_replay_buffer,
+    load_model_all,
+    is_mujoco_env,
+)
+from critic import SoftQNetwork, train_q_network
+from evaluation import Evaluation
 
 
 @dataclass
@@ -45,7 +53,7 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    num_envs: int = 12
+    num_envs: int = 1
     """the number of parallel environments to accelerate training. 
     Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
@@ -58,7 +66,7 @@ class Args:
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
-    buffer_size: int = int(1e6)
+    buffer_size: int = int(total_timesteps)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -80,6 +88,12 @@ class Args:
     """Entropy regularization coefficient."""
     autotune: bool = True
     """automatic tuning of the entropy coefficient"""
+
+    ## Evaluation
+    evaluation_frequency: int = 10000
+    """the frequency of evaluation"""
+    evaluation_episodes: int = 30
+    """the number of evaluation episodes"""
 
     ## Arguments for the neural networks
     reward_net_hidden_dim: int = 256
@@ -118,7 +132,7 @@ class Args:
     """the discount factor gamma, which models myopic behavior"""
     teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    teacher_sim_delta_skip: float = 1e-7
+    teacher_sim_delta_skip: float = 0
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
@@ -142,225 +156,7 @@ class Args:
     """path to model"""
 
 
-def make_env(env_id, seed):
-    def thunk():
-        env = gym.make(env_id)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        env.action_space.seed(seed)
-        return env
-
-    return thunk
-
-
-def select_actions(obs, actor, device, step, learning_start, envs):
-    if step < learning_start:
-        return np.array(
-            [envs.single_action_space.sample() for _ in range(envs.num_envs)]
-        )
-    else:
-        actions, _, _ = actor.get_action(torch.Tensor(obs).to(device))
-        return actions.detach().cpu().numpy()
-
-
-def train_q_network(data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer):
-    with torch.no_grad():
-        real_rewards = data.rewards
-        next_state_actions, next_state_log_pi, _ = actor.get_action(
-            data.next_observations
-        )
-        qf1_next_target = qf1_target(data.next_observations, next_state_actions)
-        qf2_next_target = qf2_target(data.next_observations, next_state_actions)
-        min_qf_next_target = (
-            torch.min(qf1_next_target, qf2_next_target) - alpha * next_state_log_pi
-        )
-        next_q_value = real_rewards.flatten() + (1 - data.dones.flatten()) * gamma * (
-            min_qf_next_target
-        ).view(-1)
-
-    qf1_a_values = qf1(data.observations, data.actions).view(-1)
-    qf2_a_values = qf2(data.observations, data.actions).view(-1)
-    qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
-    qf2_loss = F.mse_loss(qf2_a_values, next_q_value)
-    qf_loss = qf1_loss + qf2_loss
-
-    # optimize the model
-    q_optimizer.zero_grad()
-    qf_loss.backward()
-    q_optimizer.step()
-
-    return qf_loss, qf1_a_values, qf2_a_values, qf1_loss, qf2_loss
-
-
-def update_actor(data, actor, qf1, qf2, alpha, actor_optimizer):
-    pi, log_pi, _ = actor.get_action(data.observations)
-    qf1_pi = qf1(data.observations, pi)
-    qf2_pi = qf2(data.observations, pi)
-    min_qf_pi = torch.min(qf1_pi, qf2_pi)
-    actor_loss = ((alpha * log_pi) - min_qf_pi).mean()
-
-    actor_optimizer.zero_grad()
-    actor_loss.backward()
-    actor_optimizer.step()
-    if args.autotune:
-        with torch.no_grad():
-            _, log_pi, _ = actor.get_action(data.observations)
-        alpha_loss = (-log_alpha.exp() * (log_pi + target_entropy)).mean()
-
-        a_optimizer.zero_grad()
-        alpha_loss.backward()
-        a_optimizer.step()
-        alpha = log_alpha.exp().item()
-    return actor_loss, alpha, alpha_loss
-
-
-def update_target_networks(source_net, target_net, tau):
-    for param, target_param in zip(source_net.parameters(), target_net.parameters()):
-        target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
-
-
-def save_model_all(run_name: str, step: int, state_dict: dict):
-    model_folder = f"./models/{run_name}/{step}"
-    os.makedirs(model_folder, exist_ok=True)
-    out_path = f"{model_folder}/checkpoint.pth"
-
-    total_state_dict = {name: obj.state_dict() for name, obj in state_dict.items()}
-    torch.save(total_state_dict, out_path)
-    logging.info(f"Saved all models and optimizers to {out_path}")
-
-
-def load_model_all(state_dict: dict, path: str, device):
-    assert os.path.exists(path), "Path to model does not exist"
-    checkpoint = torch.load(path, device)
-    for name, obj in state_dict.items():
-        if name in checkpoint:
-            obj.load_state_dict(checkpoint[name])
-    logging.info(f"Models and optimizers loaded from {path}")
-
-
-def save_replay_buffer(run_name: str, step: int, replay_buffer: ReplayBuffer):
-    model_folder = f"./models/{run_name}/{step}"
-    os.makedirs(model_folder, exist_ok=True)
-    out_path = f"{model_folder}/replay_buffer.pth"
-
-    buffer_data = {
-        "observations": replay_buffer.observations,
-        "next_observations": replay_buffer.next_observations,
-        "actions": replay_buffer.actions,
-        "rewards": replay_buffer.rewards,
-        "ground_truth_rewards": replay_buffer.ground_truth_rewards,
-        "dones": replay_buffer.dones,
-    }
-    with gzip.open(out_path, "wb") as f:
-        pickle.dump(buffer_data, f)
-    logging.info(f"Saved replay buffer to {out_path}")
-
-
-def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
-    assert os.path.exists(path), "Path to replay buffer does not exist"
-    with gzip.open(path, "rb") as f:
-        buffer_data = pickle.load(f)
-
-    replay_buffer.observations = buffer_data["observations"]
-    replay_buffer.next_observations = buffer_data["next_observations"]
-    replay_buffer.actions = buffer_data["actions"]
-    replay_buffer.rewards = buffer_data["rewards"]
-    replay_buffer.ground_truth_rewards = buffer_data["ground_truth_rewards"]
-    replay_buffer.dones = buffer_data["dones"]
-
-    logging.info(f"Replay buffer loaded from {path}")
-
-
-def is_mujoco_env(env):
-    # Try to check the internal `mujoco` attribute
-    return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")
-
-
-# ALGO LOGIC: initialize agent here:
-class SoftQNetwork(nn.Module):
-    def __init__(self, env, hidden_dim, hidden_layers):
-        super().__init__()
-        self.fc_first = nn.Linear(
-            np.array(env.single_observation_space.shape).prod()
-            + np.prod(env.single_action_space.shape),
-            hidden_dim,
-        )
-
-        self.hidden_layers = nn.ModuleList()
-        for _ in range(hidden_layers):
-            self.hidden_layers.append(nn.Linear(hidden_dim, hidden_dim))
-
-        self.fc_last = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x, a):
-        x = torch.cat([x, a], dim=1)
-        x = F.relu(self.fc_first(x))
-        for layer in self.hidden_layers:
-            x = F.relu(layer(x))
-        x = self.fc_last(x)
-        return x
-
-
-LOG_STD_MAX = 2
-LOG_STD_MIN = -5
-
-
-class Actor(nn.Module):
-    def __init__(self, env, hidden_dim, hidden_layers):
-        super().__init__()
-        self.fc_first = nn.Linear(
-            np.array(env.single_observation_space.shape).prod(), hidden_dim
-        )
-        self.hidden_layers = nn.ModuleList()
-        for _ in range(hidden_layers):
-            self.hidden_layers.append(nn.Linear(hidden_dim, hidden_dim))
-            self.hidden_layers.append(nn.ReLU())
-        self.fc_mean = nn.Linear(hidden_dim, np.prod(env.single_action_space.shape))
-        self.fc_logstd = nn.Linear(hidden_dim, np.prod(env.single_action_space.shape))
-        # action rescaling
-        self.register_buffer(
-            "action_scale",
-            torch.tensor(
-                (env.single_action_space.high - env.single_action_space.low) / 2.0,
-                dtype=torch.float32,
-            ),
-        )
-        self.register_buffer(
-            "action_bias",
-            torch.tensor(
-                (env.single_action_space.high + env.single_action_space.low) / 2.0,
-                dtype=torch.float32,
-            ),
-        )
-
-    def forward(self, x):
-        x = F.relu(self.fc_first(x))
-        for layer in self.hidden_layers:
-            x = layer(x)
-        mean = self.fc_mean(x)
-        log_std = self.fc_logstd(x)
-        log_std = torch.tanh(log_std)
-        log_std = LOG_STD_MIN + 0.5 * (LOG_STD_MAX - LOG_STD_MIN) * (
-            log_std + 1
-        )  # From SpinUp / Denis Yarats
-
-        return mean, log_std
-
-    def get_action(self, x):
-        mean, log_std = self(x)
-        std = log_std.exp()
-        normal = torch.distributions.Normal(mean, std)
-        x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
-        y_t = torch.tanh(x_t)
-        action = y_t * self.action_scale + self.action_bias
-        log_prob = normal.log_prob(x_t)
-        # Enforcing Action Bound
-        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6)
-        log_prob = log_prob.sum(1, keepdim=True)
-        mean = torch.tanh(mean) * self.action_scale + self.action_bias
-        return action, log_prob, mean
-
-
-if __name__ == "__main__":
+def train(args: Any):
     import stable_baselines3 as sb3
 
     if sb3.__version__ < "2.0":
@@ -370,7 +166,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 """
         )
 
-    args = tyro.cli(Args)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s",
@@ -465,6 +260,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         alpha = args.alpha
 
     envs.single_observation_space.dtype = np.float32
+
+    if is_mujoco_env(envs.envs[0]):
+        qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
+        qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
+    else:
+        qpos = np.zeros((2, 2))
+        qvel = np.zeros((2, 2))
+
     rb = ReplayBuffer(
         args.buffer_size,
         envs.single_observation_space,
@@ -472,6 +275,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         device,
         handle_timeout_termination=False,
         n_envs=1,
+        qpos_shape=qpos.shape[1],
+        qvel_shape=qvel.shape[1],
     )
     start_time = time.time()
 
@@ -498,8 +303,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
-    qpos = np.zeros((args.num_envs, 6), dtype=np.float32)
-    qvel = np.zeros_like(qpos)
+
+    evaluate = Evaluation(
+        actor=actor,
+        env_id=args.env_id,
+        seed=args.seed,
+        torch_deterministic=args.torch_deterministic,
+        run_name=run_name,
+    )
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -561,6 +372,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     alpha,
                     args.gamma,
                     q_optimizer,
+                    actor,
                 )
 
                 if (
@@ -569,8 +381,17 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     for _ in range(
                         args.policy_frequency
                     ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
-                        actor_loss = update_actor(
-                            data, actor, qf1, qf2, alpha, actor_optimizer
+                        actor_loss, alpha, alpha_loss = update_actor(
+                            data,
+                            actor,
+                            qf1,
+                            qf2,
+                            alpha,
+                            actor_optimizer,
+                            args.autotune,
+                            log_alpha,
+                            target_entropy,
+                            a_optimizer,
                         )
 
             if explore_step % args.target_network_frequency == 0:
@@ -800,6 +621,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     alpha,
                     args.gamma,
                     q_optimizer,
+                    actor,
                 )
 
                 if (
@@ -809,7 +631,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         args.policy_frequency
                     ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                         actor_loss, alpha, alpha_loss = update_actor(
-                            data, actor, qf1, qf2, alpha, actor_optimizer
+                            data,
+                            actor,
+                            qf1,
+                            qf2,
+                            alpha,
+                            actor_optimizer,
+                            args.autotune,
+                            log_alpha,
+                            target_entropy,
+                            a_optimizer,
                         )
 
                 # update the target networks
@@ -853,6 +684,47 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         global_step,
                     )
                     metrics.reset()
+            if global_step % args.evaluation_frequency == 0 and (
+                global_step != 0
+                or args.exploration_load
+                or args.unsupervised_exploration
+            ):
+                render = global_step % 100000 == 0 and global_step != 0
+                track = global_step % 100000 == 0 and global_step != 0 and args.track
+                eval_dict = evaluate.evaluate_policy(
+                    episodes=args.evaluation_episodes,
+                    step=global_step,
+                    actor=actor,
+                    render=render,
+                    track=track,
+                )
+                evaluate.plot(eval_dict, global_step)
+                writer.add_scalar(
+                    "evaluate/mean", eval_dict["mean_reward"], global_step
+                )
+                writer.add_scalar("evaluate/std", eval_dict["std_reward"], global_step)
+                writer.add_scalar("evaluate/max", eval_dict["max_reward"], global_step)
+                writer.add_scalar("evaluate/min", eval_dict["min_reward"], global_step)
+                writer.add_scalar(
+                    "evaluate/median", eval_dict["median_reward"], global_step
+                )
+        eval_dict = evaluate.evaluate_policy(
+            episodes=args.evaluation_episodes,
+            step=args.total_timesteps,
+            actor=actor,
+            render=True,
+            track=args.track,
+        )
+        evaluate.plot(eval_dict, args.total_timesteps)
+        writer.add_scalar(
+            "evaluate/mean", eval_dict["mean_reward"], args.total_timesteps
+        )
+        writer.add_scalar("evaluate/std", eval_dict["std_reward"], args.total_timesteps)
+        writer.add_scalar("evaluate/max", eval_dict["max_reward"], args.total_timesteps)
+        writer.add_scalar("evaluate/min", eval_dict["min_reward"], args.total_timesteps)
+        writer.add_scalar(
+            "evaluate/median", eval_dict["median_reward"], args.total_timesteps
+        )
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
@@ -872,3 +744,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         writer.close()
+
+
+if __name__ == "__main__":
+    cli_args = tyro.cli(Args)
+    train(cli_args)
