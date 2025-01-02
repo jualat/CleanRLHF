@@ -689,14 +689,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                render = (
-                    True if global_step % 100000 == 0 and global_step != 0 else False
-                )
-                track = (
-                    True
-                    if global_step % 100000 == 0 and global_step != 0 and args.track
-                    else False
-                )
+                render = global_step % 100000 == 0 and global_step != 0
+                track = global_step % 100000 == 0 and global_step != 0 and args.track
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,
                     step=global_step,
