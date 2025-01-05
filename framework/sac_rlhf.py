@@ -464,7 +464,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
-        last_three_mean = np.zeros(3)
+        reward_means = np.zeros(3)
         obs, _ = envs.reset(seed=args.seed)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
@@ -709,7 +709,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render=render,
                     track=track,
                 )
-                last_three_mean[global_step % 3] = eval_dict["mean_reward"]
+                reward_means[global_step % 3] = eval_dict["mean_reward"]
                 evaluate.plot(eval_dict, global_step)
                 writer.add_scalar(
                     "evaluate/mean", eval_dict["mean_reward"], global_step
@@ -724,11 +724,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 global_step > args.early_stopping_step == 0
                 and (
                     (
-                        np.mean(last_three_mean) > args.early_stopping_mean
+                        np.mean(reward_means) > args.early_stopping_mean
                         and args.enable_greater_or_smaller_check
                     )
                     or (
-                        np.mean(last_three_mean) < args.early_stopping_mean
+                        np.mean(reward_means) < args.early_stopping_mean
                         and not args.enable_greater_or_smaller_check
                     )
                 )
