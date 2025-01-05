@@ -1,10 +1,15 @@
-python3 sac_rlhf.py --env-id Ant-v4 \
+python3 sac_rlhf.py --env-id=Walker2d-v4 \
   --num-envs=1 \
+  --exp_name=Walker2d-v4-Test \
+  --wandb_project_name=Walker2d-Benjamin \
+  --track \
   --capture_video \
-  --preference_sampling=uniform \
+  --log_level=INFO \
+  --total_timesteps=5000000 \
+  --preference_sampling=disagree \
   --teacher-sim-delta-skip=-1e7 \
-  --total_explore_steps=5000 \
-  --no-unsupervised_exploration \
+  --total_explore_steps=10000 \
+  --unsupervised_exploration \
   --no-exploration-load \
-  --path-to-replay-buffer=models/Ant-v4__sac_rlhf__1__1734788359/10000/replay_buffer.pth \
-  --path-to-model=models/Ant-v4__sac_rlhf__1__1734788359/10000/checkpoint.pth
+  --path-to-replay-buffer=models/Walker2d-v4__Walker2d-v4-Test__1__1736019746/10000/replay_buffer.pth \
+  --path-to-model=models/Walker2d-v4__Walker2d-v4-Test__1__1736019746/10000/checkpoint.pth

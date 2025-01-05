@@ -20,7 +20,8 @@ import {type LoaderFunctionArgs, useLoaderData, useSearchParams} from "react-rou
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const directoryPath = path.join(process.cwd(), './public/vids');
-  const files = fs.readdirSync(directoryPath, {encoding: 'utf-8'});
+  const files = fs.readdirSync(directoryPath, {encoding: 'utf-8'})
+    .filter((file) => !file.includes(".DS_Store"));
 
   return {
     runs: files
@@ -31,8 +32,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const {runs} = useLoaderData<typeof loader>();
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const run1 = searchParams.get("run1");
-  const run2 = searchParams.get("run2");
+  let run1 = searchParams.get("run1");
+  let run2 = searchParams.get("run2");
+
+  if (!run1 && runs.length > 0) {
+    run1 = runs[0];
+  }
+  if (!run2 && runs.length > 1) {
+    run2 = runs[1];
+  }
 
   const navLinks = () => {
     return [
