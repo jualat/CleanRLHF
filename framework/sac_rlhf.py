@@ -1,4 +1,3 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/sac/#sac_continuous_actionpy
 import os
 import random
 import time
@@ -95,6 +94,16 @@ class Args:
     evaluation_episodes: int = 30
     """the number of evaluation episodes"""
 
+    ## Early Stop
+    early_stopping: bool = True
+    """enable early stopping"""
+    early_stopping_steps: int = 500000
+    """the number of steps before early stopping"""
+    early_stopping_threshold: float = 900
+    """the threshold of early stopping"""
+    enable_greater_or_smaller_check: bool = False
+    """stop if reward is greater/smaller then threshold (True: greater/ False: smaller)"""
+
     ## Arguments for the neural networks
     reward_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the reward network"""
@@ -106,7 +115,7 @@ class Args:
     """the number of hidden layers in the actor network"""
     soft_q_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the SoftQNetwork"""
-    soft_q_net_hidden_layers: int = 2
+    soft_q_net_hidden_layers: int = 4
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
@@ -277,6 +286,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         n_envs=1,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
+        seed=args.seed,
     )
     start_time = time.time()
 
@@ -454,6 +464,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
+        reward_means = np.zeros(3)
         obs, _ = envs.reset(seed=args.seed)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
@@ -698,6 +709,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render=render,
                     track=track,
                 )
+                reward_means[global_step % 3] = eval_dict["mean_reward"]
                 evaluate.plot(eval_dict, global_step)
                 writer.add_scalar(
                     "evaluate/mean", eval_dict["mean_reward"], global_step
@@ -708,6 +720,21 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 writer.add_scalar(
                     "evaluate/median", eval_dict["median_reward"], global_step
                 )
+            if (
+                global_step > args.early_stopping_step == 0
+                and (
+                    (
+                        np.mean(reward_means) > args.early_stopping_mean
+                        and args.enable_greater_or_smaller_check
+                    )
+                    or (
+                        np.mean(reward_means) < args.early_stopping_mean
+                        and not args.enable_greater_or_smaller_check
+                    )
+                )
+                and args.early_stopping
+            ):
+                break
         eval_dict = evaluate.evaluate_policy(
             episodes=args.evaluation_episodes,
             step=args.total_timesteps,
