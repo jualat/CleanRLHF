@@ -39,3 +39,30 @@ Biases
 wandb login
 python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-entity cleanRLHF
 ```
+
+### Hyperparameter Tuning
+
+The sweep.py script automates hyperparameter optimization using Weights & Biases (W&B) Sweeps. 
+
+#### How to Run a Sweep:
+1. **Specify the hyperparameter config:**
+
+   Place your sweep configuration in `sweep_config/<SWEEP_NAME>.yaml`.
+
+
+2. **Run the sweep with W&B:**
+
+   ```bash
+   python sweep.py --project_name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep_count 3 --config_filename ./sweep_config/<SWEEP_NAME>.yaml
+   ```
+   `--sweep_count`:  Number of runs to launch in this session.
+   `--project_name`: The name of your W&B project.
+    `--entity`: Your W&B entity (team or username).
+
+
+3. **Run the Sweep with Sweep ID**
+
+    ```bash
+   python sweep.py --sweep_id <SWEEP_ID> --sweep_count 3 
+   ```
+    `--sweep_id`:  You can find this ID on the W&B dashboard.

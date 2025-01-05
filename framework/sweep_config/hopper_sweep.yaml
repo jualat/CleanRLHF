@@ -1,0 +1,127 @@
+program: sac_rlhf.py
+entity: cleanRLHF
+project: Hopper-tuning
+method: bayes
+metric:
+  goal: maximize
+  name: "evaluate/mean"
+parameters:
+  teacher_feedback_num_queries_per_session:
+    values: [50]
+  teacher_feedback_batch_size:
+    values: [32]
+  teacher_feedback_frequency:
+    values: [35714]
+  unsupervised_exploration:
+    values: [true]
+  target_network_frequency:
+    values: [1]
+  soft_q_net_hidden_layers:
+    values: [4]
+  reward_net_hidden_layers:
+    max: 5
+    min: 2
+    distribution: int_uniform
+  teacher_sim_delta_equal:
+    values: [0]
+  explore_learning_starts:
+    values: [512]
+  actor_net_hidden_layers:
+    values: [4]
+  teacher_sim_delta_skip:
+    values: [0]
+  teacher_update_epochs:
+    max: 20
+    min: 10
+    distribution: int_uniform
+  teacher_learning_rate:
+    values: [0.0008]
+  soft_q_net_hidden_dim:
+    values: [256]
+  reward_net_hidden_dim:
+    values: [512 ,256, 128, 64]
+  actor_net_hidden_dim:
+    values: [256]
+  total_explore_steps:
+    values: [10000]
+  torch_deterministic:
+    values: [true]
+  teacher_sim_epsilon:
+    values: [0.025]
+  preference_sampling:
+    values:
+      - disagree
+      - uniform
+      - entropy
+  wandb_project_name:
+    values: ["Hopper-tuning"]
+  explore_batch_size:
+    values: [256]
+  trajectory_length:
+    values: [32, 64]
+  teacher_sim_gamma:
+    values: [1]
+  teacher_sim_beta:
+    values: [-1]
+  policy_frequency:
+    values: [2]
+  exploration_load:
+    values: [false]
+  total_timesteps:
+    values: [1000000]
+  learning_starts:
+    values: [5000]
+  capture_video:
+    values: [false]
+  wandb_entity:
+    values: ["cleanRLHF"]
+  buffer_size:
+    values: [1000000]
+  batch_size:
+    values: [256]
+  policy_lr:
+    distribution: log_uniform
+    min: -4
+    max: -3
+  log_level:
+    values: ["INFO"]
+  num_envs:
+    values: [1]
+  log_file:
+    values: [true]
+  autotune:
+    values: [true]
+  env_id:
+    values: ["Hopper-v4"]
+  track:
+    values: [true]
+  gamma:
+    max: 0.995
+    min: 0.99
+    distribution: uniform
+  alpha:
+    values: [0.2]
+  seed:
+    max: 10
+    min: 1
+    distribution: int_uniform
+  q_lr:
+    distribution: log_uniform
+    min: -5
+    max: -3
+  cuda:
+    values: [true]
+  tau:
+    values: [0.005]
+  evaluation_frequency:
+    values: [10000]
+  evaluation_episodes:
+    values: [30]
+  early_stopping:
+    values: [true]
+  early_stopping_steps:
+    values: [500000]
+  early_stopping_threshold:
+    values: [900]
+  enable_greater_or_smaller_check:
+    values: [false]
