@@ -185,6 +185,18 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         logging.getLogger().addHandler(
             logging.FileHandler(filename=f"runs/{run_name}/logger.log")
         )
+    if args.track:
+        import wandb
+
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True,
+        )
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -302,9 +314,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
-
-    if args.track:
-        metrics.use_wandb(args, run_name)
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
