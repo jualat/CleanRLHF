@@ -119,7 +119,7 @@ parameters:
     values: [30]
   early_stopping:
     values: [true]
-  early_stopping_steps:
+  early_stopping_step:
     values: [500000]
   early_stopping_threshold:
     values: [900]
