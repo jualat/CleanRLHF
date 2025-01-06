@@ -17,10 +17,10 @@ from video_recorder import VideoRecorder
 from unsupervised_exploration import ExplorationRewardKNN
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
-from reward_net import RewardNet, train_reward
+from reward_net import RewardNet, train_reward, train_reward_surf
 from torch.utils.tensorboard import SummaryWriter
 from teacher import Teacher
-from sampling import uniform_sampling, disagreement_sampling, entropy_sampling
+from sampling import sample_trajectories
 from actor import Actor, select_actions, update_actor, update_target_networks
 from env import (
     make_env,
@@ -131,7 +131,7 @@ class Args:
     """the learning rate of the teacher"""
 
     # Simulated Teacher
-    trajectory_length: int = 32
+    trajectory_length: int = 64
     """the length of the trajectories that are sampled for human feedback"""
     preference_sampling: str = "disagree"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
@@ -155,6 +155,20 @@ class Args:
     """the batch size of the explore sampled from the replay buffer"""
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
+
+    # SURF
+    surf: bool = False
+    """Toggle SURF on/off"""
+    unlabeled_batch_ratio: int = 2
+    """Ratio of unlabeled to labeled batch size."""
+    surf_tau: float = 0.99
+    """Confidence threshold for pseudo-labeling"""
+    lambda_ssl: float = 0.1
+    """Weight for the unsupervised (pseudo-labeled) loss"""
+    surf_H_min: int = 45
+    """Minimal length of the data augmented trajectory"""
+    surf_H_max: int = 55
+    """Maximal length of the data augmented trajectory"""
 
     # Load Model
     exploration_load: bool = False
@@ -486,18 +500,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     unit="queries",
                 ):
                     # Sample trajectories from replay buffer to query teacher
-                    if args.preference_sampling == "uniform":
-                        first_trajectory, second_trajectory = uniform_sampling(
-                            rb, args.trajectory_length
-                        )
-                    elif args.preference_sampling == "disagree":
-                        first_trajectory, second_trajectory = disagreement_sampling(
-                            rb, reward_net, args.trajectory_length
-                        )
-                    elif args.preference_sampling == "entropy":
-                        first_trajectory, second_trajectory = entropy_sampling(
-                            rb, reward_net, args.trajectory_length
-                        )
+                    first_trajectory, second_trajectory = sample_trajectories(
+                        rb, args.preference_sampling, reward_net, args.trajectory_length
+                    )
 
                     logging.debug(f"step {global_step}, {i}")
 
@@ -519,18 +524,37 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     # Store preferences
                     pref_buffer.add(first_trajectory, second_trajectory, preference)
 
-                train_reward(
-                    reward_net,
-                    reward_optimizer,
-                    writer,
-                    pref_buffer,
-                    rb,
-                    global_step,
-                    args.teacher_update_epochs,
-                    args.teacher_feedback_batch_size,
-                    device,
-                )
-
+                if args.surf:
+                    train_reward_surf(
+                        model=reward_net,
+                        optimizer=reward_optimizer,
+                        writer=writer,
+                        pref_buffer=pref_buffer,
+                        rb=rb,
+                        global_step=global_step,
+                        epochs=args.teacher_update_epochs,
+                        batch_size=args.teacher_feedback_batch_size,
+                        device=device,
+                        sampling_strategy=args.preference_sampling,
+                        trajectory_length=args.trajectory_length,
+                        unlabeled_batch_ratio=args.unlabeled_batch_ratio,
+                        tau=args.surf_tau,
+                        lambda_ssl=args.lambda_ssl,
+                        H_max=args.surf_H_max,
+                        H_min=args.surf_H_min,
+                    )
+                else:
+                    train_reward(
+                        reward_net,
+                        reward_optimizer,
+                        writer,
+                        pref_buffer,
+                        rb,
+                        global_step,
+                        args.teacher_update_epochs,
+                        args.teacher_feedback_batch_size,
+                        device,
+                    )
                 rb.relabel_rewards(reward_net)
                 logging.info("Rewards relabeled")
 

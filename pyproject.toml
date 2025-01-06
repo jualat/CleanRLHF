@@ -23,6 +23,7 @@ pre-commit = "^4.0.1"
 logging = "^0.4.9.6"
 plotnine = "^0.14.4"
 imageio-ffmpeg = "^0.5.1"
+tqdm = "^4.67.1"
 
 [build-system]
 requires = ["poetry-core"]

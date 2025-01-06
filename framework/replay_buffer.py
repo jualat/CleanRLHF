@@ -226,3 +226,17 @@ class ReplayBuffer(SB3ReplayBuffer):
         assert not np.allclose(
             old_rewards, new_rewards
         ), "No change in rewards after relabeling!"
+
+    def temporal_data_augmentation(
+        self, traj: Trajectory, H_max=55, H_min=45, env: Optional[VecNormalize] = None
+    ):
+        start_idx = traj.replay_buffer_start_idx
+        end_idx = traj.replay_buffer_end_idx
+        H = end_idx - start_idx
+
+        H_prime = np.random.randint(low=H_min, high=min(H_max, H) + 1)
+        offset = np.random.randint(low=0, high=H - H_prime + 1)
+
+        slice_start_idx = start_idx + offset
+        slice_end_idx = start_idx + H_prime
+        return self.get_trajectory(slice_start_idx, slice_end_idx, env=env)
