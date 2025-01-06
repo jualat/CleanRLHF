@@ -634,7 +634,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
                 reward_means[global_step % 3] = eval_dict["mean_reward"]
                 evaluate.plot(eval_dict, global_step)
-                metrics.log_evaluate_metrics(global_step, args, eval_dict)
+                metrics.log_evaluate_metrics(global_step, eval_dict)
             if (
                 global_step > args.early_stopping_step == 0
                 and (
@@ -658,7 +658,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             track=args.track,
         )
         evaluate.plot(eval_dict, args.total_timesteps)
-        metrics.log_evaluate_metrics(global_step, args, eval_dict)
+        metrics.log_evaluate_metrics(global_step, eval_dict)
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
