@@ -7,7 +7,7 @@ videos/
 
 # Logs
 runs/
-runs2/
+runs*/
 
 # Models
 models/
