@@ -97,7 +97,7 @@ class Args:
     ## Early Stop
     early_stopping: bool = True
     """enable early stopping"""
-    early_stopping_steps: int = 500000
+    early_stopping_step: int = 500000
     """the number of steps before early stopping"""
     early_stopping_threshold: float = 900
     """the threshold of early stopping"""
