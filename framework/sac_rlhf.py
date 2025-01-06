@@ -96,7 +96,7 @@ class Args:
     ## Early Stop
     early_stopping: bool = True
     """enable early stopping"""
-    early_stopping_steps: int = 500000
+    early_stopping_step: int = 500000
     """the number of steps before early stopping"""
     early_stopping_threshold: float = 900
     """the threshold of early stopping"""
@@ -184,18 +184,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
         logging.getLogger().addHandler(
             logging.FileHandler(filename=f"runs/{run_name}/logger.log")
-        )
-    if args.track:
-        import wandb
-
-        wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=True,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=True,
-            save_code=True,
         )
 
     # TRY NOT TO MODIFY: seeding
@@ -498,7 +486,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 train_reward(
                     reward_net,
                     reward_optimizer,
-                    metrics.writer,  # TODO
+                    metrics,
                     pref_buffer,
                     rb,
                     global_step,
@@ -612,33 +600,62 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     update_target_networks(qf2, qf2_target, args.tau)
 
                 metrics.add_rewards(rewards.flatten(), groundTruthRewards)
-
-                metrics.log_training_metrics(
-                    global_step,
-                    args,
-                    rewards,
-                    groundTruthRewards,
-                    qf1_a_values,
-                    qf2_a_values,
-                    qf1_loss,
-                    qf2_loss,
-                    qf_loss,
-                    actor_loss,
-                    alpha,
-                    alpha_loss,
-                    start_time,
+                metrics.log_reward_metrics(rewards, groundTruthRewards, global_step)
+                if global_step % 100 == 0:
+                    metrics.log_training_metrics(
+                        global_step,
+                        args,
+                        qf1_a_values,
+                        qf2_a_values,
+                        qf1_loss,
+                        qf2_loss,
+                        qf_loss,
+                        actor_loss,
+                        alpha,
+                        alpha_loss,
+                        start_time,
+                    )
+            if global_step % args.evaluation_frequency == 0 and (
+                global_step != 0
+                or args.exploration_load
+                or args.unsupervised_exploration
+            ):
+                render = global_step % 100000 == 0 and global_step != 0
+                track = global_step % 100000 == 0 and global_step != 0 and args.track
+                eval_dict = evaluate.evaluate_policy(
+                    episodes=args.evaluation_episodes,
+                    step=global_step,
+                    actor=actor,
+                    render=render,
+                    track=track,
                 )
-
-            render = global_step % 100000 == 0 and global_step != 0
-            track = global_step % 100000 == 0 and global_step != 0 and args.track
-            eval_dict = evaluate.evaluate_policy(
-                episodes=args.evaluation_episodes,
-                step=global_step,
-                actor=actor,
-                render=render,
-                track=track,
-            )
-            metrics.log_evaluate_metrics(global_step, args, eval_dict)
+                reward_means[global_step % 3] = eval_dict["mean_reward"]
+                evaluate.plot(eval_dict, global_step)
+                metrics.log_evaluate_metrics(global_step, args, eval_dict)
+            if (
+                global_step > args.early_stopping_step == 0
+                and (
+                    (
+                        np.mean(reward_means) > args.early_stopping_mean
+                        and args.enable_greater_or_smaller_check
+                    )
+                    or (
+                        np.mean(reward_means) < args.early_stopping_mean
+                        and not args.enable_greater_or_smaller_check
+                    )
+                )
+                and args.early_stopping
+            ):
+                break
+        eval_dict = evaluate.evaluate_policy(
+            episodes=args.evaluation_episodes,
+            step=args.total_timesteps,
+            actor=actor,
+            render=True,
+            track=args.track,
+        )
+        evaluate.plot(eval_dict, args.total_timesteps)
+        metrics.log_evaluate_metrics(global_step, args, eval_dict)
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
