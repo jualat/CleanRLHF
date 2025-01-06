@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "cleanrlhf"
+name = "framework"
 version = "0.1.0"
 description = ""
 authors = ["Your Name <you@example.com>"]
@@ -7,22 +7,21 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-gym = "0.23.1"
-gymnasium = ">=0.28.1"
-imageio = "^2.14.1"
-mujoco = "<=2.3.3"
-opencv-python = "^4.10.0"
-stable-baselines3 = "2.0.0"
-tensorboard = "^2.10.0"
-torch = ">=1.12.1"
+gymnasium = "1.0"
+imageio = "^2.36"
+mujoco = "3.2"
+opencv-python = "^4.10" #cv_major.cv_minor.cv_revision.package_revision
+tensorboard = "^2.18"
+torch = "2.5"
 tyro = "^0.9.5"
-numpy = "<2.0"
-wandb = "^0.19.1"
-scipy = ">=1.14.1"
+numpy = "2"
+wandb = "^0.19"
+scipy = ">=1.15"
 pre-commit = "^4.0.1"
 logging = "^0.4.9.6"
-plotnine = "^0.14.4"
+plotnine = "^0.14.5"
 imageio-ffmpeg = "^0.5.1"
+stable-baselines3 = {version = "^2.5.0a0", allow-prereleases = true}
 
 [build-system]
 requires = ["poetry-core"]

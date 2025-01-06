@@ -97,7 +97,7 @@ class Args:
     ## Early Stop
     early_stopping: bool = True
     """enable early stopping"""
-    early_stopping_steps: int = 500000
+    early_stopping_step: int = 500000
     """the number of steps before early stopping"""
     early_stopping_threshold: float = 900
     """the threshold of early stopping"""
@@ -271,8 +271,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs.single_observation_space.dtype = np.float32
 
     if is_mujoco_env(envs.envs[0]):
-        qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
-        qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
+        qpos = np.zeros(
+            (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
+            dtype=np.float32,
+        )
+        qvel = np.zeros(
+            (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
+            dtype=np.float32,
+        )
     else:
         qpos = np.zeros((2, 2))
         qvel = np.zeros((2, 2))
@@ -340,14 +346,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             )
 
             real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
+
             if is_mujoco_env(envs.envs[0]):
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
+                    qpos[idx] = single_env.unwrapped.observation_structure["qpos"]
+                    qvel[idx] = single_env.unwrapped.observation_structure["qvel"]
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -547,43 +551,34 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if is_mujoco_env(envs.envs[0]):
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
+                    qpos[idx] = single_env.unwrapped.observation_structure["qpos"]
+                    qvel[idx] = single_env.unwrapped.observation_structure["qvel"]
             # TRY NOT TO MODIFY: record rewards for plotting purposes
-            if infos and "final_info" in infos:
-                for info in infos["final_info"]:
-                    if info:
-                        logging.info(
-                            f"global_step={global_step}, episodic_return={info['episode']['r']}"
-                        )
-                        writer.add_scalar(
-                            "charts/episodic_return", info["episode"]["r"], global_step
-                        )
-                        writer.add_scalar(
-                            "charts/episodic_length", info["episode"]["l"], global_step
-                        )
+            if "episode" in infos:
+                logging.info(
+                    f"global_step={global_step}, episodic_return={infos['episode']['r']}"
+                )
+                writer.add_scalar(
+                    "charts/episodic_return", infos["episode"]["r"], global_step
+                )
+                writer.add_scalar(
+                    "charts/episodic_length", infos["episode"]["l"], global_step
+                )
 
-                        if args.cuda and torch.cuda.is_available():
-                            allocated = torch.cuda.memory_allocated()
-                            reserved = torch.cuda.memory_reserved()
-                            logging.info(
-                                f"Allocated cuda memory: {allocated / (1024 ** 2)} MB"
-                            )
-                            logging.info(
-                                f"Reserved cuda memory: {reserved / (1024 ** 2)} MB"
-                            )
-                            writer.add_scalar(
-                                "hardware/cuda_memory",
-                                allocated / (1024**2),
-                                global_step,
-                            )
-                        break
+                if args.cuda and torch.cuda.is_available():
+                    allocated = torch.cuda.memory_allocated()
+                    reserved = torch.cuda.memory_reserved()
+                    logging.info(f"Allocated cuda memory: {allocated / (1024 ** 2)} MB")
+                    logging.info(f"Reserved cuda memory: {reserved / (1024 ** 2)} MB")
+                    writer.add_scalar(
+                        "hardware/cuda_memory",
+                        allocated / (1024**2),
+                        global_step,
+                    )
 
-            # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+            # TRY NOT TO MODIFY: save data to reply buffer
             real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
+
             dones = terminations | truncations
             with torch.no_grad():
                 rewards = reward_net.predict_reward(obs, actions)
@@ -598,7 +593,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 global_step,
             )
             env_idx = 0
-            single_env_info = {key: value[env_idx] for key, value in infos.items()}
+            single_env_info = {}
+            for key, value in infos.items():
+                if key != "episode":
+                    single_env_info[key] = value[env_idx]
+            # logging.info(infos["episode"]) todo: fix this
+            # for key, value in infos["episode"].items():
+            #    single_env_info[key] = value[env_idx]
+
             rb.add(
                 obs[env_idx : env_idx + 1],
                 real_next_obs[env_idx : env_idx + 1],
