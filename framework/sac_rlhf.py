@@ -303,6 +303,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
 
+    if args.track:
+        metrics.use_wandb(args, run_name)
+
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
         knn_estimator = ExplorationRewardKNN(k=3)

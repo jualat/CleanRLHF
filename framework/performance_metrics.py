@@ -24,18 +24,18 @@ class PerformanceMetrics:
 
         self.evaluate = evaluate
 
-        if args.track:
-            import wandb
+    def use_wandb(self, args, run_name):
+        import wandb
 
-            wandb.init(
-                project=args.wandb_project_name,
-                entity=args.wandb_entity,
-                sync_tensorboard=True,
-                config=vars(args),
-                name=run_name,
-                monitor_gym=True,
-                save_code=True,
-            )
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True,
+        )
 
     def add_rewards(self, predictions, ground_truths):
         """
