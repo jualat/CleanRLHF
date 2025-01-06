@@ -4,5 +4,6 @@
 # React Router
 /.react-router/
 /build/
-/public/vids/
+/public/vids*/
+/public/videos*/
 /public/models/
