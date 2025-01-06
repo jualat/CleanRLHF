@@ -53,7 +53,7 @@ class Args:
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     num_envs: int = 1
-    """the number of parallel environments to accelerate training. 
+    """the number of parallel environments to accelerate training.
     Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
     """if toggled, logger will write to a file"""
@@ -336,7 +336,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         for explore_step in trange(
             args.total_explore_steps, desc="Exploration step", unit="steps"
         ):
-
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
             )
