@@ -504,7 +504,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     train_reward_surf(
                         model=reward_net,
                         optimizer=reward_optimizer,
-                        writer=metrics,
+                        metrics=metrics,
                         pref_buffer=pref_buffer,
                         rb=rb,
                         global_step=global_step,

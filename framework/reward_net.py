@@ -177,18 +177,19 @@ def train_reward(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             total_loss += ensemble_loss.item()
+        losses = {
+            "total_loss": total_loss / (batch_size * 0.5),
+        }
 
-        metrics.log_reward_net_losses(
-            ensemble_loss, total_loss, global_step, batch_size
-        )
+        metrics.log_reward_net_losses(loss_dict=losses, global_step=global_step)
         if epoch % 10 == 0:
-            logging.info(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
+            logging.info(f"Reward epoch {epoch}, Loss {losses['total_loss']}")
 
 
 def train_reward_surf(
     model,
     optimizer,
-    writer,
+    metrics,
     pref_buffer,
     rb,
     global_step,
@@ -258,8 +259,9 @@ def train_reward_surf(
         unsup_loss_accum = 0.0
 
         if unlabeled_batch_ratio > 0:
+            unsup_batch_size = unlabeled_batch_ratio * batch_size
             unlabeled_pairs = sample_pairs(
-                size=unlabeled_batch_ratio * batch_size,
+                size=unsup_batch_size,
                 rb=rb,
                 sampling_strategy="uniform",
                 reward_net=model,
@@ -315,6 +317,7 @@ def train_reward_surf(
                     )
                     pred_u = model.preference_prob(r1_u, r2_u)
                     loss_u = model.preference_loss(pred_u, pseudo_label)
+                    assert loss_u != float("inf")
                     ensemble_loss_u += loss_u
 
                 ensemble_loss_u /= len(model.ensemble)
@@ -323,12 +326,17 @@ def train_reward_surf(
                 (lambda_ssl * ensemble_loss_u).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
-        total_loss = sup_loss_accum + lambda_ssl * unsup_loss_accum
-        writer.add_scalar("losses/supervised_loss", sup_loss_accum, global_step)
-        writer.add_scalar("losses/unsupervised_loss", unsup_loss_accum, global_step)
-        writer.add_scalar(
-            "losses/total_loss", total_loss / (batch_size * 0.5), global_step
-        )
+        losses = {
+            "total_loss": (sup_loss_accum / (batch_size * 0.5))
+            + (lambda_ssl * unsup_loss_accum) / (unsup_batch_size * 0.5)
+            if unlabeled_batch_ratio > 0
+            else (sup_loss_accum / (batch_size * 0.5)),
+            "supervised_loss": (sup_loss_accum / (batch_size * 0.5)),
+            "unsupervised_loss": unsup_loss_accum
+            if unlabeled_batch_ratio > 0
+            else None,
+        }
+        metrics.log_reward_net_losses(loss_dict=losses, global_step=global_step)
 
         if epoch % 10 == 0:
             logging.info(
