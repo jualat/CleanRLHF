@@ -18,7 +18,6 @@ def gen_reward_net(hidden_dim, layers, env=None):
     for _ in range(layers):
         reward_net.append(nn.Linear(hidden_dim, hidden_dim))
         reward_net.append(nn.LeakyReLU())
-    reward_net.append(nn.Dropout(p=0.1))
     reward_net.append(nn.Linear(hidden_dim, 1))
 
     return reward_net
@@ -209,7 +208,8 @@ def train_reward_surf(
     from sampling import sample_pairs
     from teacher import Preference
 
-    for epoch in range(epochs):
+    augmentation_factor = (H_max - H_min) / trajectory_length
+    for epoch in range(int(epochs * (1 + augmentation_factor))):
         prefs = pref_buffer.sample(batch_size)
         sup_loss_accum = 0.0
         for pref_pair in prefs:
@@ -280,9 +280,16 @@ def train_reward_surf(
                     t2_u, H_max=H_max, H_min=H_min, env=env
                 )
 
-                r1_u = t1_u_aug.samples.rewards
-                r2_u = t2_u_aug.samples.rewards
-                prob_u = model.preference_prob(r1_u, r2_u)
+                # Pseudo-labeling
+                with torch.no_grad():
+                    r1_u = model.forward(
+                        t1_u_aug.samples.observations, t1_u_aug.samples.actions
+                    )
+                    r2_u = model.forward(
+                        t2_u_aug.samples.observations, t2_u_aug.samples.actions
+                    )
+
+                    prob_u = model.preference_prob(r1_u, r2_u)
 
                 if prob_u > tau:
                     pseudo_label = Preference.FIRST.value
@@ -327,5 +334,5 @@ def train_reward_surf(
         if epoch % 10 == 0:
             logging.info(
                 f"Semi-supervised epoch {epoch}, "
-                f"Supervised Loss {sup_loss_accum:.3f}, Unsupervised Loss {unsup_loss_accum:.3f}"
+                f"Supervised Loss {sup_loss_accum}, Unsupervised Loss {unsup_loss_accum}"
             )
