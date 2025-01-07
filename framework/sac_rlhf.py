@@ -91,7 +91,7 @@ class Args:
     ## Evaluation
     evaluation_frequency: int = 10000
     """the frequency of evaluation"""
-    evaluation_episodes: int = 30
+    evaluation_episodes: int = 10
     """the number of evaluation episodes"""
 
     ## Early Stop
@@ -105,7 +105,7 @@ class Args:
     """stop if reward is greater/smaller then threshold (True: greater/ False: smaller)"""
 
     ## Arguments for the neural networks
-    reward_net_hidden_dim: int = 256
+    reward_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
@@ -119,15 +119,15 @@ class Args:
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 5000
+    teacher_feedback_frequency: int = 35712
     """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 100
+    teacher_feedback_num_queries_per_session: int = 50
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 20
+    teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
-    teacher_learning_rate: float = 1e-3
+    teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
 
     # Simulated Teacher
@@ -141,7 +141,7 @@ class Args:
     """the discount factor gamma, which models myopic behavior"""
     teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    teacher_sim_delta_skip: float = 0
+    teacher_sim_delta_skip: float = -1e7
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
@@ -157,17 +157,17 @@ class Args:
     """timestep to start learning in the exploration"""
 
     # SURF
-    surf: bool = False
+    surf: bool = True
     """Toggle SURF on/off"""
-    unlabeled_batch_ratio: int = 2
+    unlabeled_batch_ratio: int = 1
     """Ratio of unlabeled to labeled batch size."""
-    surf_tau: float = 0.99
+    surf_tau: float = 0.999
     """Confidence threshold for pseudo-labeling"""
     lambda_ssl: float = 0.1
     """Weight for the unsupervised (pseudo-labeled) loss"""
-    surf_H_min: int = 45
+    surf_H_min: int = 54
     """Minimal length of the data augmented trajectory"""
-    surf_H_max: int = 55
+    surf_H_max: int = 64
     """Maximal length of the data augmented trajectory"""
 
     # Load Model
