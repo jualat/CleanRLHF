@@ -178,7 +178,7 @@ def train_reward(
             optimizer.step()
             total_loss += ensemble_loss.item()
         losses = {
-            "total_loss": total_loss / (batch_size * 0.5),
+            "total_loss": total_loss / batch_size,
         }
 
         metrics.log_reward_net_losses(loss_dict=losses, global_step=global_step)
@@ -202,8 +202,8 @@ def train_reward_surf(
     unlabeled_batch_ratio=1,
     tau=0.8,
     lambda_ssl=0.1,
-    H_min=55,
-    H_max=45,
+    H_max=55,
+    H_min=45,
 ):
     from sampling import sample_pairs
     from teacher import Preference
@@ -283,11 +283,17 @@ def train_reward_surf(
 
                 # Pseudo-labeling
                 with torch.no_grad():
-                    r1_u = model.forward(
-                        t1_u_aug.samples.observations, t1_u_aug.samples.actions
+                    r1_u = model(
+                        torch.cat(
+                            [t1_u_aug.samples.observations, t1_u_aug.samples.actions],
+                            dim=1,
+                        ).to(device)
                     )
-                    r2_u = model.forward(
-                        t2_u_aug.samples.observations, t2_u_aug.samples.actions
+                    r2_u = model(
+                        torch.cat(
+                            [t2_u_aug.samples.observations, t2_u_aug.samples.actions],
+                            dim=1,
+                        ).to(device)
                     )
 
                     prob_u = model.preference_prob(r1_u, r2_u)
@@ -327,11 +333,11 @@ def train_reward_surf(
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
         losses = {
-            "total_loss": (sup_loss_accum / (batch_size * 0.5))
-            + (lambda_ssl * unsup_loss_accum) / (unsup_batch_size * 0.5)
+            "total_loss": (sup_loss_accum / batch_size)
+            + (lambda_ssl * unsup_loss_accum) / unsup_batch_size
             if unlabeled_batch_ratio > 0
-            else (sup_loss_accum / (batch_size * 0.5)),
-            "supervised_loss": (sup_loss_accum / (batch_size * 0.5)),
+            else (sup_loss_accum / batch_size),
+            "supervised_loss": (sup_loss_accum / batch_size),
             "unsupervised_loss": unsup_loss_accum
             if unlabeled_batch_ratio > 0
             else None,
@@ -341,5 +347,5 @@ def train_reward_surf(
         if epoch % 10 == 0:
             logging.info(
                 f"Semi-supervised epoch {epoch}, "
-                f"Supervised Loss {sup_loss_accum}, Unsupervised Loss {unsup_loss_accum}"
+                f"Supervised Loss {losses['supervised_loss']}, Unsupervised Loss {losses['unsupervised_loss']}"
             )
