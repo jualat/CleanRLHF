@@ -667,7 +667,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             track=args.track,
         )
         evaluate.plot(eval_dict, args.total_timesteps)
-        metrics.log_evaluate_metrics(global_step, eval_dict)
+        metrics.log_evaluate_metrics(args.total_timesteps, eval_dict)
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")

@@ -208,8 +208,8 @@ class PerformanceMetrics:
         )
 
         if cuda:
-            logging.info(f"Allocated cuda memory: {allocated / (1024 ** 2)} MB")
-            logging.info(f"Reserved cuda memory: {reserved / (1024 ** 2)} MB")
+            logging.debug(f"Allocated cuda memory: {allocated / (1024 ** 2)} MB")
+            logging.debug(f"Reserved cuda memory: {reserved / (1024 ** 2)} MB")
             self.writer.add_scalar(
                 "hardware/cuda_memory",
                 allocated / (1024**2),
