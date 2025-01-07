@@ -207,6 +207,7 @@ def train_reward_surf(
     H_max=45,
 ):
     from sampling import sample_pairs
+    from teacher import Preference
 
     for epoch in range(epochs):
         prefs = pref_buffer.sample(batch_size)
@@ -261,7 +262,7 @@ def train_reward_surf(
             unlabeled_pairs = sample_pairs(
                 size=unlabeled_batch_ratio * batch_size,
                 rb=rb,
-                sampling_strategy=sampling_strategy,
+                sampling_strategy="uniform",
                 reward_net=model,
                 traj_len=trajectory_length,
             )
@@ -284,9 +285,9 @@ def train_reward_surf(
                 prob_u = model.preference_prob(r1_u, r2_u)
 
                 if prob_u > tau:
-                    pseudo_label = 0.0
+                    pseudo_label = Preference.FIRST.value
                 elif prob_u < (1.0 - tau):
-                    pseudo_label = 1.0
+                    pseudo_label = Preference.SECOND.value
                 else:
                     continue  # skip uncertain pseudo-label
 
