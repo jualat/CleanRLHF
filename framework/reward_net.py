@@ -129,7 +129,7 @@ class RewardNet(nn.Module):
 def train_reward(
     model,
     optimizer,
-    writer,
+    metrics,
     pref_buffer,
     rb,
     global_step,
@@ -178,9 +178,8 @@ def train_reward(
             optimizer.step()
             total_loss += ensemble_loss.item()
 
-            writer.add_scalar("losses/reward_loss", ensemble_loss.item(), global_step)
-        writer.add_scalar(
-            "losses/total_loss", total_loss / (batch_size * 0.5), global_step
+        metrics.log_reward_net_losses(
+            ensemble_loss, total_loss, global_step, batch_size
         )
         if epoch % 10 == 0:
             logging.info(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
