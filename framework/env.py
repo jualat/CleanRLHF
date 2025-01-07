@@ -8,6 +8,13 @@ import pickle
 
 
 def save_model_all(run_name: str, step: int, state_dict: dict):
+    """
+    Save all models and optimizers to a checkpoint file
+    :param run_name: The name of the run
+    :param step: The current step
+    :param state_dict: The current state dictionary
+    :return:
+    """
     model_folder = f"./models/{run_name}/{step}"
     os.makedirs(model_folder, exist_ok=True)
     out_path = f"{model_folder}/checkpoint.pth"
@@ -18,6 +25,13 @@ def save_model_all(run_name: str, step: int, state_dict: dict):
 
 
 def load_model_all(state_dict: dict, path: str, device):
+    """
+    Load all models and optimizers from a checkpoint file
+    :param state_dict: The state dictionary to load the models and optimizers into
+    :param path: The path to the model
+    :param device: The torch device
+    :return:
+    """
     assert os.path.exists(path), "Path to model does not exist"
     checkpoint = torch.load(path, device)
     for name, obj in state_dict.items():
@@ -27,6 +41,13 @@ def load_model_all(state_dict: dict, path: str, device):
 
 
 def save_replay_buffer(run_name: str, step: int, replay_buffer: ReplayBuffer):
+    """
+    Save the replay buffer to a file
+    :param run_name: The name of the current run
+    :param step: The current step
+    :param replay_buffer: The current replay buffer
+    :return:
+    """
     model_folder = f"./models/{run_name}/{step}"
     os.makedirs(model_folder, exist_ok=True)
     out_path = f"{model_folder}/replay_buffer.pth"
@@ -45,6 +66,12 @@ def save_replay_buffer(run_name: str, step: int, replay_buffer: ReplayBuffer):
 
 
 def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
+    """
+    Load the replay buffer from a file
+    :param replay_buffer: The replay buffer to load into
+    :param path: The path to the replay buffer
+    :return:
+    """
     assert os.path.exists(path), "Path to replay buffer does not exist"
     with gzip.open(path, "rb") as f:
         buffer_data = pickle.load(f)
@@ -60,6 +87,13 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
 
 
 def make_env(env_id, seed):
+    """
+    Create an environment
+    :param env_id: The run argument env_id
+    :param seed: The seed for creating the environment
+    :return:
+    """
+
     def thunk():
         env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -70,5 +104,10 @@ def make_env(env_id, seed):
 
 
 def is_mujoco_env(env) -> bool:
+    """
+    Check if the environment is a mujoco environment
+    :param env: The environment to check
+    :return:
+    """
     # Try to check the internal `mujoco` attribute
     return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")

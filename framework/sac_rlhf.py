@@ -165,6 +165,11 @@ class Args:
 
 
 def train(args: Any):
+    """
+    The training function.
+    :param args: run arguments
+    :return:
+    """
     import stable_baselines3 as sb3
 
     if sb3.__version__ < "2.0":

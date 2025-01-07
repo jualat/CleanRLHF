@@ -20,6 +20,12 @@ class SoftQNetwork(nn.Module):
         self.fc_last = nn.Linear(hidden_dim, 1)
 
     def forward(self, x, a):
+        """
+        The forward function of the critic network
+        :param x: Parameter x to forward
+        :param a: Parameter a to forward
+        :return:
+        """
         x = torch.cat([x, a], dim=1)
         x = F.relu(self.fc_first(x))
         for layer in self.hidden_layers:
@@ -31,6 +37,19 @@ class SoftQNetwork(nn.Module):
 def train_q_network(
     data, qf1, qf2, qf1_target, qf2_target, alpha, gamma, q_optimizer, actor
 ):
+    """
+    Train the Q network
+    :param data: The data from the environment containing the observations, actions, rewards, next_observations, dones
+    :param qf1: The first Q network
+    :param qf2: The second Q network
+    :param qf1_target: The target network for the first Q network
+    :param qf2_target: The target network for the second Q network
+    :param alpha: The alpha
+    :param gamma: The run argument gamma
+    :param q_optimizer: The optimizer for the Q network
+    :param actor: The Actor network
+    :return:
+    """
     with torch.no_grad():
         real_rewards = data.rewards
         next_state_actions, next_state_log_pi, _ = actor.get_action(

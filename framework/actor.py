@@ -36,6 +36,11 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
+        """
+        Forward pass of the actor network
+        :param x: Parameter x
+        :return:
+        """
         x = F.relu(self.fc_first(x))
         for layer in self.hidden_layers:
             x = layer(x)
@@ -49,6 +54,11 @@ class Actor(nn.Module):
         return mean, log_std
 
     def get_action(self, x):
+        """
+        Get action from the actor network
+        :param x: Parameter x
+        :return:
+        """
         mean, log_std = self(x)
         std = log_std.exp()
         normal = torch.distributions.Normal(mean, std)
@@ -64,6 +74,16 @@ class Actor(nn.Module):
 
 
 def select_actions(obs, actor, device, step, learning_start, envs):
+    """
+    Select actions from the actor network
+    :param obs: Obseration from the environment
+    :param actor: The actor network
+    :param device: The torch device
+    :param step: The current step
+    :param learning_start: Run argument - timestep to start learning
+    :param envs: Vectorised environments
+    :return:
+    """
     if step < learning_start:
         return np.array(
             [envs.single_action_space.sample() for _ in range(envs.num_envs)]
@@ -85,6 +105,20 @@ def update_actor(
     target_entropy,
     a_optimizer,
 ):
+    """
+    Update the actor network
+    :param data: Data from the environment containg observations
+    :param actor: The actor network
+    :param qf1: the first Q network
+    :param qf2: the second Q network
+    :param alpha: The run argument alpha
+    :param actor_optimizer: The actor optimizer created in train()
+    :param autotune: Boolean if autotune of alpha is enabled
+    :param log_alpha: The log alpha tensor
+    :param target_entropy: The target entropy
+    :param a_optimizer: The optimizer for alpha created in train()
+    :return:
+    """
     pi, log_pi, _ = actor.get_action(data.observations)
     qf1_pi = qf1(data.observations, pi)
     qf2_pi = qf2(data.observations, pi)
@@ -107,5 +141,12 @@ def update_actor(
 
 
 def update_target_networks(source_net, target_net, tau):
+    """
+    Update the target networks
+    :param source_net: The source q network
+    :param target_net: The target q network
+    :param tau: The run argument tau
+    :return:
+    """
     for param, target_param in zip(source_net.parameters(), target_net.parameters()):
         target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
