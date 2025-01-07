@@ -279,16 +279,9 @@ def train_reward_surf(
                     t2_u, H_max=H_max, H_min=H_min, env=env
                 )
 
-                # Pseudo-labeling
-                with torch.no_grad():
-                    r1_u = model.forward(
-                        t1_u_aug.samples.observations, t1_u_aug.samples.actions
-                    )
-                    r2_u = model.forward(
-                        t2_u_aug.samples.observations, t2_u_aug.samples.actions
-                    )
-
-                    prob_u = model.preference_prob(r1_u, r2_u)
+                r1_u = t1_u_aug.samples.rewards
+                r2_u = t2_u_aug.samples.rewards
+                prob_u = model.preference_prob(r1_u, r2_u)
 
                 if prob_u > tau:
                     pseudo_label = 0.0
