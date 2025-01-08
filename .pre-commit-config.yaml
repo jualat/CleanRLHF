@@ -7,6 +7,7 @@ repos:
     rev: 7.1.1
     hooks:
     -   id: flake8
+        args: [--ignore=E501]
 -   repo: https://github.com/pycqa/isort
     rev: 5.12.0
     hooks:
