@@ -1,18 +1,18 @@
 import os
 import random
+from dataclasses import dataclass
+
+import gymnasium as gym
 import imageio
+import numpy as np
 import pandas as pd
 import torch
-import numpy as np
-import gymnasium as gym
 import tyro
 import wandb
-
-from scipy.stats import norm
-from plotnine import ggplot, aes, geom_point, geom_line, labs
 from actor import Actor
 from env import load_model_all
-from dataclasses import dataclass
+from plotnine import aes, geom_line, geom_point, ggplot, labs
+from scipy.stats import norm
 from tqdm import trange
 
 
