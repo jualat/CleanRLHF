@@ -1,7 +1,7 @@
-from torch import nn
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch import nn
 
 
 class SoftQNetwork(nn.Module):

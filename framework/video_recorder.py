@@ -1,11 +1,11 @@
-import os
 import logging
+import os
+
 import gymnasium as gym
 import imageio
 import torch
-
-from replay_buffer import ReplayBuffer, Trajectory
 from env import is_mujoco_env
+from replay_buffer import ReplayBuffer, Trajectory
 
 
 class VideoRecorder:

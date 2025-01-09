@@ -1,5 +1,5 @@
-from typing import Optional
 import logging
+from typing import Optional
 
 import numpy as np
 import torch
@@ -183,4 +183,6 @@ def train_reward(
             ensemble_loss, total_loss, global_step, batch_size
         )
         if epoch % 10 == 0:
-            logging.info(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
+            logging.info(
+                f"Reward epoch {epoch}, Loss {total_loss / (batch_size * 0.5)}"
+            )

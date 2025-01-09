@@ -1,8 +1,8 @@
 import random
-import torch
-
-from replay_buffer import Trajectory
 from enum import Enum
+
+import torch
+from replay_buffer import Trajectory
 
 
 class Preference(Enum):
