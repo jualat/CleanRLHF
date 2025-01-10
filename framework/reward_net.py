@@ -283,17 +283,11 @@ def train_reward_surf(
 
                 # Pseudo-labeling
                 with torch.no_grad():
-                    r1_u = model(
-                        torch.cat(
-                            [t1_u_aug.samples.observations, t1_u_aug.samples.actions],
-                            dim=1,
-                        ).to(device)
+                    r1_u = model.forward(
+                        t1_u_aug.samples.observations, t1_u_aug.samples.actions
                     )
-                    r2_u = model(
-                        torch.cat(
-                            [t2_u_aug.samples.observations, t2_u_aug.samples.actions],
-                            dim=1,
-                        ).to(device)
+                    r2_u = model.forward(
+                        t2_u_aug.samples.observations, t2_u_aug.samples.actions
                     )
 
                     prob_u = model.preference_prob(r1_u, r2_u)
