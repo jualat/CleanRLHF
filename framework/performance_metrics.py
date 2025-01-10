@@ -1,7 +1,8 @@
-import numpy as np
-from torch.utils.tensorboard import SummaryWriter
 import logging
 import time
+
+import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 
 
 class PerformanceMetrics:
