@@ -54,7 +54,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Hopper-common-tuning"]
+    values: ["Humanoid-Standup-common-tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -92,7 +92,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["Hopper-v4"]
+    values: ["HumanoidStandup-v4"]
   track:
     values: [true]
   gamma:
