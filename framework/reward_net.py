@@ -13,7 +13,8 @@ def gen_reward_net(hidden_dim, layers, env=None):
             np.array(env.single_observation_space.shape).prod()
             + np.prod(env.single_action_space.shape),
             hidden_dim,
-        )
+        ),
+        nn.LeakyReLU(),
     ]
     for _ in range(layers):
         reward_net.append(nn.Linear(hidden_dim, hidden_dim))
@@ -177,6 +178,7 @@ def train_reward(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             total_loss += ensemble_loss.item()
+
         losses = {
             "total_loss": total_loss / batch_size,
         }
@@ -184,162 +186,3 @@ def train_reward(
         metrics.log_reward_net_losses(loss_dict=losses, global_step=global_step)
         if epoch % 10 == 0:
             logging.info(f"Reward epoch {epoch}, Loss {losses['total_loss']}")
-
-
-def train_reward_surf(
-    model,
-    optimizer,
-    metrics,
-    pref_buffer,
-    rb,
-    global_step,
-    epochs,
-    batch_size,
-    device,
-    env: Optional[VecNormalize] = None,
-    sampling_strategy=None,
-    trajectory_length=64,
-    unlabeled_batch_ratio=1,
-    tau=0.8,
-    lambda_ssl=0.1,
-    H_max=55,
-    H_min=45,
-):
-    from sampling import sample_pairs
-    from teacher import Preference
-
-    augmentation_factor = (H_max - H_min) / trajectory_length
-    for epoch in range(int(epochs * (1 + augmentation_factor))):
-        prefs = pref_buffer.sample(batch_size)
-        sup_loss_accum = 0.0
-        for pref_pair in prefs:
-            t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
-            pref = torch.tensor(pref, dtype=torch.float32).to(device)
-
-            t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
-            t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
-
-            t1_aug = rb.temporal_data_augmentation(
-                t1, H_max=H_max, H_min=H_min, env=env
-            )
-            t2_aug = rb.temporal_data_augmentation(
-                t2, H_max=H_max, H_min=H_min, env=env
-            )
-
-            ensemble_loss = 0.0
-            optimizer.zero_grad()
-
-            for single_model in model.ensemble:
-                r1 = single_model(
-                    torch.cat(
-                        [t1_aug.samples.observations, t1_aug.samples.actions], dim=1
-                    ).to(device)
-                )
-                r2 = single_model(
-                    torch.cat(
-                        [t2_aug.samples.observations, t2_aug.samples.actions], dim=1
-                    ).to(device)
-                )
-
-                prediction = model.preference_prob(r1, r2)
-                assert (
-                    prediction.requires_grad
-                ), "prediction does not require gradients!"
-                loss = model.preference_loss(prediction, pref)
-                assert loss != float("inf")
-                ensemble_loss += loss
-
-            ensemble_loss /= len(model.ensemble)
-            ensemble_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-
-            sup_loss_accum += ensemble_loss.item()
-
-        unsup_loss_accum = 0.0
-
-        if unlabeled_batch_ratio > 0:
-            unsup_batch_size = unlabeled_batch_ratio * batch_size
-            unlabeled_pairs = sample_pairs(
-                size=unsup_batch_size,
-                rb=rb,
-                sampling_strategy="uniform",
-                reward_net=model,
-                traj_len=trajectory_length,
-            )
-            for (t1_start_idx, t1_end_idx), (
-                t2_start_idx,
-                t2_end_idx,
-            ) in unlabeled_pairs:
-                t1_u = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
-                t2_u = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
-
-                t1_u_aug = rb.temporal_data_augmentation(
-                    t1_u, H_max=H_max, H_min=H_min, env=env
-                )
-                t2_u_aug = rb.temporal_data_augmentation(
-                    t2_u, H_max=H_max, H_min=H_min, env=env
-                )
-
-                # Pseudo-labeling
-                with torch.no_grad():
-                    r1_u = model.forward(
-                        t1_u_aug.samples.observations, t1_u_aug.samples.actions
-                    )
-                    r2_u = model.forward(
-                        t2_u_aug.samples.observations, t2_u_aug.samples.actions
-                    )
-
-                    prob_u = model.preference_prob(r1_u, r2_u)
-
-                if prob_u > tau:
-                    pseudo_label = Preference.FIRST.value
-                elif prob_u < (1.0 - tau):
-                    pseudo_label = Preference.SECOND.value
-                else:
-                    continue  # skip uncertain pseudo-label
-
-                ensemble_loss_u = 0.0
-                optimizer.zero_grad()
-
-                for single_model in model.ensemble:
-                    r1_u = single_model(
-                        torch.cat(
-                            [t1_u_aug.samples.observations, t1_u_aug.samples.actions],
-                            dim=1,
-                        ).to(device)
-                    )
-                    r2_u = single_model(
-                        torch.cat(
-                            [t2_u_aug.samples.observations, t2_u_aug.samples.actions],
-                            dim=1,
-                        ).to(device)
-                    )
-                    pred_u = model.preference_prob(r1_u, r2_u)
-                    loss_u = model.preference_loss(pred_u, pseudo_label)
-                    assert loss_u != float("inf")
-                    ensemble_loss_u += loss_u
-
-                ensemble_loss_u /= len(model.ensemble)
-                unsup_loss_accum += ensemble_loss_u.item()
-
-                (lambda_ssl * ensemble_loss_u).backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-        losses = {
-            "total_loss": (sup_loss_accum / batch_size)
-            + (lambda_ssl * unsup_loss_accum) / unsup_batch_size
-            if unlabeled_batch_ratio > 0
-            else (sup_loss_accum / batch_size),
-            "supervised_loss": (sup_loss_accum / batch_size),
-            "unsupervised_loss": unsup_loss_accum
-            if unlabeled_batch_ratio > 0
-            else None,
-        }
-        metrics.log_reward_net_losses(loss_dict=losses, global_step=global_step)
-
-        if epoch % 10 == 0:
-            logging.info(
-                f"Semi-supervised epoch {epoch}, "
-                f"Supervised Loss {losses['supervised_loss']}, Unsupervised Loss {losses['unsupervised_loss']}"
-            )

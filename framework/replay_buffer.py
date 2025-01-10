@@ -179,7 +179,9 @@ class ReplayBuffer(SB3ReplayBuffer):
         )
 
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
-        return torch.tensor(array, dtype=torch.float32, device=self.device)
+        if copy:
+            return torch.tensor(array, dtype=torch.float32, device=self.device)
+        return torch.as_tensor(array, dtype=torch.float32, device=self.device)
 
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
@@ -227,19 +229,3 @@ class ReplayBuffer(SB3ReplayBuffer):
         assert not np.allclose(
             old_rewards, new_rewards
         ), "No change in rewards after relabeling!"
-
-    def temporal_data_augmentation(
-        self, traj: Trajectory, H_max=55, H_min=45, env: Optional[VecNormalize] = None
-    ):
-        start_idx = traj.replay_buffer_start_idx
-        end_idx = traj.replay_buffer_end_idx
-        H = end_idx - start_idx
-
-        H_prime = np.random.randint(low=H_min, high=min(H_max, H) + 1)
-        offset = np.random.randint(low=0, high=H - H_prime + 1)
-
-        slice_start_idx = start_idx + offset
-        slice_end_idx = start_idx + offset + H_prime - 1
-        assert slice_start_idx < slice_end_idx, "Invalid slice"
-        assert slice_end_idx <= end_idx, "Index out of range"
-        return self.get_trajectory(slice_start_idx, slice_end_idx, env=env)

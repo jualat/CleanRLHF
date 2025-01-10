@@ -10,28 +10,33 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
+def gen_net(envs, hidden_dim, layers, output_dim, std):
+    net = [
+        layer_init(
+            nn.Linear(np.array(envs.single_observation_space.shape).prod(), hidden_dim),
+        ),
+        nn.Tanh(),
+    ]
+    for _ in range(layers):
+        net.append(layer_init(nn.Linear(hidden_dim, hidden_dim)))
+        net.append(nn.Tanh())
+    net.append(layer_init(nn.Linear(hidden_dim, output_dim), std))
+
+    return net
+
+
 class Agent(nn.Module):
-    def __init__(self, envs):
+    def __init__(self, envs, hidden_dim, layers):
         super().__init__()
-        self.critic = nn.Sequential(
-            layer_init(
-                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)
-            ),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
-        )
+        self.critic = nn.Sequential(*gen_net(envs, hidden_dim, layers, 1, std=0.0))
         self.actor_mean = nn.Sequential(
-            layer_init(
-                nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)
-            ),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(
-                nn.Linear(64, np.prod(envs.single_action_space.shape)), std=0.01
-            ),
+            *gen_net(
+                envs,
+                hidden_dim,
+                layers,
+                np.prod(envs.single_action_space.shape),
+                std=0.01,
+            )
         )
         self.actor_logstd = nn.Parameter(
             torch.zeros(1, np.prod(envs.single_action_space.shape))

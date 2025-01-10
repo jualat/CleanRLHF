@@ -24,7 +24,7 @@ from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
-from reward_net import RewardNet, train_reward, train_reward_surf
+from reward_net import RewardNet, train_reward
 from sampling import sample_trajectories
 from teacher import Teacher
 from tqdm import trange
@@ -153,20 +153,6 @@ class Args:
     """the batch size of the explore sampled from the replay buffer"""
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
-
-    # SURF
-    surf: bool = True
-    """Toggle SURF on/off"""
-    unlabeled_batch_ratio: int = 1
-    """Ratio of unlabeled to labeled batch size."""
-    surf_tau: float = 0.999
-    """Confidence threshold for pseudo-labeling"""
-    lambda_ssl: float = 0.1
-    """Weight for the unsupervised (pseudo-labeled) loss"""
-    surf_H_min: int = 54
-    """Minimal length of the data augmented trajectory"""
-    surf_H_max: int = 64
-    """Maximal length of the data augmented trajectory"""
 
     # Load Model
     exploration_load: bool = False
@@ -496,37 +482,18 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     # Store preferences
                     pref_buffer.add(first_trajectory, second_trajectory, preference)
 
-                if args.surf:
-                    train_reward_surf(
-                        model=reward_net,
-                        optimizer=reward_optimizer,
-                        metrics=metrics,
-                        pref_buffer=pref_buffer,
-                        rb=rb,
-                        global_step=global_step,
-                        epochs=args.teacher_update_epochs,
-                        batch_size=args.teacher_feedback_batch_size,
-                        device=device,
-                        sampling_strategy=args.preference_sampling,
-                        trajectory_length=args.trajectory_length,
-                        unlabeled_batch_ratio=args.unlabeled_batch_ratio,
-                        tau=args.surf_tau,
-                        lambda_ssl=args.lambda_ssl,
-                        H_max=args.surf_H_max,
-                        H_min=args.surf_H_min,
-                    )
-                else:
-                    train_reward(
-                        reward_net,
-                        reward_optimizer,
-                        metrics,
-                        pref_buffer,
-                        rb,
-                        global_step,
-                        args.teacher_update_epochs,
-                        args.teacher_feedback_batch_size,
-                        device,
-                    )
+                train_reward(
+                    reward_net,
+                    reward_optimizer,
+                    metrics,
+                    pref_buffer,
+                    rb,
+                    global_step,
+                    args.teacher_update_epochs,
+                    args.teacher_feedback_batch_size,
+                    device,
+                )
+
                 rb.relabel_rewards(reward_net)
                 logging.info("Rewards relabeled")
 
