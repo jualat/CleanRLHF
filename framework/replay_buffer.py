@@ -178,6 +178,9 @@ class ReplayBuffer(SB3ReplayBuffer):
             env_idx=env_indices,
         )
 
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        return torch.tensor(array, dtype=torch.float32, device=self.device)
+
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
     ):
