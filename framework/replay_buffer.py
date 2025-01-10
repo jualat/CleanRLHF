@@ -1,15 +1,12 @@
-from dataclasses import replace
+import logging
+from typing import List, NamedTuple, Optional, Union
 
 import numpy as np
-from gymnasium import spaces
 import torch
-from typing import Union, Optional, NamedTuple, List
-import logging
-
+from gymnasium import spaces
+from reward_net import RewardNet
 from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
 from stable_baselines3.common.vec_env import VecNormalize
-
-from reward_net import RewardNet
 
 
 class ReplayBufferSampleHF(NamedTuple):

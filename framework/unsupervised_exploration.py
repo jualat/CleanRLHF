@@ -1,6 +1,7 @@
+import logging
+
 import numpy as np
 from scipy.spatial import KDTree
-import logging
 
 
 class ExplorationRewardKNN:

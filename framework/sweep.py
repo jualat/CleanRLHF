@@ -1,8 +1,9 @@
+from dataclasses import dataclass, fields, replace
+
 import tyro
 import wandb
 import yaml
-from sac_rlhf import train, Args
-from dataclasses import dataclass, fields, replace
+from sac_rlhf import Args, train
 
 
 @dataclass

@@ -1,8 +1,8 @@
+import logging
 import os
 import random
 import time
 from dataclasses import dataclass
-import logging
 from typing import Any
 
 import gymnasium as gym
@@ -10,27 +10,26 @@ import numpy as np
 import torch
 import torch.optim as optim
 import tyro
-
-from tqdm import trange
+from actor import Actor, select_actions, update_actor, update_target_networks
+from critic import SoftQNetwork, train_q_network
+from env import (
+    is_mujoco_env,
+    load_model_all,
+    load_replay_buffer,
+    make_env,
+    save_model_all,
+    save_replay_buffer,
+)
+from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
-from video_recorder import VideoRecorder
-from unsupervised_exploration import ExplorationRewardKNN
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
+from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
 from teacher import Teacher
-from sampling import uniform_sampling, disagreement_sampling, entropy_sampling
-from actor import Actor, select_actions, update_actor, update_target_networks
-from env import (
-    make_env,
-    save_replay_buffer,
-    save_model_all,
-    load_replay_buffer,
-    load_model_all,
-    is_mujoco_env,
-)
-from critic import SoftQNetwork, train_q_network
-from evaluation import Evaluation
+from tqdm import trange
+from unsupervised_exploration import ExplorationRewardKNN
+from video_recorder import VideoRecorder
 
 
 @dataclass
@@ -52,7 +51,7 @@ class Args:
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     num_envs: int = 1
-    """the number of parallel environments to accelerate training. 
+    """the number of parallel environments to accelerate training.
     Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
     """if toggled, logger will write to a file"""
@@ -214,8 +213,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     assert isinstance(
         envs.single_action_space, gym.spaces.Box
     ), "only continuous action space is supported"
-
-    max_action = float(envs.single_action_space.high[0])
 
     actor = Actor(
         env=envs,

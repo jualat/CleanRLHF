@@ -5,6 +5,12 @@ description = ""
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
 
+[tool.flake8]
+extend-ignore = ["E203", "E266", "E501", "W503"]
+
+[tool.isort]
+profile = "black"
+
 [tool.poetry.dependencies]
 python = "^3.10"
 gym = "0.23.1"
