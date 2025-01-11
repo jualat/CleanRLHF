@@ -562,9 +562,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             for key, value in infos.items():
                 if key != "episode":
                     single_env_info[key] = value[env_idx]
-            # logging.info(infos["episode"]) todo: fix this
-            # for key, value in infos["episode"].items():
-            #    single_env_info[key] = value[env_idx]
 
             rb.add(
                 obs[env_idx : env_idx + 1],
