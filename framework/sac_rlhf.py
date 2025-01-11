@@ -536,19 +536,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     qpos[idx] = single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
-            if infos and "final_info" in infos:
-                for info in infos["final_info"]:
-                    if info:
-                        allocated, reserved = 0, 0
-                        cuda = False
-                        if args.cuda and torch.cuda.is_available():
-                            allocated = torch.cuda.memory_allocated()
-                            reserved = torch.cuda.memory_reserved()
-                            cuda = True
-                        metrics.log_info_metrics(
-                            info, global_step, allocated, reserved, cuda
-                        )
-                        break
+            if infos and "episode" in infos:
+                allocated, reserved = 0, 0
+                cuda = False
+                if args.cuda and torch.cuda.is_available():
+                    allocated = torch.cuda.memory_allocated()
+                    reserved = torch.cuda.memory_reserved()
+                    cuda = True
+                metrics.log_info_metrics(infos, global_step, allocated, reserved, cuda)
 
             # TRY NOT TO MODIFY: save data to reply buffer
             real_next_obs = next_obs.copy()
