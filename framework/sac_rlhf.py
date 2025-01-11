@@ -1,6 +1,7 @@
 import os
 import random
 import time
+
 from dataclasses import dataclass
 import logging
 from typing import Any
@@ -548,10 +549,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
+
+                skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                    "skipped_qpos"
+                ]
+
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.observation_structure["qpos"]
-                    qvel[idx] = single_env.unwrapped.observation_structure["qvel"]
+                    qpos[idx] = single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             if "episode" in infos:
                 logging.info(

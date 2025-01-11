@@ -8,9 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 gymnasium = "1.0"
-imageio = "^2.36"
 mujoco = "3.2"
-opencv-python = "^4.10" #cv_major.cv_minor.cv_revision.package_revision
 tensorboard = "^2.18"
 torch = "2.5"
 tyro = "^0.9.5"

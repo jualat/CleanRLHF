@@ -1,5 +1,6 @@
 import os
 import logging
+
 import gymnasium as gym
 import numpy as np
 import torch
@@ -103,7 +104,6 @@ class VideoRecorder:
                     if isinstance(qvel_list[i], torch.Tensor)
                     else qvel_list[i]
                 )
-                logging.info(f"qpos: {qpos}, qvel: {qvel}")
                 # Append zeros to qpos for skipped qpos values
                 skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
                 qpos_extended = np.append(qpos, [0] * skipped_qpos)
