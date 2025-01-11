@@ -337,10 +337,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             real_next_obs = next_obs.copy()
 
             if is_mujoco_env(envs.envs[0]):
+
+                skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                    "skipped_qpos"
+                ]
+
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.observation_structure["qpos"]
-                    qvel[idx] = single_env.unwrapped.observation_structure["qvel"]
+                    qpos[idx] = single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
