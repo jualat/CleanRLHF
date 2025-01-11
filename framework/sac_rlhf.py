@@ -1,9 +1,8 @@
+import logging
 import os
 import random
 import time
-
 from dataclasses import dataclass
-import logging
 from typing import Any
 
 import gymnasium as gym
@@ -11,28 +10,26 @@ import numpy as np
 import torch
 import torch.optim as optim
 import tyro
-
-from tqdm import trange
+from actor import Actor, select_actions, update_actor, update_target_networks
+from critic import SoftQNetwork, train_q_network
+from env import (
+    is_mujoco_env,
+    load_model_all,
+    load_replay_buffer,
+    make_env,
+    save_model_all,
+    save_replay_buffer,
+)
+from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
-from video_recorder import VideoRecorder
-from unsupervised_exploration import ExplorationRewardKNN
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
-from torch.utils.tensorboard import SummaryWriter
+from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
 from teacher import Teacher
-from sampling import uniform_sampling, disagreement_sampling, entropy_sampling
-from actor import Actor, select_actions, update_actor, update_target_networks
-from env import (
-    make_env,
-    save_replay_buffer,
-    save_model_all,
-    load_replay_buffer,
-    load_model_all,
-    is_mujoco_env,
-)
-from critic import SoftQNetwork, train_q_network
-from evaluation import Evaluation
+from tqdm import trange
+from unsupervised_exploration import ExplorationRewardKNN
+from video_recorder import VideoRecorder
 
 
 @dataclass
@@ -100,7 +97,7 @@ class Args:
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
-    early_stopping_threshold: float = 900
+    early_stopping_mean: float = 900
     """the threshold of early stopping"""
     enable_greater_or_smaller_check: bool = False
     """stop if reward is greater/smaller then threshold (True: greater/ False: smaller)"""
@@ -199,12 +196,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s"
-        % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    )
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -222,8 +213,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     assert isinstance(
         envs.single_action_space, gym.spaces.Box
     ), "only continuous action space is supported"
-
-    max_action = float(envs.single_action_space.high[0])
 
     actor = Actor(
         env=envs,
@@ -256,7 +245,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr
     )
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.policy_lr)
-    metrics = PerformanceMetrics()
 
     # Automatic entropy tuning
     if args.autotune:
@@ -320,7 +308,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         args.teacher_sim_delta_equal,
         args.seed,
     )
-
     evaluate = Evaluation(
         actor=actor,
         env_id=args.env_id,
@@ -328,6 +315,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
     )
+
+    metrics = PerformanceMetrics(run_name, args, evaluate)
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -412,30 +401,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 update_target_networks(qf1, qf1_target, args.tau)
                 update_target_networks(qf2, qf2_target, args.tau)
 
-            if explore_step % 100 == 0:
-                writer.add_scalar(
-                    "exploration/intrinsic_reward_mean",
-                    intrinsic_reward.mean(),
-                    explore_step,
-                )
-
-                writer.add_scalar(
-                    "exploration/state_coverage",
-                    len(knn_estimator.visited_states),
-                    explore_step,
-                )
-                logging.debug(f"SPS: {int(explore_step / (time.time() - start_time))}")
-                writer.add_scalar(
-                    "exploration/SPS",
-                    int(explore_step / (time.time() - start_time)),
-                    explore_step,
-                )
-                logging.debug(f"Exploration step: {explore_step}")
-
-            writer.add_scalar(
-                "exploration/dones",
-                terminations.sum() + truncations.sum(),
+            metrics.log_exploration_metrics(
                 explore_step,
+                intrinsic_reward,
+                knn_estimator,
+                terminations,
+                truncations,
+                start_time,
             )
 
         state_dict = {
@@ -526,7 +498,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 train_reward(
                     reward_net,
                     reward_optimizer,
-                    writer,
+                    metrics,
                     pref_buffer,
                     rb,
                     global_step,
@@ -558,28 +530,20 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env = envs.envs[idx]
                     qpos[idx] = single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
-            # TRY NOT TO MODIFY: record rewards for plotting purposes
-            if "episode" in infos:
-                logging.info(
-                    f"global_step={global_step}, episodic_return={infos['episode']['r']}"
-                )
-                writer.add_scalar(
-                    "charts/episodic_return", infos["episode"]["r"], global_step
-                )
-                writer.add_scalar(
-                    "charts/episodic_length", infos["episode"]["l"], global_step
-                )
 
-                if args.cuda and torch.cuda.is_available():
-                    allocated = torch.cuda.memory_allocated()
-                    reserved = torch.cuda.memory_reserved()
-                    logging.info(f"Allocated cuda memory: {allocated / (1024 ** 2)} MB")
-                    logging.info(f"Reserved cuda memory: {reserved / (1024 ** 2)} MB")
-                    writer.add_scalar(
-                        "hardware/cuda_memory",
-                        allocated / (1024**2),
-                        global_step,
-                    )
+            if infos and "final_info" in infos:
+                for info in infos["final_info"]:
+                    if info:
+                        allocated, reserved = 0, 0
+                        cuda = False
+                        if args.cuda and torch.cuda.is_available():
+                            allocated = torch.cuda.memory_allocated()
+                            reserved = torch.cuda.memory_reserved()
+                            cuda = True
+                        metrics.log_info_metrics(
+                            info, global_step, allocated, reserved, cuda
+                        )
+                        break
 
             # TRY NOT TO MODIFY: save data to reply buffer
             real_next_obs = next_obs.copy()
@@ -587,16 +551,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             dones = terminations | truncations
             with torch.no_grad():
                 rewards = reward_net.predict_reward(obs, actions)
-            writer.add_scalar(
-                "charts/predicted_rewards",
-                rewards[0],
-                global_step,
-            )
-            writer.add_scalar(
-                "charts/groudTruthRewards",
-                groundTruthRewards[0],
-                global_step,
-            )
+
             env_idx = 0
             single_env_info = {}
             for key, value in infos.items():
@@ -667,41 +622,21 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     update_target_networks(qf2, qf2_target, args.tau)
 
                 metrics.add_rewards(rewards.flatten(), groundTruthRewards)
-
+                metrics.log_reward_metrics(rewards, groundTruthRewards, global_step)
                 if global_step % 100 == 0:
-                    writer.add_scalar(
-                        "losses/qf1_values", qf1_a_values.mean().item(), global_step
-                    )
-                    writer.add_scalar(
-                        "losses/qf2_values", qf2_a_values.mean().item(), global_step
-                    )
-                    writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
-                    writer.add_scalar("losses/qf2_loss", qf2_loss.item(), global_step)
-                    writer.add_scalar(
-                        "losses/qf_loss", qf_loss.item() / 2.0, global_step
-                    )
-                    writer.add_scalar(
-                        "losses/actor_loss", actor_loss.item(), global_step
-                    )
-                    writer.add_scalar("losses/alpha", alpha, global_step)
-                    logging.debug(
-                        f"SPS: {int(global_step / (time.time() - start_time))}"
-                    )
-                    writer.add_scalar(
-                        "charts/SPS",
-                        int(global_step / (time.time() - start_time)),
+                    metrics.log_training_metrics(
                         global_step,
+                        args,
+                        qf1_a_values,
+                        qf2_a_values,
+                        qf1_loss,
+                        qf2_loss,
+                        qf_loss,
+                        actor_loss,
+                        alpha,
+                        alpha_loss,
+                        start_time,
                     )
-                    if args.autotune:
-                        writer.add_scalar(
-                            "losses/alpha_loss", alpha_loss.item(), global_step
-                        )
-                    writer.add_scalar(
-                        "charts/pearson_correlation",
-                        metrics.compute_pearson_correlation(),
-                        global_step,
-                    )
-                    metrics.reset()
             if global_step % args.evaluation_frequency == 0 and (
                 global_step != 0
                 or args.exploration_load
@@ -718,15 +653,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
                 reward_means[global_step % 3] = eval_dict["mean_reward"]
                 evaluate.plot(eval_dict, global_step)
-                writer.add_scalar(
-                    "evaluate/mean", eval_dict["mean_reward"], global_step
-                )
-                writer.add_scalar("evaluate/std", eval_dict["std_reward"], global_step)
-                writer.add_scalar("evaluate/max", eval_dict["max_reward"], global_step)
-                writer.add_scalar("evaluate/min", eval_dict["min_reward"], global_step)
-                writer.add_scalar(
-                    "evaluate/median", eval_dict["median_reward"], global_step
-                )
+                metrics.log_evaluate_metrics(global_step, eval_dict)
             if (
                 global_step > args.early_stopping_step == 0
                 and (
@@ -750,15 +677,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             track=args.track,
         )
         evaluate.plot(eval_dict, args.total_timesteps)
-        writer.add_scalar(
-            "evaluate/mean", eval_dict["mean_reward"], args.total_timesteps
-        )
-        writer.add_scalar("evaluate/std", eval_dict["std_reward"], args.total_timesteps)
-        writer.add_scalar("evaluate/max", eval_dict["max_reward"], args.total_timesteps)
-        writer.add_scalar("evaluate/min", eval_dict["min_reward"], args.total_timesteps)
-        writer.add_scalar(
-            "evaluate/median", eval_dict["median_reward"], args.total_timesteps
-        )
+        metrics.log_evaluate_metrics(args.total_timesteps, eval_dict)
 
     except KeyboardInterrupt:
         logging.warning("KeyboardInterrupt caught! Saving progress...")
@@ -777,7 +696,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         save_model_all(run_name, current_step, state_dict)
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
-        writer.close()
+        metrics.close()
 
 
 if __name__ == "__main__":

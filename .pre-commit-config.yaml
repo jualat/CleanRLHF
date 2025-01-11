@@ -3,3 +3,19 @@ repos:
     rev: 22.10.0
     hooks:
     -   id: black
+-   repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+    -   id: flake8
+        args: ["--ignore=E203,E266,E501,W503"]
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black]
+        name: isort (python)
+-   repo: https://github.com/hadialqattan/pycln
+    rev: v2.5.0
+    hooks:
+      - id: pycln
+        args: [--config=pyproject.toml]

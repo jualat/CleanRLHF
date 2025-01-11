@@ -1,13 +1,12 @@
-import os
 import logging
+import os
 
 import gymnasium as gym
 import numpy as np
 import torch
-
-from replay_buffer import ReplayBuffer, Trajectory
 from env import is_mujoco_env
 from gymnasium.utils.save_video import save_video
+from replay_buffer import ReplayBuffer, Trajectory
 
 
 class VideoRecorder:
