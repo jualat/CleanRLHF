@@ -21,7 +21,7 @@ pre-commit = "^4.0.1"
 logging = "^0.4.9.6"
 plotnine = "^0.14.5"
 imageio-ffmpeg = "^0.5.1"
-stable-baselines3 = {version = "^2.5.0a0", allow-prereleases = true}
+stable-baselines3 = {version = "^2.5.0a1", allow-prereleases = true}
 tqdm = "^4.67.1"
 moviepy = "^2.1.2"
 
