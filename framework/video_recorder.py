@@ -1,11 +1,12 @@
 import os
 import logging
 import gymnasium as gym
-import imageio
+import numpy as np
 import torch
 
 from replay_buffer import ReplayBuffer, Trajectory
 from env import is_mujoco_env
+from gymnasium.utils.save_video import save_video
 
 
 class VideoRecorder:
@@ -32,20 +33,25 @@ class VideoRecorder:
         start_idx = trajectory.replay_buffer_start_idx
         end_idx = trajectory.replay_buffer_end_idx
         env_idx = trajectory.samples.env_idx
+        length = trajectory.replay_buffer_end_idx - trajectory.replay_buffer_start_idx
 
         # Ensure the directory for videos exists
         video_folder = f"./videos/{run_name}/trajectories"
         os.makedirs(video_folder, exist_ok=True)
-        out_path = f"{video_folder}/trajectory_{start_idx}_{end_idx}_{env_idx}.mp4"
+        out_path = f"{video_folder}/"
 
-        if os.path.exists(out_path):
-            logging.info(f"Skipping {out_path}")
-            return
         env = gym.make(self.env_id, render_mode="rgb_array")
 
         try:
             self._initialize_env_state(env, trajectory)
-            self._write_trajectory_to_video(env, trajectory, out_path, fps)
+            frames = self._generate_frames(env, trajectory)
+            save_video(
+                frames=frames,
+                video_length=length,
+                video_folder=out_path,
+                fps=fps,
+                name_prefix=f"trajectory_{start_idx}_{end_idx}_{env_idx}",
+            )
         except Exception as e:
             logging.error(
                 f"Error recording trajectory (start_idx={start_idx}, end_idx={end_idx}, env_idx={env_idx}): {e}"
@@ -64,21 +70,25 @@ class VideoRecorder:
                 if isinstance(qpos_list[0], torch.Tensor)
                 else qpos_list[0]
             )
+
             qvel = (
                 qvel_list[0].cpu().numpy()
                 if isinstance(qvel_list[0], torch.Tensor)
                 else qvel_list[0]
             )
-            env.unwrapped.set_state(qpos, qvel)
+            # Append zeros to qpos for skipped qpos values
+            skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
+            qpos_extended = np.append(qpos, [0] * skipped_qpos)
+
+            env.unwrapped.set_state(qpos_extended, qvel)
         else:
             env.reset(seed=self.seed)
             if hasattr(env, "state"):
                 env.state = trajectory.samples.observations[0]
 
-    def _write_trajectory_to_video(self, env, trajectory, out_path, fps=30):
+    def _generate_frames(self, env, trajectory):
         """Write the trajectory to a video file."""
-        img = env.render()
-        images = [img]
+        frames = [env.render()]
         if is_mujoco_env(env):
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
@@ -93,13 +103,17 @@ class VideoRecorder:
                     if isinstance(qvel_list[i], torch.Tensor)
                     else qvel_list[i]
                 )
-                env.unwrapped.set_state(qpos, qvel)
-                images.append(env.render())
+
+                # Append zeros to qpos for skipped qpos values
+                skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
+                qpos_extended = np.append(qpos, [0] * skipped_qpos)
+
+                env.unwrapped.set_state(qpos_extended, qvel)
+                frames.append(env.unwrapped.render())
         else:
             actions = trajectory.samples.actions
             for action in actions:
                 action = action.detach().cpu().numpy()
                 env.step(action)
-                images.append(env.render())
-
-        imageio.mimsave(uri=out_path, ims=images, fps=fps)
+                frames.append(env.render())
+        return frames
