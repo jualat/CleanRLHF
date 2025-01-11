@@ -29,13 +29,15 @@ parameters:
   actor_net_hidden_layers:
     values: [4]
   teacher_sim_delta_skip:
-    values: [0]
+    values: [-1e7]
   teacher_update_epochs:
     max: 20
     min: 10
     distribution: int_uniform
   teacher_learning_rate:
-    values: [0.0008]
+    min: 0.0005
+    max: 0.001
+    distribution: uniform
   soft_q_net_hidden_dim:
     values: [256]
   reward_net_hidden_dim:
