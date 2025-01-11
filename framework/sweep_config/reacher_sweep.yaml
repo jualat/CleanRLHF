@@ -56,7 +56,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Hopper-common-tuning"]
+    values: ["Reacher-common-tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -94,7 +94,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["Hopper-v4"]
+    values: ["Reacher-v4"]
   track:
     values: [true]
   gamma:

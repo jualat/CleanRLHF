@@ -1,5 +1,5 @@
-from typing import Optional
 import logging
+from typing import Optional
 
 import numpy as np
 import torch
@@ -7,7 +7,7 @@ import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
 
-def gen_reward_net(hidden_dim, layers, env=None):
+def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
     """
     Generate a reward network with the given parameters.
     :param hidden_dim: The dimension of the hidden layers
@@ -20,12 +20,13 @@ def gen_reward_net(hidden_dim, layers, env=None):
             np.array(env.single_observation_space.shape).prod()
             + np.prod(env.single_action_space.shape),
             hidden_dim,
-        )
+        ),
+        nn.LeakyReLU(),
     ]
     for _ in range(layers):
         reward_net.append(nn.Linear(hidden_dim, hidden_dim))
         reward_net.append(nn.LeakyReLU())
-    reward_net.append(nn.Dropout(p=0.1))
+        reward_net.append(nn.Dropout(p))
     reward_net.append(nn.Linear(hidden_dim, 1))
 
     return reward_net
@@ -241,4 +242,6 @@ def train_reward(
             ensemble_loss, total_loss, global_step, batch_size
         )
         if epoch % 10 == 0:
-            logging.info(f"Reward epoch {epoch}, Loss {total_loss/(batch_size*0.5)}")
+            logging.info(
+                f"Reward epoch {epoch}, Loss {total_loss / (batch_size * 0.5)}"
+            )
