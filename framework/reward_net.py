@@ -7,7 +7,7 @@ import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
 
-def gen_reward_net(hidden_dim, layers, env=None):
+def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
     reward_net = [
         nn.Linear(
             np.array(env.single_observation_space.shape).prod()
@@ -19,6 +19,7 @@ def gen_reward_net(hidden_dim, layers, env=None):
     for _ in range(layers):
         reward_net.append(nn.Linear(hidden_dim, hidden_dim))
         reward_net.append(nn.LeakyReLU())
+        reward_net.append(nn.Dropout(p)
     reward_net.append(nn.Linear(hidden_dim, 1))
 
     return reward_net
