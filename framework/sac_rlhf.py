@@ -343,13 +343,20 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             if is_mujoco_env(envs.envs[0]):
 
-                skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                    "skipped_qpos"
-                ]
+                try:
+                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                        "skipped_qpos"
+                    ]
+                except KeyError:
+                    skipped_qpos = 0
 
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                    qpos[idx] = (
+                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                        if skipped_qpos > 0
+                        else single_env.unwrapped.data.qpos.copy()
+                    )
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
@@ -532,13 +539,20 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             )
             if is_mujoco_env(envs.envs[0]):
 
-                skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                    "skipped_qpos"
-                ]
+                try:
+                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                        "skipped_qpos"
+                    ]
+                except KeyError:
+                    skipped_qpos = 0
 
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                    qpos[idx] = (
+                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                        if skipped_qpos > 0
+                        else single_env.unwrapped.data.qpos.copy()
+                    )
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             if infos and "episode" in infos:
