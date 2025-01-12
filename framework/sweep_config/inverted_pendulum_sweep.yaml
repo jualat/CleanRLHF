@@ -1,6 +1,6 @@
 program: sac_rlhf.py
 entity: cleanRLHF
-project: Hopper-tuning
+project: InvertedPendulum_common_tuning
 method: bayes
 metric:
   goal: maximize
@@ -56,7 +56,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Inverted-Pendulum-common-tuning"]
+    values: ["InvertedPendulum_common_tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -94,7 +94,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["InvertedPendulum-v4"]
+    values: ["InvertedPendulum-v5"]
   track:
     values: [true]
   gamma:

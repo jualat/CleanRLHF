@@ -1,6 +1,6 @@
 program: sac_rlhf.py
 entity: cleanRLHF
-project: Hopper-tuning
+project: Ant_common_tuning
 method: bayes
 metric:
   goal: maximize
@@ -56,7 +56,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Ant-common-tuning"]
+    values: ["Ant_common_tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -94,7 +94,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["Ant-v4"]
+    values: ["Ant-v5"]
   track:
     values: [true]
   gamma:
