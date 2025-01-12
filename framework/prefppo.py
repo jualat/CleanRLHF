@@ -24,7 +24,7 @@ from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
-from reward_net import RewardNet, train_reward, train_reward_surf
+from reward_net import RewardNet, train_reward
 from sampling import sample_trajectories
 from teacher import Teacher
 from tqdm import trange
@@ -50,10 +50,6 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = False
-    """whether to save model into the `runs/{run_name}` folder"""
-    upload_model: bool = False
-    """whether to upload the saved model to huggingface"""
     hf_entity: str = ""
     """the user or org name of the model repository from the Hugging Face Hub"""
     log_file: bool = True
@@ -90,7 +86,7 @@ class Args:
     """the surrogate clipping coefficient"""
     clip_vloss: bool = True
     """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
-    ent_coef: float = 0.0
+    ent_coef: float = 0.3
     """coefficient of the entropy"""
     vf_coef: float = 0.5
     """coefficient of the value function"""
@@ -106,7 +102,7 @@ class Args:
     """the number of evaluation episodes"""
 
     ## Early Stop
-    early_stopping: bool = True
+    early_stopping: bool = False
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
@@ -120,9 +116,9 @@ class Args:
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
-    agent_net_hidden_dim: int = 256
+    agent_net_hidden_dim: int = 64
     """the dimension of the hidden layers in the actor network"""
-    agent_net_hidden_layers: int = 4
+    agent_net_hidden_layers: int = 2
     """the number of hidden layers in the actor network"""
 
     # Human feedback arguments
@@ -158,20 +154,6 @@ class Args:
     """toggle the unsupervised exploration"""
     total_explore_steps: int = 10000
     """total number of explore steps"""
-
-    # SURF
-    surf: bool = False
-    """Toggle SURF on/off"""
-    unlabeled_batch_ratio: int = 1
-    """Ratio of unlabeled to labeled batch size."""
-    surf_tau: float = 0.999
-    """Confidence threshold for pseudo-labeling"""
-    lambda_ssl: float = 0.1
-    """Weight for the unsupervised (pseudo-labeled) loss"""
-    surf_H_min: int = 54
-    """Minimal length of the data augmented trajectory"""
-    surf_H_max: int = 64
-    """Maximal length of the data augmented trajectory"""
 
     # Load Model
     exploration_load: bool = False
@@ -231,7 +213,7 @@ def train(args: Any):
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env_ppo(args.env_id, args.gamma) for i in range(args.num_envs)]
+        [make_env_ppo(args.env_id, args.gamma) for _ in range(args.num_envs)]
     )
     assert isinstance(
         envs.single_action_space, gym.spaces.Box
@@ -329,8 +311,10 @@ def train(args: Any):
                     values[step] = value.flatten()
                 actions[step] = action
                 logprobs[step] = logprob
-                intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
-                knn_estimator.update_states(next_obs)
+                intrinsic_reward = knn_estimator.compute_intrinsic_rewards(
+                    next_obs.cpu().numpy()
+                )
+                knn_estimator.update_states(next_obs.cpu().numpy())
 
                 (
                     next_obs,
@@ -549,37 +533,17 @@ def train(args: Any):
                         # Store preferences
                         pref_buffer.add(first_trajectory, second_trajectory, preference)
 
-                    if args.surf:
-                        train_reward_surf(
-                            model=reward_net,
-                            optimizer=reward_optimizer,
-                            metrics=metrics,
-                            pref_buffer=pref_buffer,
-                            rb=rb,
-                            global_step=global_step,
-                            epochs=args.teacher_update_epochs,
-                            batch_size=args.teacher_feedback_batch_size,
-                            device=device,
-                            sampling_strategy=args.preference_sampling,
-                            trajectory_length=args.trajectory_length,
-                            unlabeled_batch_ratio=args.unlabeled_batch_ratio,
-                            tau=args.surf_tau,
-                            lambda_ssl=args.lambda_ssl,
-                            H_max=args.surf_H_max,
-                            H_min=args.surf_H_min,
-                        )
-                    else:
-                        train_reward(
-                            reward_net,
-                            reward_optimizer,
-                            metrics,
-                            pref_buffer,
-                            rb,
-                            global_step,
-                            args.teacher_update_epochs,
-                            args.teacher_feedback_batch_size,
-                            device,
-                        )
+                    train_reward(
+                        reward_net,
+                        reward_optimizer,
+                        metrics,
+                        pref_buffer,
+                        rb,
+                        global_step,
+                        args.teacher_update_epochs,
+                        args.teacher_feedback_batch_size,
+                        device,
+                    )
 
                 current_step += 1
                 global_step += args.num_envs
