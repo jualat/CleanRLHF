@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
-
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
     reward_net = [
         nn.Linear(
@@ -81,8 +80,8 @@ class RewardNet(nn.Module):
     ):
         # Convert observations and actions to tensors
         device = next(self.parameters()).device
-        observations = torch.tensor(observations, dtype=torch.float32).to(device)
-        actions = torch.tensor(actions, dtype=torch.float32).to(device)
+        observations = torch.as_tensor(observations, dtype=torch.float32, device=device)
+        actions = torch.as_tensor(actions, dtype=torch.float32, device=device)
 
         x = torch.cat([observations, actions], 1)
         rewards = self.ensemble[member](x)
@@ -127,63 +126,148 @@ class RewardNet(nn.Module):
         ent = -ent.sum(dim=-1)
         return ent
 
+def train_or_val_pref_batch(
+    model: RewardNet,
+    optimizer: torch.optim.Optimizer,
+    prefs: np.ndarray, # shape (batch_size, 5),
+    rb,
+    device: torch.device,
+    env: Optional[VecNormalize] = None,
+    do_train: bool = True,
+):
+    """
+    Runs over a set of preference samples, either in a training mode (with backward + optimizer step)
+    or validation mode (no backward).
+
+    :param model: The reward network model
+    :param optimizer: The optimizer for the model
+    :param prefs: The preferences as a numpy array of shape (batch_size, 5) => [t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref]
+    :param rb: The replay buffer, used to get the trajectories
+    :param device: The device to run the model on (CPU or GPU)
+    :param env: Optional VecNormalize to normalise observations
+    :param do_train: If True, do a forward/backward pass. If False, only forward pass (e.g. for validation).
+    :return: total_loss over this batch of preferences
+    """
+
+    # If we are in validation mode, we don't need to compute gradients
+    if not do_train:
+        torch.set_grad_enabled(False)
+
+    ensemble_loss = 0.0
+    total_loss = 0.0
+    for pref_pair in prefs:
+        t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
+        pref = torch.tensor(pref, dtype=torch.float32).to(device)
+
+        t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
+        t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
+
+        if do_train:
+            optimizer.zero_grad()
+
+        ensemble_loss = 0.0
+        for single_model in model.ensemble:
+            r1 = single_model(
+                torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(
+                    device
+                )
+            )
+            r2 = single_model(
+                torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(
+                    device
+                )
+            )
+
+            prediction = model.preference_prob(r1, r2)
+            loss = model.preference_loss(prediction, pref)
+            assert loss != float("inf")
+            ensemble_loss += loss
+
+        ensemble_loss /= len(model.ensemble)
+
+        if do_train:
+            # Backward pass in training mode
+            ensemble_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+
+        total_loss += ensemble_loss.item()
+
+    # Re-enable gradients if we are in training mode
+    if not do_train:
+        torch.set_grad_enabled(True)
+
+    return {
+        "ensemble_loss": ensemble_loss,
+        "total_loss": total_loss,
+    }
+
 
 def train_reward(
-    model,
-    optimizer,
+    model: RewardNet,
+    optimizer: torch.optim.Optimizer,
     metrics,
-    pref_buffer,
+    train_pref_buffer,
     rb,
     global_step,
     epochs,
     batch_size,
     device,
+    val_pref_buffer: Optional = None,
     env: Optional[VecNormalize] = None,
 ):
     for epoch in range(epochs):
-        prefs = pref_buffer.sample(batch_size)
-        total_loss = 0.0
-        for pref_pair in prefs:
-            t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
-            pref = torch.tensor(pref, dtype=torch.float32).to(device)
 
-            t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
-            t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
-            ensemble_loss = 0.0
+        # ==== 1) TRAINING STEP ====
+        train_prefs = train_pref_buffer.sample(batch_size)
+        train_losses = train_or_val_pref_batch(
+            model=model,
+            optimizer=optimizer,
+            prefs=train_prefs,
+            rb=rb,
+            device=device,
+            env=env,
+            do_train=True,
+        )
 
-            optimizer.zero_grad()
-
-            for single_model in model.ensemble:
-                r1 = single_model(
-                    torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(
-                        device
-                    )
+        # ==== 2) VALIDATION STEP ====
+        if val_pref_buffer is not None and val_pref_buffer.size > 0:
+            # no need to compute gradients
+            with torch.no_grad():
+                val_prefs = val_pref_buffer.sample(batch_size)
+                val_losses = train_or_val_pref_batch(
+                    model=model,
+                    optimizer=optimizer,
+                    prefs=val_prefs,
+                    rb=rb,
+                    device=device,
+                    env=env,
+                    do_train=False,
                 )
-                r2 = single_model(
-                    torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(
-                        device
-                    )
-                )
 
-                prediction = model.preference_prob(r1, r2)
-                assert (
-                    prediction.requires_grad
-                ), "prediction does not require gradients!"
-
-                loss = model.preference_loss(prediction, pref)
-                assert loss != float("inf")
-                ensemble_loss += loss
-
-            ensemble_loss /= len(model.ensemble)
-            ensemble_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-            total_loss += ensemble_loss.item()
+        train_total_loss = train_losses["total_loss"]
+        total_val_loss = val_losses["total_loss"]
+        val_avg_loss = total_val_loss / len(val_prefs)
 
         metrics.log_reward_net_losses(
-            ensemble_loss, total_loss, global_step, batch_size
+            train_ensemble_loss=train_losses["ensemble_loss"],
+            train_total_loss=train_losses["total_loss"],
+            val_ensemble_loss=val_losses["ensemble_loss"],
+            val_avg_loss=val_avg_loss,
+            global_step=global_step,
+            batch_size=batch_size
         )
+
+
         if epoch % 10 == 0:
-            logging.info(
-                f"Reward epoch {epoch}, Loss {total_loss / (batch_size * 0.5)}"
-            )
+            if val_pref_buffer is not None and val_pref_buffer.size > 0:
+                logging.info(
+                    f"Reward epoch {epoch}, "
+                    f"Train Loss {(train_total_loss / (batch_size * 0.5)):.4f}, "
+                    f"Val Loss {val_avg_loss:.4f}"
+                )
+            else:
+                logging.info(
+                    f"Reward epoch {epoch}, "
+                    f"Train Loss {(train_total_loss / (batch_size * 0.5)):.4f}"
+                )
