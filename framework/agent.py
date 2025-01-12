@@ -58,3 +58,12 @@ class Agent(nn.Module):
             probs.entropy().sum(1),
             self.critic(x),
         )
+
+    def get_action(self, x, action=None):
+        action_mean = self.actor_mean(x)
+        action_logstd = self.actor_logstd.expand_as(action_mean)
+        action_std = torch.exp(action_logstd)
+        probs = Normal(action_mean, action_std)
+        if action is None:
+            action = probs.sample()
+        return action, 0, 0  # in order to match the scheme of actor.get_action

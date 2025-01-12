@@ -36,22 +36,20 @@ from video_recorder import VideoRecorder
 class Args:
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 1
+    seed: int = 2
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    track: bool = False
+    track: bool = True
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
+    wandb_project_name: str = "HalfCheetah-PPO"
     """the wandb's project name"""
-    wandb_entity: str = None
+    wandb_entity: str = "cleanRLHF"
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    hf_entity: str = ""
-    """the user or org name of the model repository from the Hugging Face Hub"""
     log_file: bool = True
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
@@ -86,7 +84,7 @@ class Args:
     """the surrogate clipping coefficient"""
     clip_vloss: bool = True
     """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
-    ent_coef: float = 0.3
+    ent_coef: float = 0.2
     """coefficient of the entropy"""
     vf_coef: float = 0.5
     """coefficient of the value function"""
@@ -116,9 +114,9 @@ class Args:
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
-    agent_net_hidden_dim: int = 64
+    agent_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the actor network"""
-    agent_net_hidden_layers: int = 2
+    agent_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
 
     # Human feedback arguments
@@ -605,6 +603,42 @@ def train(args: Any):
                             )
                             break
 
+                if global_step % args.evaluation_frequency == 0 and (
+                    global_step != 0
+                    or args.exploration_load
+                    or args.unsupervised_exploration
+                ):
+                    render = global_step % 100000 == 0 and global_step != 0
+                    track = (
+                        global_step % 100000 == 0 and global_step != 0 and args.track
+                    )
+                    eval_dict = evaluate.evaluate_policy(
+                        episodes=args.evaluation_episodes,
+                        step=global_step,
+                        actor=agent,
+                        render=render,
+                        track=track,
+                    )
+                    reward_means[global_step % 3] = eval_dict["mean_reward"]
+                    evaluate.plot(eval_dict, global_step)
+                    metrics.log_evaluate_metrics(global_step, eval_dict)
+
+                if (
+                    global_step > args.early_stopping_step == 0
+                    and (
+                        (
+                            np.mean(reward_means) > args.early_stopping_mean
+                            and args.enable_greater_or_smaller_check
+                        )
+                        or (
+                            np.mean(reward_means) < args.early_stopping_mean
+                            and not args.enable_greater_or_smaller_check
+                        )
+                    )
+                    and args.early_stopping
+                ):
+                    break
+
             # bootstrap value if not done
             with torch.no_grad():
                 next_value = agent.get_value(next_obs).reshape(1, -1)
@@ -719,38 +753,6 @@ def train(args: Any):
                 start_time,
             )
 
-            if global_step % args.evaluation_frequency == 0 and (
-                global_step != 0
-                or args.exploration_load
-                or args.unsupervised_exploration
-            ):
-                render = global_step % 100000 == 0 and global_step != 0
-                track = global_step % 100000 == 0 and global_step != 0 and args.track
-                eval_dict = evaluate.evaluate_policy(
-                    episodes=args.evaluation_episodes,
-                    step=global_step,
-                    actor=agent,
-                    render=render,
-                    track=track,
-                )
-                reward_means[global_step % 3] = eval_dict["mean_reward"]
-                evaluate.plot(eval_dict, global_step)
-                metrics.log_evaluate_metrics(global_step, eval_dict)
-            if (
-                global_step > args.early_stopping_step == 0
-                and (
-                    (
-                        np.mean(reward_means) > args.early_stopping_mean
-                        and args.enable_greater_or_smaller_check
-                    )
-                    or (
-                        np.mean(reward_means) < args.early_stopping_mean
-                        and not args.enable_greater_or_smaller_check
-                    )
-                )
-                and args.early_stopping
-            ):
-                break
         eval_dict = evaluate.evaluate_policy(
             episodes=args.evaluation_episodes,
             step=args.total_timesteps,
