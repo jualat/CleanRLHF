@@ -97,7 +97,7 @@ class Args:
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
-    early_stopping_threshold: float = 900
+    early_stopping_mean: float = 900
     """the threshold of early stopping"""
     enable_greater_or_smaller_check: bool = False
     """stop if reward is greater/smaller then threshold (True: greater/ False: smaller)"""
