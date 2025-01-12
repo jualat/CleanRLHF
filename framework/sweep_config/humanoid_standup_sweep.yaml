@@ -120,7 +120,7 @@ parameters:
   evaluation_episodes:
     values: [30]
   early_stopping:
-    values: [true]
+    values: [false]
   early_stopping_step:
     values: [500000]
   early_stopping_mean:

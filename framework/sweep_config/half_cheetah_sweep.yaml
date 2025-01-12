@@ -124,6 +124,6 @@ parameters:
   early_stopping_step:
     values: [500000]
   early_stopping_mean:
-    values: [900]
+    values: [2000]
   enable_greater_or_smaller_check:
     values: [false]
