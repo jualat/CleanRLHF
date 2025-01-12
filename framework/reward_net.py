@@ -34,7 +34,7 @@ def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
 
 class RewardNet(nn.Module):
     def __init__(self, env, hidden_dim, hidden_layers):
-        super(RewardNet, self).__init__()
+        super().__init__()
         self.ensemble = nn.ModuleList()
 
         for _ in range(3):
