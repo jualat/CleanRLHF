@@ -281,8 +281,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    train_pref_buffer_size = ((args.buffer_size // args.teacher_feedback_frequency)
-                              * args.teacher_feedback_num_queries_per_session)
+    train_pref_buffer_size = (
+        args.buffer_size // args.teacher_feedback_frequency
+    ) * args.teacher_feedback_num_queries_per_session
     train_pref_buffer = PreferenceBuffer(buffer_size=train_pref_buffer_size)
 
     val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
@@ -495,10 +496,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         continue
 
                     # Store preferences
-                    if np.random.rand() < (1 - args.reward_net_val_split): # 1 - (Val Split)% for training
-                        train_pref_buffer.add(first_trajectory, second_trajectory, preference)
+                    if np.random.rand() < (
+                        1 - args.reward_net_val_split
+                    ):  # 1 - (Val Split)% for training
+                        train_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
                     else:  # (Val Split)% for validation
-                        val_pref_buffer.add(first_trajectory, second_trajectory, preference)
+                        val_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
 
                 train_reward(
                     model=reward_net,

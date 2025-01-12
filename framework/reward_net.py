@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
+
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
     reward_net = [
         nn.Linear(
@@ -126,10 +127,11 @@ class RewardNet(nn.Module):
         ent = -ent.sum(dim=-1)
         return ent
 
+
 def train_or_val_pref_batch(
     model: RewardNet,
     optimizer: torch.optim.Optimizer,
-    prefs: np.ndarray, # shape (batch_size, 5),
+    prefs: np.ndarray,  # shape (batch_size, 5),
     rb,
     device: torch.device,
     env: Optional[VecNormalize] = None,
@@ -255,9 +257,8 @@ def train_reward(
             val_ensemble_loss=val_losses["ensemble_loss"],
             val_avg_loss=val_avg_loss,
             global_step=global_step,
-            batch_size=batch_size
+            batch_size=batch_size,
         )
-
 
         if epoch % 10 == 0:
             if val_pref_buffer is not None and val_pref_buffer.size > 0:
