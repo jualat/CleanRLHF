@@ -16,7 +16,7 @@ echo 'entity:' $entity
 project_name='Slurm_test'
 echo 'project_name:' $project_name
 
-sweep_config='../sweep_config/slurm_sweep.yaml'
+sweep_config='./sweep_config/slurm_sweep.yaml'
 echo 'sweep_config:' $sweep_config
 
 echo 'activating virtual environment'
