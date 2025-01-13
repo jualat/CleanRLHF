@@ -10,7 +10,7 @@ python3.10 -m pipx install poetry
 
 mkdir -p ~/workspace
 cd ~/workspace
-git clone --branch 85-run-sweeps-using-lmu-slurm git@github.com:jualat/CleanRLHF.git cleanrlhf
+git clone --branch sweep-branch git@github.com:jualat/CleanRLHF.git cleanrlhf
 cd cleanrlhf/framework
 
 poetry install

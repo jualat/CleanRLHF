@@ -19,4 +19,4 @@ echo 'force login'
 wandb login --relogin $WANDB_API_KEY
 
 echo 'start sweep script'
-python3.10 sweep.py --project_name Slurm_test --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/slurm_sweep.yaml
+python3.10 sweep.py --project_name Ant_common_tuning --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/ant_sweep.yaml
