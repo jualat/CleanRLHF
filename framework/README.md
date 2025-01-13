@@ -53,18 +53,19 @@ The sweep.py script automates hyperparameter optimization using Weights & Biases
 2. **Run the sweep with W&B:**
 
    ```bash
-   python sweep.py --project_name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep_count 3 --config_filename ./sweep_config/<SWEEP_NAME>.yaml
+   python sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
    ```
-   `--sweep_count`:  Number of runs to launch in this session.
-   `--project_name`: The name of your W&B project.
+   `--sweep-count`:  Number of runs to launch in this session.
+   `--project-name`: The name of your W&B project.
     `--entity`: Your W&B entity (team or username).
 
 
 3. **Run the Sweep with Sweep ID**
 
     ```bash
-   python sweep.py --sweep_id <SWEEP_ID> --sweep_count 3 
+   python sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
    ```
+
     `--sweep_id`:  You can find this ID on the W&B dashboard.
 
 #### How to Run a Sweep on SLURM:
