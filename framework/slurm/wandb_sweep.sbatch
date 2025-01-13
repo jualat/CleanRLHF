@@ -16,4 +16,4 @@ conda activate py310
 which python3.10
 
 echo 'start sweep script'
-python3.10 sweep.py --project Slurm_test --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/slurm_sweep.yaml
+python3.10 sweep.py --project_name Slurm_test --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/slurm_sweep.yaml
