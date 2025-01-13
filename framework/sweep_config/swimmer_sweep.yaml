@@ -1,6 +1,6 @@
 program: sac_rlhf.py
 entity: cleanRLHF
-project: Hopper-tuning
+project: Swimmer_common_tuning
 method: bayes
 metric:
   goal: maximize
@@ -56,7 +56,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Swimmer-common-tuning"]
+    values: ["Swimmer_common_tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -94,7 +94,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["Swimmer-v4"]
+    values: ["Swimmer-v5"]
   track:
     values: [true]
   gamma:
@@ -120,7 +120,7 @@ parameters:
   evaluation_episodes:
     values: [30]
   early_stopping:
-    values: [true]
+    values: [false]
   early_stopping_step:
     values: [500000]
   early_stopping_mean:

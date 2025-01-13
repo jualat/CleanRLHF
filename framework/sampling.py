@@ -5,11 +5,24 @@ from reward_net import RewardNet
 
 
 def uniform_sampling(rb: ReplayBuffer, traj_len: int):
+    """
+    Sample two trajectories from the replay buffer, uniformly.
+    :param rb: The replay buffer
+    :param traj_len: The trajectory length
+    :return:
+    """
     traj_mb1, traj_mb2 = rb.sample_trajectories(traj_len=traj_len)
     return traj_mb1[0], traj_mb2[0]
 
 
 def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
+    """
+    Sample two trajectories from the replay buffer, based on the disagreement between ensemble members.
+    :param rb: The replay buffer
+    :param reward_net: The reward network
+    :param traj_len: The trajectory length
+    :return:
+    """
     traj_mb1, traj_mb2 = rb.sample_trajectories(traj_len=traj_len)
 
     disagrees = []
@@ -38,6 +51,13 @@ def disagreement_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int
 
 
 def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
+    """
+    Sample two trajectories from the replay buffer, based on the entropy of the ensemble members.
+    :param rb: The replay buffer
+    :param reward_net: The reward network
+    :param traj_len: The trajectory length
+    :return:
+    """
     traj_mb1, traj_mb2 = rb.sample_trajectories(traj_len=traj_len)
 
     entropies = []
