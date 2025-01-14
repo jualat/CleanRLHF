@@ -1,6 +1,6 @@
 program: sac_rlhf.py
 entity: cleanRLHF
-project: Hopper-tuning
+project: Walker2D_common_tuning
 method: bayes
 metric:
   goal: maximize
@@ -56,7 +56,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Walker2D-common-tuning"]
+    values: ["Walker2D_common_tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -94,7 +94,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["Walker2D-v4"]
+    values: ["Walker2D-v5"]
   track:
     values: [true]
   gamma:
@@ -124,6 +124,6 @@ parameters:
   early_stopping_step:
     values: [500000]
   early_stopping_mean:
-    values: [900]
+    values: [2500]
   enable_greater_or_smaller_check:
     values: [false]

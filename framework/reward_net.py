@@ -8,6 +8,13 @@ from stable_baselines3.common.vec_env import VecNormalize
 
 
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
+    """
+    Generate a reward network with the given parameters.
+    :param hidden_dim: The dimension of the hidden layers
+    :param layers: The amount of hidden layers
+    :param env: The environment
+    :return:
+    """
     reward_net = [
         nn.Linear(
             np.array(env.single_observation_space.shape).prod()
@@ -27,7 +34,7 @@ def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
 
 class RewardNet(nn.Module):
     def __init__(self, env, hidden_dim, hidden_layers):
-        super(RewardNet, self).__init__()
+        super().__init__()
         self.ensemble = nn.ModuleList()
 
         for _ in range(3):
@@ -35,14 +42,24 @@ class RewardNet(nn.Module):
             self.ensemble.append(model)
 
     def forward(self, x, a):
+        """
+        Forward pass through the network
+        :param x: Parameter x
+        :param a: Parameter a
+        :return:
+        """
         x = torch.cat([x, a], 1)
         y = [model(x) for model in self.ensemble]
         y = torch.stack(y, dim=0)
         return torch.mean(y, dim=0)
 
     def preference_prob(self, r1, r2):
-        # Probability based on Bradley-Terry model
-        # r_{1,2} shape: (num_steps,)
+        """
+        Compute the probability based on the Bradley-Terry model.
+        :param r1: shape: (num_steps,)
+        :param r2: shape: (num_steps,)
+        :return:
+        """
         device = next(self.parameters()).device
         softmax = nn.Softmax(dim=0)
         exp1 = torch.sum(r1)
@@ -52,7 +69,13 @@ class RewardNet(nn.Module):
         return prob[0]
 
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
-        # Compute binary cross entropy loss based on human feedback
+        """
+        Compute the binary cross entropy loss based on human feedback.
+        :param predictions: The predictions as a tensor
+        :param preferences: The preferences as a tensor
+        :param epsilon: The epsilon value
+        :return:
+        """
         predictions = torch.clamp(predictions, epsilon, 1 - epsilon)
         return -torch.mean(
             preferences * torch.log(predictions)
@@ -79,6 +102,13 @@ class RewardNet(nn.Module):
     def predict_reward_member(
         self, observations: np.ndarray, actions: np.ndarray, member: int = -1
     ):
+        """
+        Predict the reward for a given observation and action in a specific ensemble member.
+        :param observations: The observations as a numpy array
+        :param actions: The actions as a numpy array
+        :param member: The member of the ensemble
+        :return:
+        """
         # Convert observations and actions to tensors
         device = next(self.parameters()).device
         observations = torch.tensor(observations, dtype=torch.float32).to(device)
@@ -89,6 +119,13 @@ class RewardNet(nn.Module):
         return rewards
 
     def preference_prob_hat_member(self, traj1, traj2, member: int = -1):
+        """
+        Compute the probability based on the Bradley-Terry model for a specific ensemble member.
+        :param traj1: Trajectory one
+        :param traj2: Trajectory two
+        :param member: The ensemble member
+        :return:
+        """
         softmax = nn.Softmax(dim=0)
         r1 = self.predict_reward_member(
             traj1.samples.observations,
@@ -107,6 +144,13 @@ class RewardNet(nn.Module):
         return prob[0]
 
     def preference_hat_entropy_member(self, traj1, traj2, member: int = -1):
+        """
+        Compute the entropy for a specific ensemble member.
+        :param traj1: Trajectory one
+        :param traj2: Trajectory two
+        :param member: The member of the ensemble
+        :return:
+        """
         r1 = self.predict_reward_member(
             traj1.samples.observations,
             traj1.samples.actions,
@@ -140,6 +184,20 @@ def train_reward(
     device,
     env: Optional[VecNormalize] = None,
 ):
+    """
+    Train the reward network.
+    :param model: The model to train
+    :param optimizer: The optimizer for the training
+    :param metrics: The metrics class
+    :param pref_buffer: The preference buffer
+    :param rb: The replay buffer
+    :param global_step: The global step
+    :param epochs: The amount of epochs
+    :param batch_size: The batch size
+    :param device: The torch device
+    :param env: The environment
+    :return:
+    """
     for epoch in range(epochs):
         prefs = pref_buffer.sample(batch_size)
         total_loss = 0.0

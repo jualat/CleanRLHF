@@ -59,7 +59,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v4"
+    env_id: str = "Hopper-v5"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -164,6 +164,11 @@ class Args:
 
 
 def train(args: Any):
+    """
+    The training function.
+    :param args: run arguments
+    :return:
+    """
     import stable_baselines3 as sb3
 
     if sb3.__version__ < "2.0":
@@ -259,8 +264,24 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs.single_observation_space.dtype = np.float32
 
     if is_mujoco_env(envs.envs[0]):
-        qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
-        qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
+        try:
+            qpos = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
+                dtype=np.float32,
+            )
+            qvel = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
+                dtype=np.float32,
+            )
+        except AttributeError:
+            qpos = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.model.key_qpos.shape[1]),
+                dtype=np.float32,
+            )
+            qvel = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
+                dtype=np.float32,
+            )
     else:
         qpos = np.zeros((2, 2))
         qvel = np.zeros((2, 2))
@@ -319,7 +340,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         for explore_step in trange(
             args.total_explore_steps, desc="Exploration step", unit="steps"
         ):
-
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
             )
@@ -329,13 +349,23 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             )
 
             real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
+
             if is_mujoco_env(envs.envs[0]):
+
+                try:
+                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                        "skipped_qpos"
+                    ]
+                except (KeyError, AttributeError):
+                    skipped_qpos = 0
+
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qpos[idx] = (
+                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                        if skipped_qpos > 0
+                        else single_env.unwrapped.data.qpos.copy()
+                    )
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
@@ -508,36 +538,45 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
+
+                try:
+                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                        "skipped_qpos"
+                    ]
+                except (KeyError, AttributeError):
+                    skipped_qpos = 0
+
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                    qpos[idx] = (
+                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                        if skipped_qpos > 0
+                        else single_env.unwrapped.data.qpos.copy()
+                    )
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
-            if infos and "final_info" in infos:
-                for info in infos["final_info"]:
-                    if info:
-                        allocated, reserved = 0, 0
-                        cuda = False
-                        if args.cuda and torch.cuda.is_available():
-                            allocated = torch.cuda.memory_allocated()
-                            reserved = torch.cuda.memory_reserved()
-                            cuda = True
-                        metrics.log_info_metrics(
-                            info, global_step, allocated, reserved, cuda
-                        )
-                        break
+            if infos and "episode" in infos:
+                allocated, reserved = 0, 0
+                cuda = False
+                if args.cuda and torch.cuda.is_available():
+                    allocated = torch.cuda.memory_allocated()
+                    reserved = torch.cuda.memory_reserved()
+                    cuda = True
+                metrics.log_info_metrics(infos, global_step, allocated, reserved, cuda)
 
-            # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+            # TRY NOT TO MODIFY: save data to reply buffer
             real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
+
             dones = terminations | truncations
             with torch.no_grad():
                 rewards = reward_net.predict_reward(obs, actions)
 
             env_idx = 0
-            single_env_info = {key: value[env_idx] for key, value in infos.items()}
+            single_env_info = {}
+            for key, value in infos.items():
+                if key != "episode":
+                    single_env_info[key] = value[env_idx]
+
             rb.add(
                 obs[env_idx : env_idx + 1],
                 real_next_obs[env_idx : env_idx + 1],

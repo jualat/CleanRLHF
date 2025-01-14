@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 import gymnasium as gym
 import imageio
+import matplotlib
+
+matplotlib.use("AGG")
 import numpy as np
 import pandas as pd
 import torch
@@ -20,7 +23,7 @@ from tqdm import trange
 class Args:
     path_to_model: str = ""
     """path to model"""
-    env_id: str = "Hopper-v4"
+    env_id: str = "Hopper-v5"
     """the environment of the policy"""
     seed: int = 1
     """seed of the experiment"""
@@ -85,6 +88,18 @@ class Evaluation:
         actor=None,
         track=False,
     ):
+        """
+        Evaluate the policy
+        :param episodes: The number of episodes to run
+        :param fps: The frames per second of the video
+        :param confidence: The confidence interval size
+        :param lowest_x_pct: The lowest `lowest_x_pct` percentile of the episode rewards gets returned
+        :param step: The global step
+        :param render: Boolean if the videos should be rendered
+        :param actor: The actor network
+        :param track: Boolean if the best and worst video should be tracked
+        :return:
+        """
         actor = actor.eval() if actor is not None else self.actor
         env = self.make_env(render=render)
         run_name = self.run_name
@@ -160,6 +175,12 @@ class Evaluation:
         }
 
     def plot(self, eval_dict, step=None):
+        """
+        Plot the evaluation
+        :param eval_dict: Dictionary with the evaluation results
+        :param step: The global step / total_timesteps
+        :return:
+        """
         model_folder = f"./models/{self.run_name}"
         os.makedirs(model_folder, exist_ok=True)
         if step is not None:
@@ -177,6 +198,11 @@ class Evaluation:
         ).save(out_path, width=10, height=6, dpi=300)
 
     def make_env(self, render):
+        """
+        Create the environment
+        :param render: If videos should be rendered
+        :return:
+        """
         if render:
             env = gym.make(self.env_id, render_mode="rgb_array")
         else:
