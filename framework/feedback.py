@@ -1,11 +1,10 @@
 import json
 import logging
 import time
-import requests
 
+import requests
 from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
 from tqdm import tqdm, trange
-
 
 server_url = "http://localhost:5000"
 
@@ -31,9 +30,9 @@ def collect_feedback(
     run_name,
     preference_sampling,
     teacher_feedback_num_queries_per_session,
+    trajectory_length,
     sim_teacher=None,
     reward_net=None,
-    trajectory_length=10,
     feedback_file=None,
     capture_video=True,
     video_recorder=None,
@@ -72,9 +71,6 @@ def collect_feedback(
         reward_net (RewardNet, optional):
             Reward network used for advanced sampling strategies like "disagree" or "entropy"
             (only used if applicable).
-
-        num_queries (int, optional):
-            Total number of feedback queries to process. The default is 100.
 
         trajectory_length (int, optional):
             The number of steps in each sampled trajectory. The default is 10.
@@ -326,5 +322,3 @@ def human_feedback_preparation(
         logging.error("Invalid JSON response received from server.")
     except requests.RequestException as e:
         logging.error(f"An error occurred while sending the videos: {str(e)}")
-
-

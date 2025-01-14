@@ -527,6 +527,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
+
+                try:
+                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                        "skipped_qpos"
+                    ]
+                except (KeyError, AttributeError):
+                    skipped_qpos = 0
+
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
                     qpos[idx] = (
