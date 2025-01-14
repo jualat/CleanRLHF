@@ -99,6 +99,19 @@ class ReplayBuffer(SB3ReplayBuffer):
         qpos: np.ndarray,
         qvel: np.ndarray,
     ) -> None:
+        """
+        Extending the SB3 add method to include ground truth rewards, qpos and qvel.
+        :param obs: observation
+        :param next_obs: next observation
+        :param action: action
+        :param reward: reward
+        :param ground_truth_rewards: ground truth rewards
+        :param done: done
+        :param infos: info
+        :param qpos: qpos
+        :param qvel: qvel
+        :return:
+        """
         super().add(obs, next_obs, action, reward, done, infos)
         self.ground_truth_rewards[self.pos] = ground_truth_rewards
         self.qpos[self.pos] = qpos
@@ -140,6 +153,12 @@ class ReplayBuffer(SB3ReplayBuffer):
     def _get_samples(
         self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None
     ) -> ReplayBufferSampleHF:
+        """
+        Helper function for get_trajectory() to get a single sample.
+        :param batch_inds: Numpy array of indices of the trajectory
+        :param env: Environment
+        :return:
+        """
         # Sample randomly the env idx
         env_indices = np.random.randint(0, high=self.n_envs)
 
@@ -181,6 +200,13 @@ class ReplayBuffer(SB3ReplayBuffer):
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
     ):
+        """
+        Helper function of sample_trajectories() to get a single trajectory.
+        :param start_idx: The start index of the trajectory
+        :param end_idx: The end index of the trajectory
+        :param env: The environment
+        :return:
+        """
         assert start_idx < end_idx, "start_idx=%d, end_idx=%d" % (start_idx, end_idx)
         trajectory_indices = np.arange(start_idx, end_idx)
         trajectory_samples = self._get_samples(trajectory_indices, env)
