@@ -51,7 +51,7 @@ class VideoRecorder:
                 fps=fps,
                 name_prefix=name_prefix,
             )
-            video_file_name = video_folder + name_prefix + ".mp4"
+            video_file_name = name_prefix + ".mp4"
             logging.debug(f"Finished recording trajectory video: {video_file_name}")
             return video_file_name
         except Exception as e:
@@ -110,7 +110,12 @@ class VideoRecorder:
                     else qvel_list[i]
                 )
                 # Append zeros to qpos for skipped qpos values
-                skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
+                skipped_qpos = 0  # Default value if metadata is unavailable
+                if hasattr(env.unwrapped, "observation_structure"):
+                    skipped_qpos = env.unwrapped.observation_structure.get(
+                        "skipped_qpos", 0
+                    )
+
                 qpos_extended = np.append(qpos, [0] * skipped_qpos)
 
                 env.unwrapped.set_state(qpos_extended, qvel)

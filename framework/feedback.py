@@ -201,10 +201,9 @@ def human_feedback_preparation(
     sampled_trajectory_videos = []
     for i in trange(
         teacher_feedback_num_queries_per_session,
-        desc="Queries",
-        unit="queries",
+        desc="Feedback pairs prepared:",
+        # unit="",
     ):
-        # for _ in range(num_queries):
         """
         Prepares human feedback data by sampling trajectory pairs, recording their videos,
         and sending them to the server for human evaluation.
@@ -301,10 +300,12 @@ def human_feedback_preparation(
             )
             continue  # Skip this trajectory pair if there is no video
 
-        sampled_trajectory_videos.append([first_trajectory, second_trajectory])
+        sampled_trajectory_videos.append(
+            [first_trajectory_video, second_trajectory_video]
+        )
 
     try:
-        payload = {"video_pairs": [sampled_trajectory_videos]}
+        payload = {"video_pairs": sampled_trajectory_videos}
         response = requests.post(
             f"{server_url}/api/add_videos/{run_name}", json=payload
         )
