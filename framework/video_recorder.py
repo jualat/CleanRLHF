@@ -38,8 +38,7 @@ class VideoRecorder:
         # Ensure the directory for videos exists
         video_folder = f"./videos/{run_name}/trajectories"
         os.makedirs(video_folder, exist_ok=True)
-        out_path = f"{video_folder}/"
-
+        name_prefix = f"trajectory_{start_idx}_{end_idx}_{env_idx}"
         env = gym.make(self.env_id, render_mode="rgb_array")
 
         try:
@@ -50,14 +49,16 @@ class VideoRecorder:
                 video_length=length,
                 video_folder=out_path,
                 fps=fps,
-                name_prefix=f"trajectory_{start_idx}_{end_idx}_{env_idx}",
+                name_prefix=name_prefix,
             )
+            return out_path + name_prefix + ".mp4"
         except Exception as e:
             logging.error(
                 f"Error recording trajectory (start_idx={start_idx}, end_idx={end_idx}, env_idx={env_idx}): {e}"
             )
         finally:
             env.close()
+            logging.info(f"Finished recording trajectory {out_path}")
 
     def _initialize_env_state(self, env, trajectory):
         """Initialize the environment state based on Mujoco or non-Mujoco trajectories."""

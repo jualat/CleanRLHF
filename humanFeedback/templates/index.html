@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feedback Server</title>
+    <script>
+        async function submitFeedback(preference) {
+            const video1 = document.getElementById("video1").dataset.filename;
+            const video2 = document.getElementById("video2").dataset.filename;
+
+            const response = await fetch("/api/submit_feedback", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    trajectory_1: video1,
+                    trajectory_2: video2,
+                    preference: preference  // TODO change? currently: 1 for video1, 2 for video2, 0 for neither
+                })
+            });
+
+            const result = await response.json();
+            if (result.status === "success") {
+                alert("Feedback submitted successfully!");
+            } else {
+                alert("Error submitting feedback: " + result.message);
+            }
+        }
+
+        function playVideos(video1Src, video2Src, video1Filename, video2Filename) {
+            const video1 = document.getElementById("video1");
+            const video2 = document.getElementById("video2");
+
+            video1.src = video1Src;
+            video2.src = video2Src;
+
+            video1.dataset.filename = video1Filename;
+            video2.dataset.filename = video2Filename;
+
+            video1.play();
+            video2.play();
+        }
+    </script>
+</head>
+<body>
+    <h1>Choose the Better Trajectory</h1>
+    <div>
+        <video id="video1" width="400" controls></video>
+        <video id="video2" width="400" controls></video>
+    </div>
+    <div>
+        <button onclick="submitFeedback(1)">Option 1</button>
+        <button onclick="submitFeedback(2)">Option 2</button>
+        <button onclick="submitFeedback(0)">Neither</button>
+    </div>
+
+<script>
+    async function loadVideos() {
+        try {
+            const response = await fetch("/api/get_videos");
+            if (response.ok) {
+                const data = await response.json();
+
+                const video1Src = data.video1;
+                const video2Src = data.video2;
+
+                const video1Filename = video1Src.split("/").pop(); // Extract filename
+                const video2Filename = video2Src.split("/").pop();
+
+                playVideos(video1Src, video2Src, video1Filename, video2Filename);
+            } else {
+                console.error("Failed to load videos:", response.statusText);
+            }
+        } catch (error) {
+            console.error("Error loading videos:", error);
+        }
+    }
+
+    window.onload = loadVideos;
+</script>
+</body>
+</html>

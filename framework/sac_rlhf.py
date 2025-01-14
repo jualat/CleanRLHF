@@ -21,11 +21,11 @@ from env import (
     save_replay_buffer,
 )
 from evaluation import Evaluation
+from feedback import collect_feedback
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
-from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
 from teacher import Teacher
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
@@ -116,6 +116,10 @@ class Args:
     soft_q_net_hidden_layers: int = 4
     """the number of hidden layers in the SoftQNetwork"""
 
+    # Teacher feedback mode
+    teacher_feedback_mode: str = "simulated"
+    """the mode of feedback, must be 'simulated', 'human' or 'file'"""
+
     # Human feedback arguments
     teacher_feedback_frequency: int = 5000
     """the frequency of teacher feedback (every K iterations)"""
@@ -145,7 +149,7 @@ class Args:
     """the range of two trajectories being equal"""
 
     # Unsupervised Exploration
-    unsupervised_exploration: bool = True
+    unsupervised_exploration: bool = False
     """toggle the unsupervised exploration"""
     total_explore_steps: int = 10000
     """total number of explore steps"""
@@ -483,44 +487,19 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                for i in trange(
-                    args.teacher_feedback_num_queries_per_session,
-                    desc="Queries",
-                    unit="queries",
-                ):
-                    # Sample trajectories from replay buffer to query teacher
-                    if args.preference_sampling == "uniform":
-                        first_trajectory, second_trajectory = uniform_sampling(
-                            rb, args.trajectory_length
-                        )
-                    elif args.preference_sampling == "disagree":
-                        first_trajectory, second_trajectory = disagreement_sampling(
-                            rb, reward_net, args.trajectory_length
-                        )
-                    elif args.preference_sampling == "entropy":
-                        first_trajectory, second_trajectory = entropy_sampling(
-                            rb, reward_net, args.trajectory_length
-                        )
-
-                    logging.debug(f"step {global_step}, {i}")
-
-                    # Create video of the two trajectories. For now, we only render if capture_video is True.
-                    # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                    if args.capture_video:
-                        video_recorder.record_trajectory(first_trajectory, run_name)
-                        video_recorder.record_trajectory(second_trajectory, run_name)
-
-                    # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                    preference = sim_teacher.give_preference(
-                        first_trajectory, second_trajectory
-                    )
-
-                    # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
-                    if preference is None:
-                        continue
-
-                    # Store preferences
-                    pref_buffer.add(first_trajectory, second_trajectory, preference)
+                pref_buffer = collect_feedback(
+                    mode=args.teacher_feedback_mode,
+                    pref_buffer=pref_buffer,
+                    run_name=run_name,
+                    preference_sampling=args.preference_sampling,
+                    replay_buffer=rb,
+                    trajectory_length=args.trajectory_length,
+                    reward_net=reward_net,
+                    teacher_feedback_num_queries_per_session=args.teacher_feedback_num_queries_per_session,
+                    capture_video=args.capture_video,
+                    video_recorder=video_recorder,
+                    sim_teacher=sim_teacher,
+                )
 
                 train_reward(
                     reward_net,
@@ -548,14 +527,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
-
-                try:
-                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                        "skipped_qpos"
-                    ]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
                     qpos[idx] = (
