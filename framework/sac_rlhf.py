@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -449,6 +450,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         }
         save_model_all(run_name, args.total_explore_steps, state_dict)
         save_replay_buffer(run_name, args.total_explore_steps, rb)
+        obs, _ = envs.reset(seed=args.seed)
 
     if args.exploration_load:
         load_replay_buffer(rb, path=args.path_to_replay_buffer)
@@ -466,8 +468,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
-        reward_means = np.zeros(3)
-        obs, _ = envs.reset(seed=args.seed)
+        reward_means = deque(maxlen=3)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
             if args.exploration_load or args.unsupervised_exploration
@@ -667,7 +668,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render=render,
                     track=track,
                 )
-                reward_means[global_step % 3] = eval_dict["mean_reward"]
+                reward_means.append(eval_dict["mean_reward"])
                 evaluate.plot(eval_dict, global_step)
                 metrics.log_evaluate_metrics(global_step, eval_dict)
             if (

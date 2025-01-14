@@ -80,7 +80,8 @@ class ReplayBuffer(SB3ReplayBuffer):
             (self.buffer_size, self.n_envs, qvel_shape), dtype=np.float32
         )
         self.seed = seed
-
+        self.qpos_shape = qpos_shape
+        self.qvel_shape = qvel_shape
         if seed is not None:
             np.random.seed(seed)
             self.torch_generator = torch.Generator().manual_seed(seed)
@@ -255,3 +256,29 @@ class ReplayBuffer(SB3ReplayBuffer):
         assert not np.allclose(
             old_rewards, new_rewards
         ), "No change in rewards after relabeling!"
+
+    def reset_buffer(self):
+        """Reset replay buffer"""
+        self.pos = 0
+        self.full = False
+        self.observations = np.zeros(
+            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32
+        )
+        self.next_observations = np.zeros(
+            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32
+        )
+        self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.actions = np.zeros(
+            (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32
+        )
+        self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.qpos = np.zeros(
+            (self.buffer_size, self.n_envs, self.qpos_shape), dtype=np.float32
+        )
+        self.qvel = np.zeros(
+            (self.buffer_size, self.n_envs, self.qvel_shape), dtype=np.float32
+        )
+        self.ground_truth_rewards = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
+        )
+        logging.debug("Replay Buffer reset")

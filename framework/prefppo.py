@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,7 +43,7 @@ class Args:
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
     cuda: bool = True
     """if toggled, cuda will be enabled by default"""
-    track: bool = True
+    track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
     wandb_project_name: str = "HalfCheetah-PPO"
     """the wandb's project name"""
@@ -56,7 +57,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "HalfCheetah-v4"
+    env_id: str = "HalfCheetah-v5"
     """the id of the environment"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -240,11 +241,24 @@ def train(args: Any):
     next_done = torch.zeros(args.num_envs).to(device)
 
     if is_mujoco_env(envs.envs[0]):
-        qpos = np.zeros((args.num_envs, envs.envs[0].model.nq), dtype=np.float32)
-        qvel = np.zeros((args.num_envs, envs.envs[0].model.nv), dtype=np.float32)
-    else:
-        qpos = np.zeros((2, 2))
-        qvel = np.zeros((2, 2))
+        try:
+            qpos = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
+                dtype=np.float32,
+            )
+            qvel = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
+                dtype=np.float32,
+            )
+        except AttributeError:
+            qpos = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.model.key_qpos.shape[1]),
+                dtype=np.float32,
+            )
+            qvel = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
+                dtype=np.float32,
+            )
 
     rb = ReplayBuffer(
         args.buffer_size,
@@ -324,10 +338,22 @@ def train(args: Any):
                 next_done = np.logical_or(terminations, truncations)
 
                 if is_mujoco_env(envs.envs[0]):
+                    try:
+                        skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                            "skipped_qpos"
+                        ]
+                    except (KeyError, AttributeError):
+                        skipped_qpos = 0
+
                     for idx in range(args.num_envs):
                         single_env = envs.envs[idx]
-                        qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                        qpos[idx] = (
+                            single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                            if skipped_qpos > 0
+                            else single_env.unwrapped.data.qpos.copy()
+                        )
                         qvel[idx] = single_env.unwrapped.data.qvel.copy()
+
                 next_obs = next_obs.astype(np.float32)
                 rb.add(
                     obs=single_obs.cpu().numpy(),
@@ -483,7 +509,7 @@ def train(args: Any):
         }
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
-    reward_means = np.zeros(3)
+    reward_means = deque(maxlen=3)
     try:
         for iteration in trange(1, args.num_iterations + 1):
 
@@ -542,6 +568,7 @@ def train(args: Any):
                         args.teacher_feedback_batch_size,
                         device,
                     )
+                    rb.reset_buffer()
 
                 current_step += 1
                 global_step += args.num_envs
@@ -568,10 +595,22 @@ def train(args: Any):
                 next_done = np.logical_or(terminations, truncations)
 
                 if is_mujoco_env(envs.envs[0]):
+                    try:
+                        skipped_qpos = envs.envs[0].unwrapped.observation_structure[
+                            "skipped_qpos"
+                        ]
+                    except (KeyError, AttributeError):
+                        skipped_qpos = 0
+
                     for idx in range(args.num_envs):
                         single_env = envs.envs[idx]
-                        qpos[idx] = single_env.unwrapped.data.qpos.copy()
+                        qpos[idx] = (
+                            single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
+                            if skipped_qpos > 0
+                            else single_env.unwrapped.data.qpos.copy()
+                        )
                         qvel[idx] = single_env.unwrapped.data.qvel.copy()
+
                 next_obs = next_obs.astype(np.float32)
                 rb.add(
                     obs=single_obs.cpu().numpy(),
@@ -589,19 +628,16 @@ def train(args: Any):
                     next_done
                 ).to(device)
 
-                if infos and "final_info" in infos:
-                    for info in infos["final_info"]:
-                        if info:
-                            allocated, reserved = 0, 0
-                            cuda = False
-                            if args.cuda and torch.cuda.is_available():
-                                allocated = torch.cuda.memory_allocated()
-                                reserved = torch.cuda.memory_reserved()
-                                cuda = True
-                            metrics.log_info_metrics(
-                                info, global_step, allocated, reserved, cuda
-                            )
-                            break
+                if infos and "episode" in infos:
+                    allocated, reserved = 0, 0
+                    cuda = False
+                    if args.cuda and torch.cuda.is_available():
+                        allocated = torch.cuda.memory_allocated()
+                        reserved = torch.cuda.memory_reserved()
+                        cuda = True
+                    metrics.log_info_metrics(
+                        infos, global_step, allocated, reserved, cuda
+                    )
 
                 if global_step % args.evaluation_frequency == 0 and (
                     global_step != 0
@@ -619,7 +655,7 @@ def train(args: Any):
                         render=render,
                         track=track,
                     )
-                    reward_means[global_step % 3] = eval_dict["mean_reward"]
+                    reward_means.append(eval_dict["mean_reward"])
                     evaluate.plot(eval_dict, global_step)
                     metrics.log_evaluate_metrics(global_step, eval_dict)
 
