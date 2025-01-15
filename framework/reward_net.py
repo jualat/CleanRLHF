@@ -323,6 +323,5 @@ def train_reward(
                 )
             else:
                 logging.info(
-                    f"Reward epoch {epoch}, "
-                    f"Train Loss {train_avg_loss:.4f}"
+                    f"Reward epoch {epoch}, " f"Train Loss {train_avg_loss:.4f}"
                 )
