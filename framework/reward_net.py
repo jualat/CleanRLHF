@@ -305,16 +305,13 @@ def train_reward(
         train_avg_loss = train_total_loss / len(train_prefs)
         val_avg_loss = val_total_loss / len(val_prefs)
         losses = {
-            "train_total_loss": train_total_loss,
-            "val_total_loss": val_total_loss,
             "train_avg_loss": train_avg_loss,
             "val_avg_loss": val_avg_loss,
         }
 
         metrics.log_losses(
-            losses=losses,
+            loss_dict=losses,
             global_step=global_step,
-            batch_size=batch_size,
         )
 
         if epoch % 10 == 0:
