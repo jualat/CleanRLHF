@@ -199,7 +199,6 @@ def train_or_val_pref_batch(
     if not do_train:
         torch.set_grad_enabled(False)
 
-    ensemble_loss = 0.0
     total_loss = 0.0
     for pref_pair in prefs:
         t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
@@ -243,10 +242,7 @@ def train_or_val_pref_batch(
     if not do_train:
         torch.set_grad_enabled(True)
 
-    return {
-        "ensemble_loss": ensemble_loss,
-        "total_loss": total_loss,
-    }
+    return total_loss
 
 
 def train_reward(
@@ -280,7 +276,7 @@ def train_reward(
 
         # ==== 1) TRAINING STEP ====
         train_prefs = train_pref_buffer.sample(batch_size)
-        train_losses = train_or_val_pref_batch(
+        train_total_loss = train_or_val_pref_batch(
             model=model,
             optimizer=optimizer,
             prefs=train_prefs,
@@ -295,7 +291,7 @@ def train_reward(
             # no need to compute gradients
             with torch.no_grad():
                 val_prefs = val_pref_buffer.sample(batch_size)
-                val_losses = train_or_val_pref_batch(
+                val_total_loss = train_or_val_pref_batch(
                     model=model,
                     optimizer=optimizer,
                     prefs=val_prefs,
@@ -305,15 +301,18 @@ def train_reward(
                     do_train=False,
                 )
 
-        train_total_loss = train_losses["total_loss"]
-        total_val_loss = val_losses["total_loss"]
-        val_avg_loss = total_val_loss / len(val_prefs)
+        # For both training and validation, len(prefs) is the batch size
+        train_avg_loss = train_total_loss / len(train_prefs)
+        val_avg_loss = val_total_loss / len(val_prefs)
+        losses = {
+            "train_total_loss": train_total_loss,
+            "val_total_loss": val_total_loss,
+            "train_avg_loss": train_avg_loss,
+            "val_avg_loss": val_avg_loss,
+        }
 
-        metrics.log_reward_net_losses(
-            train_ensemble_loss=train_losses["ensemble_loss"],
-            train_total_loss=train_losses["total_loss"],
-            val_ensemble_loss=val_losses["ensemble_loss"],
-            val_avg_loss=val_avg_loss,
+        metrics.log_losses(
+            losses=losses,
             global_step=global_step,
             batch_size=batch_size,
         )
@@ -322,11 +321,11 @@ def train_reward(
             if val_pref_buffer is not None and val_pref_buffer.size > 0:
                 logging.info(
                     f"Reward epoch {epoch}, "
-                    f"Train Loss {(train_total_loss / (batch_size * 0.5)):.4f}, "
+                    f"Train Loss {train_avg_loss :.4f}, "
                     f"Val Loss {val_avg_loss:.4f}"
                 )
             else:
                 logging.info(
                     f"Reward epoch {epoch}, "
-                    f"Train Loss {(train_total_loss / (batch_size * 0.5)):.4f}"
+                    f"Train Loss {train_avg_loss:.4f}"
                 )
