@@ -232,19 +232,22 @@ class PerformanceMetrics:
             "evaluate/median", eval_dict["median_reward"], global_step
         )
 
-    def log_reward_net_losses(self, ensemble_loss, total_loss, global_step, batch_size):
+    def log_losses(
+        self,
+        loss_dict,
+        global_step,
+    ):
         """
         Log reward net losses to TensorBoard.
-        :param ensemble_loss: The ensemble loss after training the reward_net
-        :param total_loss: The total loss after training the reward_net
+        :param loss_dict: The dictionary of losses
         :param global_step: The global step
-        :param batch_size: The batch size the reward net was trained on
         :return:
         """
-        self.writer.add_scalar("losses/reward_loss", ensemble_loss.item(), global_step)
-        self.writer.add_scalar(
-            "losses/total_loss", total_loss / (batch_size * 0.5), global_step
-        )
+        for loss_name, loss_value in loss_dict.items():
+            if loss_value is not None:
+                self.writer.add_scalar(
+                    f"losses/{loss_name}", float(loss_value), global_step
+                )
 
     def close(self):
         self.writer.close()
