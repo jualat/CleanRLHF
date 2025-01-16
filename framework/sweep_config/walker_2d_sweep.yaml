@@ -56,7 +56,7 @@ parameters:
       - uniform
       - entropy
   wandb_project_name:
-    values: ["Walker2D_common_tuning"]
+    values: ["Walker2d_common_tuning"]
   explore_batch_size:
     values: [256]
   trajectory_length:
@@ -94,7 +94,7 @@ parameters:
   autotune:
     values: [true]
   env_id:
-    values: ["Walker2D-v5"]
+    values: ["Walker2d-v5"]
   track:
     values: [true]
   gamma:
