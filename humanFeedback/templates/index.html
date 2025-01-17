@@ -53,6 +53,21 @@
             video1.onended = () => video1.play();
             video2.onended = () => video2.play();
         }
+
+        function setupKeyControls() {
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowLeft") {
+                    console.log("Arrow Left pressed: Option 1 selected");
+                    submitFeedback(1);
+                } else if (event.key === "ArrowRight") {
+                    console.log("Arrow Right pressed: Option 2 selected");
+                    submitFeedback(2);
+                } else if (event.key === "ArrowDown") {
+                    console.log("Arrow Down pressed: Neither selected");
+                    submitFeedback(0);
+                }
+            });
+        }
     </script>
 </head>
 <body>
@@ -86,7 +101,10 @@
         }
     }
 
-    window.onload = loadVideos;
+    window.onload = () => {
+        loadVideos();
+        setupKeyControls();
+    };
 </script>
 </body>
 </html>
