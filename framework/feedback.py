@@ -5,11 +5,12 @@ import time
 import requests
 from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
 from tqdm import tqdm, trange
+from video_recorder import retrieve_trajectory_by_video_name
 
-server_url = "http://localhost:5000"
+server_url = "http://localhost:5001"
 
 
-def fetch_feedback(api_url="http://localhost:5000/api/get_feedback"):
+def fetch_feedback(api_url=server_url + "/api/get_feedback"):
     """
     Fetches feedback from a server via an API. Logs errors when fetching fails.
     Returns the feedback as a list.
@@ -149,23 +150,23 @@ def collect_feedback(
                     desc="Collecting Feedback",
                     unit="feedback",
                 ) as pbar:
-                    response = requests.get(server_url + "/api/get_feedback")
+                    response = requests.get(server_url + "/api/get_feedback/" + run_name)
                     if response.status_code == 200:
                         feedback_items = response.json()
                         if feedback_items:
                             for feedback in feedback_items:
-                                first_trajectory = feedback["trajectory_1"]
-                                second_trajectory = feedback["trajectory_2"]
+                                first_trajectory = retrieve_trajectory_by_video_name(replay_buffer, feedback["trajectory_1"])
+                                second_trajectory = retrieve_trajectory_by_video_name(replay_buffer, feedback["trajectory_2"])
                                 preference = feedback["preference"]
                                 pref_buffer.add(
-                                    first_trajectory, second_trajectory, preference
+                                     first_trajectory, second_trajectory, preference
                                 )
                                 collected_feedback += 1
                                 pbar.update(1)
                     else:
                         logging.debug("Could not fetch feedback; retrying...")
 
-                    time.sleep(2)
+                    time.sleep(5)
 
         except KeyboardInterrupt:
             logging.error("Human feedback process interrupted.")

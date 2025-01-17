@@ -7,6 +7,8 @@ import torch
 from env import is_mujoco_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
+import re
+
 
 
 class VideoRecorder:
@@ -34,7 +36,7 @@ class VideoRecorder:
         end_idx = trajectory.replay_buffer_end_idx
         env_idx = trajectory.samples.env_idx
         length = trajectory.replay_buffer_end_idx - trajectory.replay_buffer_start_idx
-
+        episode_index = 0
         # Ensure the directory for videos exists
         video_folder = f"./videos/{run_name}/trajectories/"
         os.makedirs(video_folder, exist_ok=True)
@@ -50,9 +52,10 @@ class VideoRecorder:
                 video_folder=video_folder,
                 fps=fps,
                 name_prefix=name_prefix,
+                episode_index=episode_index
             )
-            video_file_name = name_prefix + ".mp4"
-            logging.debug(f"Finished recording trajectory video: {video_file_name}")
+            video_file_name = f"{run_name}/trajectories/{name_prefix}-episode-{episode_index}.mp4"
+            logging.info(f"Finished recording trajectory video: {video_file_name}")
             return video_file_name
         except Exception as e:
             logging.error(
@@ -110,12 +113,7 @@ class VideoRecorder:
                     else qvel_list[i]
                 )
                 # Append zeros to qpos for skipped qpos values
-                skipped_qpos = 0  # Default value if metadata is unavailable
-                if hasattr(env.unwrapped, "observation_structure"):
-                    skipped_qpos = env.unwrapped.observation_structure.get(
-                        "skipped_qpos", 0
-                    )
-
+                skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
                 qpos_extended = np.append(qpos, [0] * skipped_qpos)
 
                 env.unwrapped.set_state(qpos_extended, qvel)
@@ -127,3 +125,37 @@ class VideoRecorder:
                 env.step(action)
                 frames.append(env.render())
         return frames
+
+
+
+def parse_video_filename(video_name: str):
+    """
+    Parse the video file name and extract trajectory-related indices.
+
+    Example filename: trajectory_100_200_1-episode-0.mp4
+    """
+    match = re.match(r"trajectory_(\d+)_(\d+)_(\d+)-episode-\d+\.mp4", video_name)
+    if not match:
+        raise ValueError(f"Invalid video file name format: {video_name}")
+
+    start_idx = int(match.group(1))
+    end_idx = int(match.group(2))
+    env_idx = int(match.group(3))
+    return start_idx, end_idx, env_idx
+
+
+def retrieve_trajectory_by_video_name(replay_buffer: ReplayBuffer, video_name: str, env=None) -> Trajectory:
+    """
+    Retrieve the trajectory object corresponding to a given video name.
+
+    Args:
+        replay_buffer (ReplayBuffer): The replay buffer.
+        video_name (str): The video file name.
+        env: Optional VecNormalize environment for normalizing samples.
+
+    Returns:
+        Trajectory: The corresponding trajectory object.
+    """
+    start_idx, end_idx, _ = parse_video_filename(video_name.split("/")[-1])
+    return replay_buffer.get_trajectory(start_idx, end_idx, env)
+
