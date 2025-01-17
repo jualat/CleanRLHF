@@ -163,6 +163,7 @@ def give_pseudo_label(
         pseudo_label = None
     return pseudo_label
 
+
 def teacher_feedback_schedule(
     total_steps: int,
     num_sessions: int,
@@ -193,6 +194,7 @@ def teacher_feedback_schedule(
         raise ValueError(f"Unknown schedule: {schedule}")
 
     return feedback_steps.astype(int)
+
 
 def plot_feedback_schedule(
     schedule: np.array,

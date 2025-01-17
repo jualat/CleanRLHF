@@ -505,7 +505,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         )
 
         teacher_total_queries = args.teacher_feedback_total_queries
-        teacher_num_sessions = teacher_total_queries // args.teacher_feedback_num_queries_per_session
+        teacher_num_sessions = (
+            teacher_total_queries // args.teacher_feedback_num_queries_per_session
+        )
         teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
         teacher_session_steps = teacher_feedback_schedule(
             num_sessions=teacher_num_sessions,
