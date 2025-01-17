@@ -227,9 +227,9 @@ def train_or_val_pref_batch(
 
         t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
         t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
-
-        t1_aug = rb.temporal_data_augmentation(t1, H_max=H_max, H_min=H_min, env=env)
-        t2_aug = rb.temporal_data_augmentation(t2, H_max=H_max, H_min=H_min, env=env)
+        if surf:
+            t1 = rb.temporal_data_augmentation(t1, H_max=H_max, H_min=H_min, env=env)
+            t2 = rb.temporal_data_augmentation(t2, H_max=H_max, H_min=H_min, env=env)
 
         if do_train:
             optimizer.zero_grad()
@@ -237,14 +237,14 @@ def train_or_val_pref_batch(
         ensemble_loss = 0.0
         for single_model in model.ensemble:
             r1 = single_model(
-                torch.cat(
-                    [t1_aug.samples.observations, t1_aug.samples.actions], dim=1
-                ).to(device)
+                torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(
+                    device
+                )
             )
             r2 = single_model(
-                torch.cat(
-                    [t2_aug.samples.observations, t2_aug.samples.actions], dim=1
-                ).to(device)
+                torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(
+                    device
+                )
             )
 
             prediction = model.preference_prob(r1, r2)
@@ -293,7 +293,8 @@ def train_or_val_pref_batch(
                 continue
 
             ensemble_loss_u = 0.0
-            optimizer.zero_grad()
+            if do_train:
+                optimizer.zero_grad()
 
             for single_model in model.ensemble:
                 r1_u = single_model(
@@ -315,10 +316,10 @@ def train_or_val_pref_batch(
 
             ensemble_loss_u /= len(model.ensemble)
             unsup_loss_accum += ensemble_loss_u.item()
-
-            (lambda_ssl * ensemble_loss_u).backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+            if do_train:
+                (lambda_ssl * ensemble_loss_u).backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
         unsup_avg_loss = unsup_loss_accum / len(prefs * unlabeled_batch_ratio)
 
     # Re-enable gradients if we are in training mode
@@ -326,7 +327,17 @@ def train_or_val_pref_batch(
         torch.set_grad_enabled(True)
 
     total_avg_loss = sup_avg_loss + unsup_avg_loss
-    return total_avg_loss
+    if do_train:
+        return {
+            "train_total_loss": total_avg_loss,
+            "train_supervised_loss": sup_avg_loss,
+            "train_unsupervised_loss": unsup_avg_loss,
+        }
+    return {
+        "val_total_loss": total_avg_loss,
+        "val_supervised_loss": sup_avg_loss,
+        "val_unsupervised_loss": unsup_avg_loss,
+    }
 
 
 def train_reward(
@@ -378,7 +389,7 @@ def train_reward(
         # ==== 1) TRAINING STEP ====
         train_prefs = train_pref_buffer.sample(batch_size)
 
-        train_avg_loss = train_or_val_pref_batch(
+        train_loss_dict = train_or_val_pref_batch(
             model=model,
             optimizer=optimizer,
             prefs=train_prefs,
@@ -401,7 +412,7 @@ def train_reward(
             # no need to compute gradients
             with torch.no_grad():
                 val_prefs = val_pref_buffer.sample(batch_size)
-                val_avg_loss = train_or_val_pref_batch(
+                val_loss_dict = train_or_val_pref_batch(
                     model=model,
                     optimizer=optimizer,
                     prefs=val_prefs,
@@ -411,24 +422,43 @@ def train_reward(
                     do_train=False,
                 )
 
-        losses = {
-            "train_avg_loss": train_avg_loss,
-            "val_avg_loss": val_avg_loss,
-        }
-
         metrics.log_losses(
-            loss_dict=losses,
+            loss_dict=train_loss_dict,
+            global_step=global_step,
+        )
+        metrics.log_losses(
+            loss_dict=val_loss_dict,
             global_step=global_step,
         )
 
         if epoch % 10 == 0:
             if val_pref_buffer is not None and val_pref_buffer.size > 0:
-                logging.info(
-                    f"Reward epoch {epoch}, "
-                    f"Train Loss {train_avg_loss :.4f}, "
-                    f"Val Loss {val_avg_loss:.4f}"
-                )
+                if surf:
+                    logging.info(
+                        f"Reward epoch {epoch}, "
+                        f"Train Loss {train_loss_dict['train_total_loss'] :.4f}, "
+                        f"Val Loss {val_loss_dict['val_total_loss'] :.4f}, "
+                        f"Train Supervised Loss {train_loss_dict['train_supervised_loss']:.4f}, "
+                        f"Val Supervised Loss {val_loss_dict['val_supervised_loss']:.4f}, "
+                        f"Train Unsupervised Loss {train_loss_dict['train_unsupervised_loss']:.4f}, "
+                        f"Val Unsupervised Loss {val_loss_dict['val_unsupervised_loss']:.4f}, "
+                    )
+                else:
+                    logging.info(
+                        f"Reward epoch {epoch}, "
+                        f"Train Loss {train_loss_dict['train_total_loss'] :.4f}, "
+                        f"Val Loss {val_loss_dict['val_total_loss'] :.4f}"
+                    )
             else:
-                logging.info(
-                    f"Reward epoch {epoch}, " f"Train Loss {train_avg_loss:.4f}"
-                )
+                if surf:
+                    logging.info(
+                        f"Reward epoch {epoch}, "
+                        f"Train Loss {train_loss_dict['train_total_loss']:.4f}, "
+                        f"Supervised Loss {train_loss_dict['train_supervised_loss']:.4f}, "
+                        f"Unsupervised Loss {train_loss_dict['train_unsupervised_loss']:.4f}"
+                    )
+                else:
+                    logging.info(
+                        f"Reward epoch {epoch}, "
+                        f"Train Loss {train_loss_dict['train_total_loss']:.4f}"
+                    )
