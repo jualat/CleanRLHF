@@ -207,6 +207,7 @@ class ReplayBuffer(SB3ReplayBuffer):
         :param env: The environment
         :return:
         """
+        assert start_idx < end_idx, "start_idx=%d, end_idx=%d" % (start_idx, end_idx)
         trajectory_indices = np.arange(start_idx, end_idx)
         trajectory_samples = self._get_samples(trajectory_indices, env)
 
@@ -249,3 +250,19 @@ class ReplayBuffer(SB3ReplayBuffer):
         assert not np.allclose(
             old_rewards, new_rewards
         ), "No change in rewards after relabeling!"
+
+    def temporal_data_augmentation(
+        self, traj: Trajectory, H_max=55, H_min=45, env: Optional[VecNormalize] = None
+    ):
+        start_idx = traj.replay_buffer_start_idx
+        end_idx = traj.replay_buffer_end_idx
+        H = end_idx - start_idx
+
+        H_prime = np.random.randint(low=H_min, high=min(H_max, H) + 1)
+        offset = np.random.randint(low=0, high=H - H_prime + 1)
+
+        slice_start_idx = start_idx + offset
+        slice_end_idx = start_idx + offset + H_prime - 1
+        assert slice_start_idx < slice_end_idx, "Invalid slice"
+        assert slice_end_idx <= end_idx, "Index out of range"
+        return self.get_trajectory(slice_start_idx, slice_end_idx, env=env)
