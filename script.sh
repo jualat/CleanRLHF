@@ -10,6 +10,6 @@ python3 sac_rlhf.py --env-id=Ant-v4 \
   --teacher-sim-delta-skip=-1e7 \
   --total_explore_steps=10000 \
   --unsupervised_exploration \
-  --no-exploration-load \
-  --path-to-replay-buffer=models/Ant-v4__Benjamin-Test__1__1736940230/10000/replay_buffer.pth \
-  --path-to-model=models/Ant-v4__Benjamin-Test__1__1736940230/10000/checkpoint.pth
+  --exploration-load \
+  --path-to-replay-buffer=models/Ant-v4__Benjamin-Test__1__1736680754/10000/replay_buffer.pth \
+  --path-to-model=models/Ant-v4__Benjamin-Test__1__1736680754/10000/checkpoint.pth

@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 import gymnasium as gym
 import imageio
+import matplotlib
+
+matplotlib.use("AGG")
 import numpy as np
 import pandas as pd
 import torch
@@ -20,7 +23,7 @@ from tqdm import trange
 class Args:
     path_to_model: str = ""
     """path to model"""
-    env_id: str = "Hopper-v4"
+    env_id: str = "Hopper-v5"
     """the environment of the policy"""
     seed: int = 1
     """seed of the experiment"""

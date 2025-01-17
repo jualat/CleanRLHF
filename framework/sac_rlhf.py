@@ -59,7 +59,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v4"
+    env_id: str = "Hopper-v5"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -107,6 +107,8 @@ class Args:
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
+    reward_net_val_split: float = 0.2
+    """the validation split for the reward network"""
     actor_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
     actor_net_hidden_layers: int = 4
@@ -265,14 +267,24 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs.single_observation_space.dtype = np.float32
 
     if is_mujoco_env(envs.envs[0]):
-        qpos = np.zeros(
-            (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
-            dtype=np.float32,
-        )
-        qvel = np.zeros(
-            (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
-            dtype=np.float32,
-        )
+        try:
+            qpos = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
+                dtype=np.float32,
+            )
+            qvel = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
+                dtype=np.float32,
+            )
+        except AttributeError:
+            qpos = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.model.key_qpos.shape[1]),
+                dtype=np.float32,
+            )
+            qvel = np.zeros(
+                (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
+                dtype=np.float32,
+            )
     else:
         qpos = np.zeros((2, 2))
         qvel = np.zeros((2, 2))
@@ -290,10 +302,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    pref_buffer = PreferenceBuffer(
-        (args.buffer_size // args.teacher_feedback_frequency)
-        * args.teacher_feedback_num_queries_per_session
-    )
+    train_pref_buffer_size = (
+        args.buffer_size // args.teacher_feedback_frequency
+    ) * args.teacher_feedback_num_queries_per_session
+    train_pref_buffer = PreferenceBuffer(buffer_size=train_pref_buffer_size)
+
+    val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
+    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size)
+
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
@@ -347,7 +363,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     skipped_qpos = envs.envs[0].unwrapped.observation_structure[
                         "skipped_qpos"
                     ]
-                except KeyError:
+                except (KeyError, AttributeError):
                     skipped_qpos = 0
 
                 for idx in range(args.num_envs):
@@ -510,18 +526,28 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         continue
 
                     # Store preferences
-                    pref_buffer.add(first_trajectory, second_trajectory, preference)
+                    if np.random.rand() < (
+                        1 - args.reward_net_val_split
+                    ):  # 1 - (Val Split)% for training
+                        train_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
+                    else:  # (Val Split)% for validation
+                        val_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
 
                 train_reward(
-                    reward_net,
-                    reward_optimizer,
-                    metrics,
-                    pref_buffer,
-                    rb,
-                    global_step,
-                    args.teacher_update_epochs,
-                    args.teacher_feedback_batch_size,
-                    device,
+                    model=reward_net,
+                    optimizer=reward_optimizer,
+                    metrics=metrics,
+                    train_pref_buffer=train_pref_buffer,
+                    val_pref_buffer=val_pref_buffer,
+                    rb=rb,
+                    global_step=global_step,
+                    epochs=args.teacher_update_epochs,
+                    batch_size=args.teacher_feedback_batch_size,
+                    device=device,
                 )
 
                 rb.relabel_rewards(reward_net)
@@ -543,7 +569,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     skipped_qpos = envs.envs[0].unwrapped.observation_structure[
                         "skipped_qpos"
                     ]
-                except KeyError:
+                except (KeyError, AttributeError):
                     skipped_qpos = 0
 
                 for idx in range(args.num_envs):
