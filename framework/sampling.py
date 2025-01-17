@@ -83,3 +83,36 @@ def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
 
     entropies_argmax = max(enumerate(entropies), key=lambda x: x[1])[0]
     return traj_mb1[entropies_argmax], traj_mb2[entropies_argmax]
+
+
+def sample_pairs(
+    size: int,
+    rb: ReplayBuffer,
+    sampling_strategy: str,
+    reward_net: RewardNet,
+    traj_len: int,
+):
+    pairs = []
+    for i in range(size):
+        traj1, traj2 = sample_trajectories(rb, sampling_strategy, reward_net, traj_len)
+        traj1_tuple = (traj1.replay_buffer_start_idx, traj1.replay_buffer_end_idx)
+        traj2_tuple = (traj2.replay_buffer_start_idx, traj2.replay_buffer_end_idx)
+        pairs.append((traj1_tuple, traj2_tuple))
+
+    return pairs
+
+
+def sample_trajectories(
+    rb: ReplayBuffer, sampling_strategy: str, reward_net: RewardNet, traj_len: int
+):
+    if sampling_strategy == "disagree":
+        first_trajectory, second_trajectory = disagreement_sampling(
+            rb, reward_net, traj_len
+        )
+    elif sampling_strategy == "entropy":
+        first_trajectory, second_trajectory = entropy_sampling(rb, reward_net, traj_len)
+    elif sampling_strategy == "uniform":
+        first_trajectory, second_trajectory = uniform_sampling(rb, traj_len)
+    else:
+        assert False, "Invalid sampling strategy"
+    return first_trajectory, second_trajectory
