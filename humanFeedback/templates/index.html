@@ -2,6 +2,34 @@
 <html>
 <head>
     <title>Feedback Server</title>
+    <style>
+        #toastContainer {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        .toast {
+            background-color: #333;
+            color: #fff;
+            padding: 12px 20px;
+            margin-top: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            transform: translateY(20px);
+        }
+
+        /* Show the toast (fade-in effect) */
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
     <script>
         async function submitFeedback(preference) {
             const video1 = document.getElementById("video1").dataset.filename;
@@ -9,8 +37,17 @@
             const run_name = document.getElementById("video1").src.split("/")[4];
             console.log("run_name: " + run_name);
 
-            const response = await fetch(`/api/submit_feedback/${run_name}`,
-                {
+            let preferenceText;
+            if (preference === 1) {
+                preferenceText = `Preference given: Video1`;
+            } else if (preference === 2) {
+                preferenceText = `Preference given: Video2`;
+            } else {
+                preferenceText = "Preference given: Neither";
+            }
+
+            try {
+                const response = await fetch(`/api/submit_feedback/${run_name}`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
@@ -22,12 +59,28 @@
                     })
                 });
 
-            const result = await response.json();
-            if (result.status === "success") {
-                alert("Feedback submitted successfully!");
-            } else {
-                alert("Error submitting feedback: " + result.message);
+                const result = await response.json();
+                if (result.status === "success") {
+                    showToast(`${preferenceText}`);
+                } else {
+                    showToast("Error submitting feedback: " + result.message);
+                }
+            } catch (error) {
+                showToast("Error submitting feedback: " + error.message);
             }
+        }
+
+        function showToast(message) {
+            const toastContainer = document.getElementById("toastContainer");
+            const toast = document.createElement("div");
+            toast.classList.add("toast");
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.classList.add("show"), 50);
+            setTimeout(() => {
+                toast.classList.remove("show");
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
 
         function playVideos(video1Src, video2Src) {
@@ -40,13 +93,12 @@
             video1.dataset.filename = video1Src;
             video2.dataset.filename = video2Src;
 
-            // Mute the videos and enable autoplay
+            // most browsers dont allow autoplaying videos unless they are muted
             video1.muted = true;
             video2.muted = true;
             video1.autoplay = true;
             video2.autoplay = true;
 
-            // Play videos and set up auto-replay
             video1.play();
             video2.play();
 
@@ -81,6 +133,8 @@
     <button onclick="submitFeedback(2)">Option 2</button>
     <button onclick="submitFeedback(0)">Neither</button>
 </div>
+
+<div id="toastContainer"></div>
 
 <script>
     async function loadVideos() {
