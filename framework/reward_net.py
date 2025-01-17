@@ -420,6 +420,14 @@ def train_reward(
                     device=device,
                     env=env,
                     do_train=False,
+                    surf=surf,
+                    sampling_strategy=sampling_strategy,
+                    trajectory_length=trajectory_length,
+                    unlabeled_batch_ratio=unlabeled_batch_ratio,
+                    tau=tau,
+                    lambda_ssl=lambda_ssl,
+                    H_max=H_max,
+                    H_min=H_min,
                 )
 
         metrics.log_losses(
