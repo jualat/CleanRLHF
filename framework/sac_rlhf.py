@@ -22,7 +22,6 @@ from env import (
     save_replay_buffer,
 )
 from evaluation import Evaluation
-from framework.teacher import teacher_feedback_schedule, plot_feedback_schedule
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
@@ -32,6 +31,8 @@ from teacher import Teacher
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
+
+from framework.teacher import plot_feedback_schedule, teacher_feedback_schedule
 
 
 @dataclass

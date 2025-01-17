@@ -1,9 +1,9 @@
 import random
-import numpy as np
 from enum import Enum
-from matplotlib import pyplot as plt
 
+import numpy as np
 import torch
+from matplotlib import pyplot as plt
 from replay_buffer import Trajectory
 from reward_net import RewardNet
 
