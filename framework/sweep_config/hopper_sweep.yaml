@@ -82,9 +82,9 @@ parameters:
   batch_size:
     values: [256]
   policy_lr:
-    distribution: log_uniform
-    min: -4
-    max: -3
+    distribution: uniform
+    min: 0.0001
+    max: 0.001
   log_level:
     values: ["INFO"]
   num_envs:
@@ -108,9 +108,9 @@ parameters:
     min: 1
     distribution: int_uniform
   q_lr:
-    distribution: log_uniform
-    min: -5
-    max: -3
+    distribution: uniform
+    min: 0.0001
+    max: 0.001
   cuda:
     values: [true]
   tau:
