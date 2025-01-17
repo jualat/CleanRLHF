@@ -7,36 +7,22 @@ from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
 from tqdm import tqdm, trange
 from video_recorder import retrieve_trajectory_by_video_name
 
-server_url = "http://localhost:5001"
-
-
-def fetch_feedback(api_url=server_url + "/api/get_feedback"):
-    """
-    Fetches feedback from a server via an API. Logs errors when fetching fails.
-    Returns the feedback as a list.
-    """
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to fetch feedback: {e}")
-        return []
 
 
 def collect_feedback(
-    mode,
-    replay_buffer,
-    pref_buffer,
-    run_name,
-    preference_sampling,
-    teacher_feedback_num_queries_per_session,
-    trajectory_length,
-    sim_teacher=None,
-    reward_net=None,
-    feedback_file=None,
-    capture_video=True,
-    video_recorder=None,
+        mode,
+        feedback_server_url,
+        replay_buffer,
+        pref_buffer,
+        run_name,
+        preference_sampling,
+        teacher_feedback_num_queries_per_session,
+        trajectory_length,
+        sim_teacher=None,
+        reward_net=None,
+        feedback_file=None,
+        capture_video=True,
+        video_recorder=None,
 ):
     """
     Collect feedback based on the given mode.
@@ -46,6 +32,9 @@ def collect_feedback(
             - "simulated_teacher": Use a simulated teacher to generate preferences.
             - "human_feedback": Collect feedback from a human evaluator.
             - "file": Load feedback data from a file.
+
+        feedback_server_url (str):
+            Url including port of the feedback server to use
 
         replay_buffer (ReplayBuffer):
             Replay buffer containing the trajectories available for sampling.
@@ -87,6 +76,7 @@ def collect_feedback(
             Used only when `capture_video` is True or "human_feedback" mode is selected.
     Returns:
         PreferenceBuffer: Updated preference buffer with collected feedback.
+
     """
 
     if mode == "simulated":
@@ -132,6 +122,7 @@ def collect_feedback(
     elif mode == "human":
         logging.info("Collecting human feedback")
         human_feedback_preparation(
+            feedback_server_url,
             teacher_feedback_num_queries_per_session,
             preference_sampling,
             replay_buffer,
@@ -145,21 +136,23 @@ def collect_feedback(
             collected_feedback = 0
             while collected_feedback < teacher_feedback_num_queries_per_session:
                 with tqdm(
-                    total=teacher_feedback_num_queries_per_session,
-                    initial=collected_feedback,
-                    desc="Collecting Feedback",
-                    unit="feedback",
+                        total=teacher_feedback_num_queries_per_session,
+                        initial=collected_feedback,
+                        desc="Collecting Feedback",
+                        unit="feedback",
                 ) as pbar:
-                    response = requests.get(server_url + "/api/get_feedback/" + run_name)
+                    response = requests.get(feedback_server_url + "/api/get_feedback/" + run_name)
                     if response.status_code == 200:
                         feedback_items = response.json()
                         if feedback_items:
                             for feedback in feedback_items:
-                                first_trajectory = retrieve_trajectory_by_video_name(replay_buffer, feedback["trajectory_1"])
-                                second_trajectory = retrieve_trajectory_by_video_name(replay_buffer, feedback["trajectory_2"])
+                                first_trajectory = retrieve_trajectory_by_video_name(replay_buffer,
+                                                                                     feedback["trajectory_1"])
+                                second_trajectory = retrieve_trajectory_by_video_name(replay_buffer,
+                                                                                      feedback["trajectory_2"])
                                 preference = feedback["preference"]
                                 pref_buffer.add(
-                                     first_trajectory, second_trajectory, preference
+                                    first_trajectory, second_trajectory, preference
                                 )
                                 collected_feedback += 1
                                 pbar.update(1)
@@ -191,19 +184,20 @@ def collect_feedback(
 
 
 def human_feedback_preparation(
-    teacher_feedback_num_queries_per_session,
-    preference_sampling,
-    replay_buffer,
-    reward_net,
-    run_name,
-    trajectory_length,
-    video_recorder,
+        feedback_server_url,
+        teacher_feedback_num_queries_per_session,
+        preference_sampling,
+        replay_buffer,
+        reward_net,
+        run_name,
+        trajectory_length,
+        video_recorder,
 ):
     sampled_trajectory_videos = []
     for i in trange(
-        teacher_feedback_num_queries_per_session,
-        desc="Feedback pairs prepared:",
-        # unit="",
+            teacher_feedback_num_queries_per_session,
+            desc="Feedback pairs prepared:",
+            # unit="",
     ):
         """
         Prepares human feedback data by sampling trajectory pairs, recording their videos,
@@ -308,7 +302,7 @@ def human_feedback_preparation(
     try:
         payload = {"video_pairs": sampled_trajectory_videos}
         response = requests.post(
-            f"{server_url}/api/add_videos/{run_name}", json=payload
+            f"{feedback_server_url}/api/add_videos/{run_name}", json=payload
         )
 
         logging.debug(f"Response Status Code: {response.status_code}")

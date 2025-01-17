@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import argparse
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
@@ -178,6 +179,19 @@ def get_feedback(run_name):
                 404,
             )
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    parser = argparse.ArgumentParser(description="Feedback Server")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5001,
+        help="Port to run the feedback server on (default: 5001)",
+    )
+    args = parser.parse_args()
+    app.run(debug=True, port=args.port)
+

@@ -22,6 +22,7 @@ from env import (
 )
 from evaluation import Evaluation
 from feedback import collect_feedback
+from feedback_util import start_feedback_server, stop_feedback_server
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
@@ -117,9 +118,15 @@ class Args:
     soft_q_net_hidden_layers: int = 4
     """the number of hidden layers in the SoftQNetwork"""
 
+    # Feedback server arguments
+    feedback_server_url: str = "http://localhost:5001"
+    """the url of the feedback server"""
+    feedback_server_autostart: bool = False
+    """toggle the autostart of a local feedback server"""
+
     # Teacher feedback mode
     teacher_feedback_mode: str = "simulated"
-    """the mode of feedback, must be 'simulated', 'human' or 'file'"""
+    """the mode of feedback, must be 'simulated', 'human' or 'file'""" # file is currently not supported
 
     # Human feedback arguments
     teacher_feedback_frequency: int = 5000
@@ -490,6 +497,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             ):
                 pref_buffer = collect_feedback(
                     mode=args.teacher_feedback_mode,
+                    feedback_server_url=args.feedback_server_url,
                     pref_buffer=pref_buffer,
                     run_name=run_name,
                     preference_sampling=args.preference_sampling,
@@ -707,4 +715,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
 if __name__ == "__main__":
     cli_args = tyro.cli(Args)
-    train(cli_args)
+    try:
+        if cli_args.feedback_server_autostart:
+            feedback_server_process = start_feedback_server(cli_args.feedback_server_url.split(":")[-1])
+        train(cli_args)
+    except Exception as e:
+        logging.exception(e)
+    finally:
+        if cli_args.feedback_server_autostart:
+            stop_feedback_server(feedback_server_process)
