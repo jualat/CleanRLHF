@@ -209,7 +209,7 @@ def plot_feedback_schedule(
     cumulative_feedback = np.linspace(0, num_queries, len(schedule))
 
     plt.plot(schedule, cumulative_feedback, marker="o")
-    plt.title("Exponential Schedule: Total Steps vs. Cumulative Feedback Queries")
+    plt.title("Schedule: Total Steps vs. Cumulative Feedback Queries")
     plt.xlabel("Total Steps")
     plt.ylabel("Cumulative Feedback")
     return plt
