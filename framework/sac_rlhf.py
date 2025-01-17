@@ -109,6 +109,8 @@ class Args:
     """the number of hidden layers in the reward network"""
     reward_net_val_split: float = 0.2
     """the validation split for the reward network"""
+    reward_net_dropout: float = 0.2
+    """the dropout rate for the reward network"""
     actor_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
     actor_net_hidden_layers: int = 4
@@ -330,6 +332,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
         env=envs,
+        dropout=args.reward_net_dropout,
     ).to(device)
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4

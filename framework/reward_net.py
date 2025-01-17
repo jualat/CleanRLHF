@@ -13,6 +13,7 @@ def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
     :param hidden_dim: The dimension of the hidden layers
     :param layers: The amount of hidden layers
     :param env: The environment
+    :param p: Dropout value
     :return:
     """
     reward_net = [
@@ -33,12 +34,14 @@ def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
 
 
 class RewardNet(nn.Module):
-    def __init__(self, env, hidden_dim, hidden_layers):
+    def __init__(self, env, hidden_dim, hidden_layers, dropout):
         super().__init__()
         self.ensemble = nn.ModuleList()
 
         for _ in range(3):
-            model = nn.Sequential(*gen_reward_net(hidden_dim, hidden_layers, env=env))
+            model = nn.Sequential(
+                *gen_reward_net(hidden_dim, hidden_layers, env=env, p=dropout)
+            )
             self.ensemble.append(model)
 
     def forward(self, x, a):
