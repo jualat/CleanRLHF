@@ -49,3 +49,7 @@ class PreferenceBuffer:
         # Randomly select indices to sample
         indices = np.random.choice(self.size, min(self.size, batch_size), replace=False)
         return self.buffer[indices]
+
+    def reset(self):
+        self.size = 0
+        self.next_idx = 0

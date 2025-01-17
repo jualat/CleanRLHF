@@ -108,7 +108,10 @@ class VideoRecorder:
                     else qvel_list[i]
                 )
                 # Append zeros to qpos for skipped qpos values
-                skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
+                try:
+                    skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
+                except (KeyError, AttributeError):
+                    skipped_qpos = 0
                 qpos_extended = np.append(qpos, [0] * skipped_qpos)
 
                 env.unwrapped.set_state(qpos_extended, qvel)

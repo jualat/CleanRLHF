@@ -3,6 +3,7 @@ from enum import Enum
 
 import torch
 from replay_buffer import Trajectory
+from reward_net import RewardNet
 
 
 class Preference(Enum):
@@ -93,8 +94,8 @@ class Teacher:
         self,
         first_trajectory: Trajectory,
         second_trajectory: Trajectory,
-        first_trajectory_reward,
-        second_trajectory_reward,
+        first_trajectory_reward: float,
+        second_trajectory_reward: float,
     ) -> bool:
         if self.beta > 0:
             sum1 = (
@@ -118,12 +119,12 @@ class Teacher:
             assert 0 <= p1 <= 1, f"p1={p1} is out of bounds"
             assert 0 <= p2 <= 1, f"p2={p2} is out of bounds"
 
-            return True if p1 > p2 else False
+            return p1 > p2
         elif self.beta == 0:
             # Use a random float to choose uniformly between the two trajectories
             return random.random() < 0.5
         else:
-            return True if first_trajectory_reward > second_trajectory_reward else False
+            return first_trajectory_reward > second_trajectory_reward
 
     def _trajectory_weights(self, trajectory: Trajectory) -> torch.Tensor:
         h = trajectory.samples.ground_truth_rewards.size(dim=0)
@@ -140,3 +141,22 @@ class Teacher:
         ), f"Shape mismatch: weights {weights_first_trajectory.shape}, rewards {trajectory.samples.ground_truth_rewards.shape}"
 
         return weights_first_trajectory
+
+
+def give_pseudo_label(
+    traj1: Trajectory, traj2: Trajectory, tau: float, model: RewardNet
+):
+    # Pseudo-labeling
+    with torch.no_grad():
+        r1_u = model.forward(traj1.samples.observations, traj1.samples.actions)
+        r2_u = model.forward(traj2.samples.observations, traj2.samples.actions)
+
+        prob_u = model.preference_prob(r1_u, r2_u)
+
+    if prob_u > tau:
+        pseudo_label = Preference.FIRST.value
+    elif prob_u < (1.0 - tau):
+        pseudo_label = Preference.SECOND.value
+    else:
+        pseudo_label = None
+    return pseudo_label
