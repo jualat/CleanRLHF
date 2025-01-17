@@ -107,6 +107,8 @@ class Args:
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
+    reward_net_val_split: float = 0.2
+    """the validation split for the reward network"""
     actor_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
     actor_net_hidden_layers: int = 4
@@ -314,10 +316,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    pref_buffer = PreferenceBuffer(
-        (args.buffer_size // args.teacher_feedback_frequency)
-        * args.teacher_feedback_num_queries_per_session
-    )
+    train_pref_buffer_size = (
+        args.buffer_size // args.teacher_feedback_frequency
+    ) * args.teacher_feedback_num_queries_per_session
+    train_pref_buffer = PreferenceBuffer(buffer_size=train_pref_buffer_size)
+
+    val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
+    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size)
+
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
@@ -525,15 +531,24 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         continue
 
                     # Store preferences
-                    pref_buffer.add(first_trajectory, second_trajectory, preference)
+                    if np.random.rand() < (
+                        1 - args.reward_net_val_split
+                    ):  # 1 - (Val Split)% for training
+                        train_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
+                    else:  # (Val Split)% for validation
+                        val_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
 
                 if args.surf:
                     train_reward_surf(
                         model=reward_net,
                         optimizer=reward_optimizer,
                         metrics=metrics,
-                        pref_buffer=pref_buffer,
                         rb=rb,
+                        pref_buffer=train_pref_buffer,
                         global_step=global_step,
                         epochs=args.teacher_update_epochs,
                         batch_size=args.teacher_feedback_batch_size,
@@ -548,15 +563,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     )
                 else:
                     train_reward(
-                        reward_net,
-                        reward_optimizer,
-                        metrics,
-                        pref_buffer,
-                        rb,
-                        global_step,
-                        args.teacher_update_epochs,
-                        args.teacher_feedback_batch_size,
-                        device,
+                        model=reward_net,
+                        optimizer=reward_optimizer,
+                        metrics=metrics,
+                        train_pref_buffer=train_pref_buffer,
+                        val_pref_buffer=val_pref_buffer,
+                        rb=rb,
+                        global_step=global_step,
+                        epochs=args.teacher_update_epochs,
+                        batch_size=args.teacher_feedback_batch_size,
+                        device=device,
                     )
                 rb.relabel_rewards(reward_net)
                 logging.info("Rewards relabeled")

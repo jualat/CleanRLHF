@@ -232,10 +232,14 @@ class PerformanceMetrics:
             "evaluate/median", eval_dict["median_reward"], global_step
         )
 
-    def log_reward_net_losses(self, loss_dict, global_step):
+    def log_losses(
+        self,
+        loss_dict,
+        global_step,
+    ):
         """
         Log reward net losses to TensorBoard.
-        :param loss_dict: Dictionary of losses
+        :param loss_dict: The dictionary of losses
         :param global_step: The global step
         :return:
         """
