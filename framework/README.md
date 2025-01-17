@@ -100,7 +100,7 @@ The sweep.py script automates hyperparameter optimization using Weights & Biases
    > Note: You'll be prompted to paste your WAND API key. You can find it on your W&B dashboard.
 
    ```bash
-   read -s WANDB_API_KEY && sbatch --export=WANDB_API_KEY=$WANDB_API_KEY wandb_sweep.sbatch
+   sh start_job.sh
    ```
    
    The command returns a job ID. You can check the status of your job with `squeue -u <username>`.
