@@ -119,17 +119,13 @@ def get_videos():
                             {
                                 "video1": f"/video/{video_pair[0]}",
                                 "video2": f"/video/{video_pair[1]}",
-                                "run_name": run_name,  # currently not used but could be displayed in the UI for clarification
+                                "run_name": run_name, # currently not used but could be displayed in the UI for clarification
                             }
                         ),
                         200,
                     )
-        return (
-            jsonify(
-                {"status": "error", "message": "No videos available in any environment"}
-            ),
-            404,
-        )
+        return "", 204  # Send 204 No Content when there are no videos available
+
 
 
 @app.route("/api/submit_feedback/<run_name>", methods=["POST"])

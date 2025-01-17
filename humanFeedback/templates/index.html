@@ -24,7 +24,6 @@
             transform: translateY(20px);
         }
 
-        /* Show the toast (fade-in effect) */
         .toast.show {
             opacity: 1;
             transform: translateY(0);
@@ -39,9 +38,9 @@
 
             let preferenceText;
             if (preference === 1) {
-                preferenceText = `Preference given: Video1`;
+                preferenceText = `Preference given: ${video1}`;
             } else if (preference === 2) {
-                preferenceText = `Preference given: Video2`;
+                preferenceText = `Preference given: ${video2}`;
             } else {
                 preferenceText = "Preference given: Neither";
             }
@@ -61,7 +60,12 @@
 
                 const result = await response.json();
                 if (result.status === "success") {
-                    showToast(`${preferenceText}`);
+                    showToast(preferenceText);
+
+                    // Reload the page after a short delay after submitting feedback
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
                 } else {
                     showToast("Error submitting feedback: " + result.message);
                 }
@@ -140,13 +144,21 @@
     async function loadVideos() {
         try {
             const response = await fetch("/api/get_videos");
-            if (response.ok) {
+            if (response.status === 200) {
                 const data = await response.json();
 
                 const video1Src = data.video1;
                 const video2Src = data.video2;
 
                 playVideos(video1Src, video2Src);
+            } else if (response.status === 204) {
+                document.body.innerHTML = `
+                    <h1>Currently no videos available</h1>
+                    <p>The model is training 🤖💭</p>
+                `;
+                setTimeout(() => {
+                    location.reload();
+                }, 3000); // Reload the page every 3 seconds to check if there are new videos to give preference to
             } else {
                 console.error("Failed to load videos:", response.statusText);
             }
