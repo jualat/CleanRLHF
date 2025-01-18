@@ -32,6 +32,8 @@ from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
 
+from framework.teacher import plot_feedback_schedule, teacher_feedback_schedule
+
 
 @dataclass
 class Args:
@@ -122,10 +124,14 @@ class Args:
     """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 35712
-    """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 50
+    teacher_feedback_schedule: str = "exponential"
+    """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
+    teacher_feedback_total_queries: int = 1400
+    """the total number of queries the teacher will provide"""
+    teacher_feedback_num_queries_per_session: int = 20
     """the number of queries per feedback session"""
+    teacher_feedback_exponential_lambda: float = 0.1
+    """the lambda parameter for the exponential feedback schedule"""
     teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
     teacher_feedback_batch_size: int = 32
@@ -321,9 +327,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    train_pref_buffer_size = (
-        args.buffer_size // args.teacher_feedback_frequency
-    ) * args.teacher_feedback_num_queries_per_session
+    train_pref_buffer_size = args.teacher_feedback_num_queries_per_session
     train_pref_buffer = PreferenceBuffer(buffer_size=train_pref_buffer_size)
 
     val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
@@ -500,11 +504,35 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             if args.exploration_load or args.unsupervised_exploration
             else args.total_timesteps
         )
+
+        teacher_total_queries = args.teacher_feedback_total_queries
+        teacher_num_sessions = (
+            teacher_total_queries // args.teacher_feedback_num_queries_per_session
+        )
+        teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
+        teacher_session_steps = teacher_feedback_schedule(
+            num_sessions=teacher_num_sessions,
+            total_steps=total_steps,
+            schedule="exponential",
+            lambda_=teacher_exponential_lambda,
+        )
+
+        model_folder = f"./models/{run_name}"
+        os.makedirs(model_folder, exist_ok=True)
+
+        sessions_steps_plt = plot_feedback_schedule(
+            schedule=teacher_session_steps,
+            num_queries=teacher_total_queries,
+        )
+        sessions_steps_plt.savefig(f"{model_folder}/feedback_schedule.png")
+
+        next_session_idx = 0
+
         for global_step in trange(total_steps, desc="Training steps", unit="steps"):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
-            if global_step % args.teacher_feedback_frequency == 0 and (
+            if global_step >= teacher_session_steps[next_session_idx] and (
                 global_step != 0
                 or args.exploration_load
                 or args.unsupervised_exploration
@@ -547,6 +575,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         val_pref_buffer.add(
                             first_trajectory, second_trajectory, preference
                         )
+
+                next_session_idx += 1
 
                 train_reward(
                     model=reward_net,
