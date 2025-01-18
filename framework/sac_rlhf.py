@@ -174,10 +174,10 @@ class Args:
     """Confidence threshold for pseudo-labeling"""
     lambda_ssl: float = 0.1
     """Weight for the unsupervised (pseudo-labeled) loss"""
-    surf_H_max: int = 64
-    """Maximal length of the data augmented trajectory"""
-    surf_H_min: int = 54
-    """Minimal length of the data augmented trajectory"""
+    max_augmentation_offset: int = 10
+    """Max offset for the data augmentation"""
+    min_augmentation_offset: int = 5
+    """Min offset for the data augmentation"""
 
     # Load Model
     exploration_load: bool = False
@@ -364,6 +364,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
+    surf_H_max = args.trajectory_length - args.min_augmentation_offset
+    surf_H_min = args.trajectory_length - args.max_augmentation_offset
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -573,8 +575,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     unlabeled_batch_ratio=args.unlabeled_batch_ratio,
                     tau=args.surf_tau,
                     lambda_ssl=args.lambda_ssl,
-                    H_max=args.surf_H_max,
-                    H_min=args.surf_H_min,
+                    H_max=surf_H_max,
+                    H_min=surf_H_min,
                 )
                 rb.relabel_rewards(reward_net)
                 train_pref_buffer.reset()
