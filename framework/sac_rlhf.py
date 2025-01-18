@@ -128,7 +128,7 @@ class Args:
     """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
     teacher_feedback_total_queries: int = 1400
     """the total number of queries the teacher will provide"""
-    teacher_feedback_num_queries_per_session: int = 50
+    teacher_feedback_num_queries_per_session: int = 20
     """the number of queries per feedback session"""
     teacher_feedback_exponential_lambda: float = 0.1
     """the lambda parameter for the exponential feedback schedule"""

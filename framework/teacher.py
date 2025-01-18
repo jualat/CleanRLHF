@@ -181,6 +181,9 @@ def teacher_feedback_schedule(
                     result in more feedback early on
     :return: A numpy array containing the steps at which feedback is provided
     """
+    # Last session at the end of training will never provide additional feedback,
+    # so we increment the number of sessions by 1 to make sure we actually get num_sessions effective feedback sessions
+    num_sessions += 1
     if schedule == "exponential":
         i = np.arange(1, num_sessions + 1)
         denom = np.exp(lambda_ * num_sessions) - 1.0
@@ -206,6 +209,8 @@ def plot_feedback_schedule(
     :param num_queries: The total number of queries
     :return:
     """
+    # Remove the last element since it's the total number of steps (and this is not a real feedback session)
+    schedule = schedule[:-1]
     cumulative_feedback = np.linspace(0, num_queries, len(schedule))
 
     plt.plot(schedule, cumulative_feedback, marker="o")
