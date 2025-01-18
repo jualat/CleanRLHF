@@ -158,5 +158,6 @@ def give_pseudo_label(
     elif prob_u < (1.0 - tau):
         pseudo_label = Preference.SECOND.value
     else:
-        pseudo_label = None
+        pseudo_label = Preference.SKIP.value
+
     return pseudo_label
