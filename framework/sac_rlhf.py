@@ -27,12 +27,10 @@ from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from sampling import sample_trajectories
-from teacher import Teacher
+from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
-
-from framework.teacher import plot_feedback_schedule, teacher_feedback_schedule
 
 
 @dataclass
@@ -134,6 +132,10 @@ class Args:
     """the lambda parameter for the exponential feedback schedule"""
     teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
+    teacher_batch_strategy: str = "minibatch"
+    """the sampling method for teacher training, must be 'minibatch' ,'batch' or 'full'"""
+    teacher_minibatch_size: int = 10
+    """the mini batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 0.00082
@@ -176,10 +178,10 @@ class Args:
     """Confidence threshold for pseudo-labeling"""
     lambda_ssl: float = 0.1
     """Weight for the unsupervised (pseudo-labeled) loss"""
-    surf_H_max: int = 64
-    """Maximal length of the data augmented trajectory"""
-    surf_H_min: int = 54
-    """Minimal length of the data augmented trajectory"""
+    max_augmentation_offset: int = 10
+    """Max offset for the data augmentation"""
+    min_augmentation_offset: int = 5
+    """Min offset for the data augmentation"""
 
     # Load Model
     exploration_load: bool = False
@@ -328,10 +330,12 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     start_time = time.time()
 
     train_pref_buffer_size = args.teacher_feedback_num_queries_per_session
-    train_pref_buffer = PreferenceBuffer(buffer_size=train_pref_buffer_size)
+    train_pref_buffer = PreferenceBuffer(
+        buffer_size=train_pref_buffer_size, seed=args.seed
+    )
 
     val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
-    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size)
+    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size, seed=args.seed)
 
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
@@ -362,6 +366,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
+    surf_H_max = args.trajectory_length - args.min_augmentation_offset
+    surf_H_min = args.trajectory_length - args.max_augmentation_offset
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -588,6 +594,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     global_step=global_step,
                     epochs=args.teacher_update_epochs,
                     batch_size=args.teacher_feedback_batch_size,
+                    mini_batch_size=args.teacher_minibatch_size,
+                    batch_sample_strategy=args.teacher_batch_strategy,
                     device=device,
                     surf=args.surf,
                     sampling_strategy=args.surf_sampling_strategy,
@@ -595,8 +603,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     unlabeled_batch_ratio=args.unlabeled_batch_ratio,
                     tau=args.surf_tau,
                     lambda_ssl=args.lambda_ssl,
-                    H_max=args.surf_H_max,
-                    H_min=args.surf_H_min,
+                    H_max=surf_H_max,
+                    H_min=surf_H_min,
                 )
                 rb.relabel_rewards(reward_net)
                 train_pref_buffer.reset()
