@@ -181,6 +181,14 @@ class Args:
     min_augmentation_offset: int = 5
     """Min offset for the data augmentation"""
 
+    ### RUNE
+    rune: bool = False
+    """Toggle RUNE on/off"""
+    rune_beta: float = 100
+    """Beta parameter for RUNE"""
+    rune_beta_decay: float = 0.0001
+    """Beta decay parameter for RUNE"""
+
     # Load Model
     exploration_load: bool = False
     """skip exploration and load the pre-trained model and buffer from a file"""
@@ -323,6 +331,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         n_envs=1,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
+        rune=args.rune,
+        rune_beta=args.rune_beta,
+        rune_beta_decay=args.rune_beta_decay,
         seed=args.seed,
     )
     start_time = time.time()
@@ -411,9 +422,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs,
                 actions,
                 intrinsic_reward,
+                np.zeros(
+                    args.num_envs
+                ),  # There is no standard deviation during the exploration phase
                 ground_truth_reward,
                 dones,
                 infos,
+                current_step,
                 qpos,
                 qvel,
             )
@@ -651,7 +666,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             dones = terminations | truncations
             with torch.no_grad():
-                rewards = reward_net.predict_reward(obs, actions)
+                rewards, rewards_std = reward_net.predict_reward(obs, actions)
 
             env_idx = 0
             single_env_info = {}
@@ -664,9 +679,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs[env_idx : env_idx + 1],
                 actions[env_idx : env_idx + 1],
                 rewards[env_idx : env_idx + 1].squeeze(),
+                rewards_std[env_idx : env_idx + 1].squeeze(),
                 groundTruthRewards[env_idx : env_idx + 1],
                 dones[env_idx : env_idx + 1],
                 single_env_info,
+                global_step,
                 qpos,
                 qvel,
             )
