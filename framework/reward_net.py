@@ -99,8 +99,6 @@ class RewardNet(nn.Module):
         actions = torch.tensor(actions, dtype=torch.float32).to(device)
 
         # Forward pass through the network
-        rewards = self.forward(observations, actions).cpu().detach().numpy()
-
         r_hat_all_members = []
 
         for member in self.ensemble:
@@ -111,6 +109,7 @@ class RewardNet(nn.Module):
 
         r_hat_all_members = np.array(r_hat_all_members)
         r_hat_std = np.std(r_hat_all_members, axis=0)
+        rewards = np.mean(r_hat_all_members, axis=0)
 
         return rewards, r_hat_std
 
