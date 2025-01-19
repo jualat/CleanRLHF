@@ -98,6 +98,8 @@ class Args:
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
+    early_stop_patience: int = 5
+    """the number of evaluation before early stopping"""
     early_stopping_mean: float = 900
     """the threshold of early stopping"""
     enable_greater_or_smaller_check: bool = False
@@ -112,14 +114,10 @@ class Args:
     """the validation split for the reward network"""
     reward_net_dropout: float = 0.2
     """the dropout rate for the reward network"""
-    actor_net_hidden_dim: int = 256
+    actor_and_q_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
-    actor_net_hidden_layers: int = 4
+    actor_and_q_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
-    soft_q_net_hidden_dim: int = 256
-    """the dimension of the hidden layers in the SoftQNetwork"""
-    soft_q_net_hidden_layers: int = 4
-    """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"
@@ -250,28 +248,28 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     actor = Actor(
         env=envs,
-        hidden_dim=args.actor_net_hidden_dim,
-        hidden_layers=args.actor_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1 = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf2 = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1_target = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf2_target = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
@@ -503,7 +501,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
-        reward_means = deque(maxlen=3)
+        reward_means = deque(maxlen=args.early_stop_patience)
         obs, _ = envs.reset(seed=args.seed)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
