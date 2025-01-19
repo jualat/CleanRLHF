@@ -161,6 +161,15 @@ parameters:
   min_augmentation_offset:
     values: [5]
 
+  rune:
+    values: [true, false]
+  rune_beta:
+    min: 0.05
+    max: 20
+    distribution: uniform
+  rune_beta_decay:
+    values: [0.001, 0.0001, 0.00001]
+
   exploration_load:
     values: [false]
   path_to_replay_buffer:
