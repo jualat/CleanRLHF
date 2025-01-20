@@ -13,7 +13,7 @@ parameters:
   cuda:
     values: [true]
   track:
-    values: [false]
+    values: [true]
   wandb_project_name:
     values: [""]
   wandb_entity:
