@@ -140,7 +140,9 @@ class Teacher:
         assert (
             weights_first_trajectory.shape
             == trajectory.samples.ground_truth_rewards.shape
-        ), f"Shape mismatch: weights {weights_first_trajectory.shape}, rewards {trajectory.samples.ground_truth_rewards.shape}"
+        ), (
+            f"Shape mismatch: weights {weights_first_trajectory.shape}, rewards {trajectory.samples.ground_truth_rewards.shape}"
+        )
 
         return weights_first_trajectory
 
