@@ -65,4 +65,42 @@ The sweep.py script automates hyperparameter optimization using Weights & Biases
     ```bash
    python sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
    ```
-    `--sweep-id`:  You can find this ID on the W&B dashboard.
+
+    `--sweep_id`:  You can find this ID on the W&B dashboard.
+
+#### How to Run a Sweep on SLURM:
+
+1. Setup a virtual environment and install the dependencies:
+
+   > Note: This step is only required once. It'll install Miniconda, installs Python3.10. creates a virtual environment
+   > and executes the `poetry install` command.
+   > It also clones the CleanRLHF repository into ~/workspace directory
+
+   ```bash
+   cd slurm
+   sh setup_venv.sh
+   ```
+
+2. Adjust `slurm/wandb_sweep.sbatch` to your needs. Make sure to replace the email to receive notifications and update 
+   absolute paths.
+
+   ```
+   #SBATCH --mail-user=b.kuen@campus.lmu.de
+   #SBATCH --mail-type=ALL
+   #SBATCH --chdir=/home/k/kuen/workspace/cleanrlhf/framework
+   #SBATCH --output=/home/k/kuen/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.out
+   #SBATCH --error=/home/k/kuen/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.err
+   ```
+   
+   Replace `python3.10 sweep.py --project_name Ant_common_tuning --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/ant_sweep.yaml`
+   with the startup command of your sweep.
+
+3. Submit the job to the SLURM cluster:
+
+   > Note: You'll be prompted to paste your WAND API key. You can find it on your W&B dashboard.
+
+   ```bash
+   sh start_job.sh
+   ```
+   
+   The command returns a job ID. You can check the status of your job with `squeue -u <username>`.

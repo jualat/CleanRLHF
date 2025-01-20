@@ -83,3 +83,56 @@ def entropy_sampling(rb: ReplayBuffer, reward_net: RewardNet, traj_len: int):
 
     entropies_argmax = max(enumerate(entropies), key=lambda x: x[1])[0]
     return traj_mb1[entropies_argmax], traj_mb2[entropies_argmax]
+
+
+def slice_pairs(pairs, mini_batch_size):
+    """
+    Slices the pairs into mini-batches.
+    :param pairs: The pairs to slice
+    :param mini_batch_size: The size of the mini-batches
+    :return:
+    """
+    return [
+        pairs[i : i + mini_batch_size] for i in range(0, len(pairs), mini_batch_size)
+    ]
+
+
+def sample_pairs(
+    size: int,
+    rb: ReplayBuffer,
+    sampling_strategy: str,
+    reward_net: RewardNet,
+    traj_len: int,
+    batch_sampling: str,
+    mini_batch_size: int,
+):
+    pairs = []
+    for i in range(size):
+        traj1, traj2 = sample_trajectories(rb, sampling_strategy, reward_net, traj_len)
+        traj1_tuple = (traj1.replay_buffer_start_idx, traj1.replay_buffer_end_idx)
+        traj2_tuple = (traj2.replay_buffer_start_idx, traj2.replay_buffer_end_idx)
+        pairs.append((traj1_tuple, traj2_tuple))
+
+    if batch_sampling == "minibatch":
+        batch = slice_pairs(pairs, mini_batch_size)
+    else:
+        batch = [pairs]
+
+    return batch
+
+
+def sample_trajectories(
+    rb: ReplayBuffer, sampling_strategy: str, reward_net: RewardNet, traj_len: int
+):
+    if sampling_strategy == "disagree":
+        first_trajectory, second_trajectory = disagreement_sampling(
+            rb, reward_net, traj_len
+        )
+    elif sampling_strategy == "entropy":
+        first_trajectory, second_trajectory = entropy_sampling(rb, reward_net, traj_len)
+    elif sampling_strategy == "uniform":
+        first_trajectory, second_trajectory = uniform_sampling(rb, traj_len)
+    else:
+        raise ValueError(f"Invalid sampling strategy: {sampling_strategy}")
+
+    return first_trajectory, second_trajectory

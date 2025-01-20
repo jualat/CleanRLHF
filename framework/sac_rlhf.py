@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import time
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,8 +26,8 @@ from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
-from sampling import disagreement_sampling, entropy_sampling, uniform_sampling
-from teacher import Teacher
+from sampling import sample_trajectories
+from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
@@ -89,7 +90,7 @@ class Args:
     ## Evaluation
     evaluation_frequency: int = 10000
     """the frequency of evaluation"""
-    evaluation_episodes: int = 30
+    evaluation_episodes: int = 10
     """the number of evaluation episodes"""
 
     ## Early Stop
@@ -97,39 +98,49 @@ class Args:
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
+    early_stop_patience: int = 5
+    """the number of evaluation before early stopping"""
     early_stopping_mean: float = 900
     """the threshold of early stopping"""
     enable_greater_or_smaller_check: bool = False
     """stop if reward is greater/smaller then threshold (True: greater/ False: smaller)"""
 
     ## Arguments for the neural networks
-    reward_net_hidden_dim: int = 256
+    reward_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
-    actor_net_hidden_dim: int = 256
+    reward_net_val_split: float = 0.2
+    """the validation split for the reward network"""
+    reward_net_dropout: float = 0.2
+    """the dropout rate for the reward network"""
+    actor_and_q_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
-    actor_net_hidden_layers: int = 4
+    actor_and_q_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
-    soft_q_net_hidden_dim: int = 256
-    """the dimension of the hidden layers in the SoftQNetwork"""
-    soft_q_net_hidden_layers: int = 4
-    """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 5000
-    """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 100
+    teacher_feedback_schedule: str = "exponential"
+    """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
+    teacher_feedback_total_queries: int = 1400
+    """the total number of queries the teacher will provide"""
+    teacher_feedback_num_queries_per_session: int = 20
     """the number of queries per feedback session"""
-    teacher_update_epochs: int = 20
+    teacher_feedback_exponential_lambda: float = 0.1
+    """the lambda parameter for the exponential feedback schedule"""
+    teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
+    teacher_batch_strategy: str = "minibatch"
+    """the sampling method for teacher training, must be 'minibatch' ,'batch' or 'full'"""
+    teacher_minibatch_size: int = 10
+    """the mini batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
-    teacher_learning_rate: float = 1e-3
+    teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
 
     # Simulated Teacher
-    trajectory_length: int = 32
+    trajectory_length: int = 64
     """the length of the trajectories that are sampled for human feedback"""
     preference_sampling: str = "disagree"
     """the sampling method for preferences, must be 'uniform', 'disagree' or 'entropy'"""
@@ -139,7 +150,7 @@ class Args:
     """the discount factor gamma, which models myopic behavior"""
     teacher_sim_epsilon: float = 0
     """with probability epsilon, the teacher's preference is flipped, introducing randomness"""
-    teacher_sim_delta_skip: float = 0
+    teacher_sim_delta_skip: float = -1e7
     """skip two trajectories if neither segment demonstrates the desired behavior"""
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
@@ -153,6 +164,30 @@ class Args:
     """the batch size of the explore sampled from the replay buffer"""
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
+
+    # SURF
+    surf: bool = True
+    """Toggle SURF on/off"""
+    unlabeled_batch_ratio: int = 1
+    """Ratio of unlabeled to labeled batch size"""
+    surf_sampling_strategy: str = "uniform"
+    """the sampling method for SURF, must be 'uniform', 'disagree' or 'entropy'"""
+    surf_tau: float = 0.999
+    """Confidence threshold for pseudo-labeling"""
+    lambda_ssl: float = 0.1
+    """Weight for the unsupervised (pseudo-labeled) loss"""
+    max_augmentation_offset: int = 10
+    """Max offset for the data augmentation"""
+    min_augmentation_offset: int = 5
+    """Min offset for the data augmentation"""
+
+    ### RUNE
+    rune: bool = False
+    """Toggle RUNE on/off"""
+    rune_beta: float = 100
+    """Beta parameter for RUNE"""
+    rune_beta_decay: float = 0.0001
+    """Beta decay parameter for RUNE"""
 
     # Load Model
     exploration_load: bool = False
@@ -221,28 +256,28 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     actor = Actor(
         env=envs,
-        hidden_dim=args.actor_net_hidden_dim,
-        hidden_layers=args.actor_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1 = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf2 = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1_target = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf2_target = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
@@ -296,18 +331,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         n_envs=1,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
+        rune=args.rune,
+        rune_beta=args.rune_beta,
+        rune_beta_decay=args.rune_beta_decay,
         seed=args.seed,
     )
     start_time = time.time()
 
-    pref_buffer = PreferenceBuffer(
-        (args.buffer_size // args.teacher_feedback_frequency)
-        * args.teacher_feedback_num_queries_per_session
+    train_pref_buffer_size = args.teacher_feedback_num_queries_per_session
+    train_pref_buffer = PreferenceBuffer(
+        buffer_size=train_pref_buffer_size, seed=args.seed
     )
+
+    val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
+    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size, seed=args.seed)
+
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
         env=envs,
+        dropout=args.reward_net_dropout,
     ).to(device)
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
@@ -332,6 +375,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
+    surf_H_max = args.trajectory_length - args.min_augmentation_offset
+    surf_H_min = args.trajectory_length - args.max_augmentation_offset
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -377,9 +422,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs,
                 actions,
                 intrinsic_reward,
+                np.zeros(
+                    args.num_envs
+                ),  # There is no standard deviation during the exploration phase
                 ground_truth_reward,
                 dones,
                 infos,
+                current_step,
                 qpos,
                 qvel,
             )
@@ -467,18 +516,42 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
-        reward_means = np.zeros(3)
+        reward_means = deque(maxlen=args.early_stop_patience)
         obs, _ = envs.reset(seed=args.seed)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
             if args.exploration_load or args.unsupervised_exploration
             else args.total_timesteps
         )
+
+        teacher_total_queries = args.teacher_feedback_total_queries
+        teacher_num_sessions = (
+            teacher_total_queries // args.teacher_feedback_num_queries_per_session
+        )
+        teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
+        teacher_session_steps = teacher_feedback_schedule(
+            num_sessions=teacher_num_sessions,
+            total_steps=total_steps,
+            schedule="exponential",
+            lambda_=teacher_exponential_lambda,
+        )
+
+        model_folder = f"./models/{run_name}"
+        os.makedirs(model_folder, exist_ok=True)
+
+        sessions_steps_plt = plot_feedback_schedule(
+            schedule=teacher_session_steps,
+            num_queries=teacher_total_queries,
+        )
+        sessions_steps_plt.savefig(f"{model_folder}/feedback_schedule.png")
+
+        next_session_idx = 0
+
         for global_step in trange(total_steps, desc="Training steps", unit="steps"):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
-            if global_step % args.teacher_feedback_frequency == 0 and (
+            if global_step >= teacher_session_steps[next_session_idx] and (
                 global_step != 0
                 or args.exploration_load
                 or args.unsupervised_exploration
@@ -489,18 +562,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     unit="queries",
                 ):
                     # Sample trajectories from replay buffer to query teacher
-                    if args.preference_sampling == "uniform":
-                        first_trajectory, second_trajectory = uniform_sampling(
-                            rb, args.trajectory_length
-                        )
-                    elif args.preference_sampling == "disagree":
-                        first_trajectory, second_trajectory = disagreement_sampling(
-                            rb, reward_net, args.trajectory_length
-                        )
-                    elif args.preference_sampling == "entropy":
-                        first_trajectory, second_trajectory = entropy_sampling(
-                            rb, reward_net, args.trajectory_length
-                        )
+                    first_trajectory, second_trajectory = sample_trajectories(
+                        rb, args.preference_sampling, reward_net, args.trajectory_length
+                    )
 
                     logging.debug(f"step {global_step}, {i}")
 
@@ -520,21 +584,44 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         continue
 
                     # Store preferences
-                    pref_buffer.add(first_trajectory, second_trajectory, preference)
+                    if np.random.rand() < (
+                        1 - args.reward_net_val_split
+                    ):  # 1 - (Val Split)% for training
+                        train_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
+                    else:  # (Val Split)% for validation
+                        val_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
+
+                next_session_idx += 1
 
                 train_reward(
-                    reward_net,
-                    reward_optimizer,
-                    metrics,
-                    pref_buffer,
-                    rb,
-                    global_step,
-                    args.teacher_update_epochs,
-                    args.teacher_feedback_batch_size,
-                    device,
+                    model=reward_net,
+                    optimizer=reward_optimizer,
+                    metrics=metrics,
+                    train_pref_buffer=train_pref_buffer,
+                    val_pref_buffer=val_pref_buffer,
+                    rb=rb,
+                    global_step=global_step,
+                    epochs=args.teacher_update_epochs,
+                    batch_size=args.teacher_feedback_batch_size,
+                    mini_batch_size=args.teacher_minibatch_size,
+                    batch_sample_strategy=args.teacher_batch_strategy,
+                    device=device,
+                    surf=args.surf,
+                    sampling_strategy=args.surf_sampling_strategy,
+                    trajectory_length=args.trajectory_length,
+                    unlabeled_batch_ratio=args.unlabeled_batch_ratio,
+                    tau=args.surf_tau,
+                    lambda_ssl=args.lambda_ssl,
+                    H_max=surf_H_max,
+                    H_min=surf_H_min,
                 )
-
                 rb.relabel_rewards(reward_net)
+                train_pref_buffer.reset()
+                val_pref_buffer.reset()
                 logging.info("Rewards relabeled")
 
             ### AGENT LEARNING ###
@@ -579,7 +666,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             dones = terminations | truncations
             with torch.no_grad():
-                rewards = reward_net.predict_reward(obs, actions)
+                rewards, rewards_std = reward_net.predict_reward(obs, actions)
 
             env_idx = 0
             single_env_info = {}
@@ -592,9 +679,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs[env_idx : env_idx + 1],
                 actions[env_idx : env_idx + 1],
                 rewards[env_idx : env_idx + 1].squeeze(),
+                rewards_std[env_idx : env_idx + 1].squeeze(),
                 groundTruthRewards[env_idx : env_idx + 1],
                 dones[env_idx : env_idx + 1],
                 single_env_info,
+                global_step,
                 qpos,
                 qvel,
             )
@@ -677,7 +766,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render=render,
                     track=track,
                 )
-                reward_means[global_step % 3] = eval_dict["mean_reward"]
+                reward_means.append(eval_dict["mean_reward"])
                 evaluate.plot(eval_dict, global_step)
                 metrics.log_evaluate_metrics(global_step, eval_dict)
             if (

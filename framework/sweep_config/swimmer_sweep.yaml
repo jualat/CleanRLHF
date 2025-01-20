@@ -6,124 +6,173 @@ metric:
   goal: maximize
   name: "evaluate/mean"
 parameters:
-  teacher_feedback_num_queries_per_session:
-    values: [50]
-  teacher_feedback_batch_size:
-    values: [32]
-  teacher_feedback_frequency:
-    values: [35714]
-  unsupervised_exploration:
+  seed:
+    values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  torch_deterministic:
     values: [true]
+  cuda:
+    values: [true]
+  track:
+    values: [false]
+  wandb_project_name:
+    values: [""]
+  wandb_entity:
+    values: [""]
+  capture_video:
+    values: [false]
+  num_envs:
+    values: [1]
+  log_file:
+    values: [true]
+  log_level:
+    values: ["INFO"]
+
+  env_id:
+    values: ["Swimmer-v5"]
+  total_timesteps:
+    values: [1000000]
+  buffer_size:
+    values: [1000000]
+  gamma:
+    min: 0.99
+    max: 0.995
+    distribution: uniform
+  tau:
+    values: [0.005]
+  batch_size:
+    values: [256]
+  learning_starts:
+    values: [5000]
+  policy_lr:
+    min: 0.0001
+    max: 0.001
+    distribution: uniform
+  q_lr:
+    min: 0.0001
+    max: 0.001
+    distribution: uniform
+  policy_frequency:
+    values: [2]
   target_network_frequency:
     values: [1]
-  soft_q_net_hidden_layers:
-    values: [4]
-  reward_net_hidden_layers:
-    max: 5
-    min: 2
-    distribution: int_uniform
-  teacher_sim_delta_equal:
+  alpha:
+    values: [0.2]
+  autotune:
+    values: [true]
+
+  evaluation_frequency:
+    values: [10000]
+  evaluation_episodes:
+    values: [10]
+
+  early_stop:
+    values: [false]
+  early_stopping_step:
+    values: [500000]
+  early_stop_patience:
+    values: [5]
+  early_stopping_mean:
     values: [0]
-  explore_learning_starts:
-    values: [512]
-  actor_net_hidden_layers:
-    values: [4]
-  teacher_sim_delta_skip:
-    values: [-1e7]
+  enable_greater_or_smaller_check:
+    values: [false]
+
+  reward_net_hidden_dim:
+    values: [64, 128, 256, 512]
+  reward_net_hidden_layers:
+    values: [2, 3, 4, 5]
+  reward_net_val_split:
+    values: [0.2]
+  reward_net_dropout:
+    values: [0, 0.1, 0.2, 0.3]
+  actor_and_q_net_hidden_dim:
+    values: [128, 256, 512]
+  actor_and_q_net_hidden_layers:
+    values: [3, 4, 5]
+
+  teacher_feedback_num_queries_per_session:
+    values: [20, 30, 40, 50, 60]
+  teacher_feedback_total_queries:
+    values: [500, 1000, 1500, 2000, 3000]
+  teacher_feedback_schedule:
+    values:
+    - linear
+    - exponential
+  teacher_feedback_exponential_lambda:
+    values: [0.1]
+  teacher_feedback_batch_size:
+    values: [16, 32]
   teacher_update_epochs:
+    distribution: int_uniform
     max: 20
     min: 10
-    distribution: int_uniform
+  teacher_batch_strategy:
+    values:
+    - minibatch
+    - batch
+    - full
+  teacher_minibatch_size:
+    values: [5, 10, 20]
   teacher_learning_rate:
     min: 0.0005
     max: 0.001
     distribution: uniform
-  soft_q_net_hidden_dim:
-    values: [256]
-  reward_net_hidden_dim:
-    values: [512 ,256, 128, 64]
-  actor_net_hidden_dim:
-    values: [256]
-  total_explore_steps:
-    values: [10000]
-  torch_deterministic:
-    values: [true]
-  teacher_sim_epsilon:
-    values: [0.025]
+  trajectory_length:
+    values: [32, 64, 128]
   preference_sampling:
     values:
       - disagree
       - uniform
       - entropy
-  wandb_project_name:
-    values: ["Swimmer_common_tuning"]
-  explore_batch_size:
-    values: [256]
-  trajectory_length:
-    values: [32, 64, 128]
   teacher_sim_gamma:
     values: [1]
   teacher_sim_beta:
     values: [-1]
-  policy_frequency:
-    values: [2]
+  teacher_sim_epsilon:
+    values: [0]
+  teacher_sim_delta_skip:
+    values: [-1e7]
+  teacher_sim_delta_equal:
+    values: [0]
+
+  unsupervised_exploration:
+    values: [true]
+  total_explore_steps:
+    values: [10000]
+  explore_batch_size:
+    values: [256]
+  explore_learning_starts:
+    values: [512]
+
+  surf:
+    values: [true, false]
+  unlabeled_batch_ratio:
+    values: [1, 2, 4]
+  surf_sampling_strategy:
+    values:
+    - uniform
+    - disagree
+    - entropy
+  surf_tau:
+    values: [0.999]
+  lambda_ssl:
+    values: [0.1]
+  max_augmentation_offset:
+    values: [10]
+  min_augmentation_offset:
+    values: [5]
+
+  rune:
+    values: [ true, false ]
+  rune_beta:
+    min: 0.05
+    max: 600
+    distribution: uniform
+  rune_beta_decay:
+    values: [ 0.001, 0.0001, 0.00001 ]
+
   exploration_load:
     values: [false]
-  total_timesteps:
-    values: [1000000]
-  learning_starts:
-    values: [5000]
-  capture_video:
-    values: [false]
-  wandb_entity:
-    values: ["cleanRLHF"]
-  buffer_size:
-    values: [1000000]
-  batch_size:
-    values: [256]
-  policy_lr:
-    distribution: uniform
-    min: 0.0001
-    max: 0.001
-  log_level:
-    values: ["INFO"]
-  num_envs:
-    values: [1]
-  log_file:
-    values: [true]
-  autotune:
-    values: [true]
-  env_id:
-    values: ["Swimmer-v5"]
-  track:
-    values: [true]
-  gamma:
-    max: 0.995
-    min: 0.99
-    distribution: uniform
-  alpha:
-    values: [0.2]
-  seed:
-    max: 10
-    min: 1
-    distribution: int_uniform
-  q_lr:
-    distribution: uniform
-    min: 0.0001
-    max: 0.001
-  cuda:
-    values: [true]
-  tau:
-    values: [0.005]
-  evaluation_frequency:
-    values: [10000]
-  evaluation_episodes:
-    values: [30]
-  early_stopping:
-    values: [false]
-  early_stopping_step:
-    values: [500000]
-  early_stopping_mean:
-    values: [900]
-  enable_greater_or_smaller_check:
-    values: [false]
+  path_to_replay_buffer:
+    values: [""]
+  path_to_model:
+    values: [""]
