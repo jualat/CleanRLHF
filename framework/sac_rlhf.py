@@ -532,7 +532,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         teacher_session_steps = teacher_feedback_schedule(
             num_sessions=teacher_num_sessions,
             total_steps=total_steps,
-            schedule="exponential",
+            schedule=args.teacher_feedback_schedule,
             lambda_=teacher_exponential_lambda,
         )
 
