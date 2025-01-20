@@ -517,7 +517,11 @@ def train_reward(
         )
 
         if epoch % 10 == 0:
-            if val_pref_buffer is not None and val_pref_buffer.size > 0:
+            if (
+                val_pref_buffer is not None
+                and val_pref_buffer.size > 0
+                and val_loss_dict is not None
+            ):
                 if surf:
                     logging.info(
                         f"Reward epoch {epoch}, "
