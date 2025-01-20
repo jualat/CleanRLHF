@@ -13,7 +13,7 @@ parameters:
   cuda:
     values: [true]
   track:
-    values: [false]
+    values: [true]
   wandb_project_name:
     values: [""]
   wandb_entity:
@@ -26,7 +26,6 @@ parameters:
     values: [true]
   log_level:
     values: ["INFO"]
-
   env_id:
     values: ["Ant-v5"]
   total_timesteps:
@@ -59,12 +58,10 @@ parameters:
     values: [0.2]
   autotune:
     values: [true]
-
   evaluation_frequency:
     values: [10000]
   evaluation_episodes:
     values: [10]
-
   early_stop:
     values: [false]
   early_stopping_step:
@@ -75,7 +72,6 @@ parameters:
     values: [0]
   enable_greater_or_smaller_check:
     values: [false]
-
   reward_net_hidden_dim:
     values: [64, 128, 256, 512]
   reward_net_hidden_layers:
@@ -88,7 +84,6 @@ parameters:
     values: [128, 256, 512]
   actor_and_q_net_hidden_layers:
     values: [3, 4, 5]
-
   teacher_feedback_num_queries_per_session:
     values: [20, 30, 40, 50, 60]
   teacher_feedback_total_queries:
@@ -133,7 +128,6 @@ parameters:
     values: [-1e7]
   teacher_sim_delta_equal:
     values: [0]
-
   unsupervised_exploration:
     values: [true]
   total_explore_steps:
@@ -142,7 +136,6 @@ parameters:
     values: [256]
   explore_learning_starts:
     values: [512]
-
   surf:
     values: [true, false]
   unlabeled_batch_ratio:
@@ -160,7 +153,6 @@ parameters:
     values: [10]
   min_augmentation_offset:
     values: [5]
-
   rune:
     values: [true, false]
   rune_beta:
@@ -169,7 +161,6 @@ parameters:
     distribution: uniform
   rune_beta_decay:
     values: [0.001, 0.0001, 0.00001]
-
   exploration_load:
     values: [false]
   path_to_replay_buffer:
