@@ -477,7 +477,6 @@ def train_reward(
             batch_sampling=batch_sample_strategy,
             mini_batch_size=mini_batch_size,
         )
-
         # ==== 2) VALIDATION STEP ====
         if val_pref_buffer is not None and val_pref_buffer.size > 0:
             # no need to compute gradients
@@ -517,7 +516,11 @@ def train_reward(
         )
 
         if epoch % 10 == 0:
-            if val_pref_buffer is not None and val_pref_buffer.size > 0:
+            if (
+                val_pref_buffer is not None
+                and val_pref_buffer.size > 0
+                and val_loss_dict is not None
+            ):
                 if surf:
                     logging.info(
                         f"Reward epoch {epoch}, "
