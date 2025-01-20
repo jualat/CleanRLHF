@@ -39,8 +39,10 @@
             let preferenceText;
             if (preference === 1) {
                 preferenceText = `Preference given: ${video1}`;
-            } else if (preference === 2) {
+            } else if (preference === 0) {
                 preferenceText = `Preference given: ${video2}`;
+            } else if (preference === 0.5) {
+                preferenceText = `Preference given: both`;
             } else {
                 preferenceText = "Preference given: Neither";
             }
@@ -117,10 +119,13 @@
                     submitFeedback(1);
                 } else if (event.key === "ArrowRight") {
                     console.log("Arrow Right pressed: Option 2 selected");
-                    submitFeedback(2);
+                    submitFeedback(0);
                 } else if (event.key === "ArrowDown") {
                     console.log("Arrow Down pressed: Neither selected");
-                    submitFeedback(0);
+                    submitFeedback(-1);
+                } else if (event.key === "ArrowUp") {
+                    console.log("Arrow Up pressed: Both selected");
+                    submitFeedback(0.5);
                 }
             });
         }
@@ -133,9 +138,10 @@
     <video id="video2" width="400" muted controls></video>
 </div>
 <div>
-    <button onclick="submitFeedback(1)">Option 1</button>
-    <button onclick="submitFeedback(2)">Option 2</button>
-    <button onclick="submitFeedback(0)">Neither</button>
+    <button onclick="submitFeedback(1)">Video 1</button>
+    <button onclick="submitFeedback(0)">Video 2</button>
+    <button onclick="submitFeedback(-1)">Neither</button>
+    <button onclick="submitFeedback(0.5)">Both</button>
 </div>
 
 <div id="toastContainer"></div>

@@ -717,7 +717,8 @@ if __name__ == "__main__":
     cli_args = tyro.cli(Args)
     try:
         if cli_args.feedback_server_autostart:
-            feedback_server_process = start_feedback_server(cli_args.feedback_server_url.split(":")[-1])
+            if "localhost" in cli_args.feedback_server_url or "127.0.0" in cli_args.feedback_server_url:
+                feedback_server_process = start_feedback_server(cli_args.feedback_server_url.split(":")[-1])
         train(cli_args)
     except Exception as e:
         logging.exception(e)

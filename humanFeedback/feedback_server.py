@@ -2,6 +2,7 @@ import logging
 import os
 import threading
 import argparse
+import logging
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
@@ -108,24 +109,33 @@ def add_videos(env_id):
 def get_videos():
     """
     Endpoint to get the next video filenames for comparison.
-    Searches through all env_ids in sampled_videos and serves the next available pair.
+    Searches through all env_ids in sampled_videos, skipping pairs that already have feedback.
     """
     with lock:
         for run_name, video_stack in sampled_videos.items():
-            if video_stack:
+            while video_stack:
                 video_pair = video_stack.pop(0)
-                if len(video_pair) == 2:
+
+                # Check if this pair already has feedback
+                feedback_exists = any(
+                    feedback["trajectory_1"] == video_pair[0] and feedback["trajectory_2"] == video_pair[1]
+                    for feedback in feedback_buffers.get(run_name, [])
+                )
+
+                if not feedback_exists:
+                    # If the pair has no feedback, return this pair
                     return (
                         jsonify(
                             {
                                 "video1": f"/video/{video_pair[0]}",
                                 "video2": f"/video/{video_pair[1]}",
-                                "run_name": run_name, # currently not used but could be displayed in the UI for clarification
+                                "run_name": run_name,
                             }
                         ),
                         200,
                     )
-        return "", 204  # Send 204 No Content when there are no videos available
+                logging.info(f"Skipped pair {video_pair} for run: {run_name} as feedback already exists.")
+        return "", 204
 
 
 
@@ -133,29 +143,60 @@ def get_videos():
 def submit_feedback(run_name):
     """
     Endpoint to collect user feedback for a specific environment ID (env_id).
-    Expects: { "trajectory_1": ..., "trajectory_2": ..., "preference": ... }
+    Expects JSON: { "trajectory_1": ..., "trajectory_2": ..., "preference": ... }
+    Removes the feedback pair from the sampled videos queue after receiving feedback.
     """
     data = request.json
     if not data:
         return jsonify({"error": "No feedback data provided"}), 400
 
+    # Validate feedback format
     if "trajectory_1" in data and "trajectory_2" in data and "preference" in data:
+        trajectory_1 = data["trajectory_1"]
+        trajectory_2 = data["trajectory_2"]
+        preference = data["preference"]
+
         with lock:
             if run_name not in feedback_buffers:
                 feedback_buffers[run_name] = []
+
+            # Check if feedback for the same pair already exists
+            existing_feedback = next(
+                (feedback for feedback in feedback_buffers[run_name]
+                 if feedback["trajectory_1"] == trajectory_1 and feedback["trajectory_2"] == trajectory_2),
+                None
+            )
+
+            if existing_feedback:
+                return jsonify({
+                    "status": "error",
+                    "message": f"Feedback already exists for pair: ({trajectory_1}, {trajectory_2}) in run: {run_name}."
+                }), 400
+
             feedback_buffers[run_name].append(data)
+
+            # Remove submitted pair from the sampled videos queue
+            if run_name in sampled_videos:
+                video_stack = sampled_videos[run_name]
+                pair_to_remove = [trajectory_1, trajectory_2]
+                if pair_to_remove in video_stack:
+                    video_stack.remove(pair_to_remove)
+                    logging.info(f"Removed pair {pair_to_remove} from queue for run: {run_name}")
+                else:
+                    logging.warning(f"Pair {pair_to_remove} not found in queue for run: {run_name}")
 
         return (
             jsonify(
                 {
                     "status": "success",
-                    "message": f"Feedback received for run: {run_name}!",
+                    "message": f"Feedback received and pair removed for run: {run_name}.",
                 }
             ),
             200,
         )
     else:
         return jsonify({"status": "error", "message": "Invalid feedback format"}), 400
+
 
 
 @app.route("/api/get_feedback/<run_name>", methods=["GET"])
@@ -166,7 +207,6 @@ def get_feedback(run_name):
     with lock:
         if run_name in feedback_buffers:
             buffer_copy = feedback_buffers[run_name][:]
-            feedback_buffers[run_name].clear()
             return jsonify(buffer_copy), 200
         else:
             return (
@@ -193,5 +233,6 @@ if __name__ == "__main__":
         help="Port to run the feedback server on (default: 5001)",
     )
     args = parser.parse_args()
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app.run(debug=True, port=args.port)
 

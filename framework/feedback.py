@@ -151,14 +151,15 @@ def collect_feedback(
                                 second_trajectory = retrieve_trajectory_by_video_name(replay_buffer,
                                                                                       feedback["trajectory_2"])
                                 preference = feedback["preference"]
-                                pref_buffer.add(
-                                    first_trajectory, second_trajectory, preference
-                                )
-                                collected_feedback += 1
-                                pbar.update(1)
+                                if preference == "-1": preference = None
+
+                                if not pref_buffer.contains(first_trajectory, second_trajectory, preference):
+                                    pref_buffer.add(first_trajectory, second_trajectory, preference)
+                                    logging.info(f"Adding to pref_buffer: {first_trajectory, second_trajectory, preference}")
+                                    collected_feedback += 1
+                                    pbar.update(1)
                     else:
                         logging.debug("Could not fetch feedback; retrying...")
-
                     time.sleep(5)
 
         except KeyboardInterrupt:
