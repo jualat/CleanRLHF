@@ -107,3 +107,24 @@ class PreferenceBuffer:
         """
         self.size = 0
         self.next_idx = 0
+
+    def contains(self, trajectory_1: Trajectory, trajectory_2: Trajectory, preference: float):
+        """
+        Check if the preference buffer contains a given combination of trajectories and preference.
+
+        :param trajectory_1: First trajectory being checked
+        :param trajectory_2: Second trajectory being checked
+        :param preference: Preference score to check for
+        :return: True if the preference exists in the buffer, False otherwise
+        """
+        for i in range(self.size):
+            buffer_entry = self.buffer[i]
+
+            if (buffer_entry[0] == trajectory_1.replay_buffer_start_idx and
+                    buffer_entry[1] == trajectory_1.replay_buffer_end_idx and
+                    buffer_entry[2] == trajectory_2.replay_buffer_start_idx and
+                    buffer_entry[3] == trajectory_2.replay_buffer_end_idx and
+                    buffer_entry[4] == preference):
+                return True
+
+        return False

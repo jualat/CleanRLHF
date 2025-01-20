@@ -36,7 +36,15 @@ There exist several arguments which can be found in `framwork/sac_rlhf.py`. For 
 python3 framework/sac_rlhf.py --env_id Walker2d
 ```
 
-# Tensorboard
+## Feedback server
+With the flag `poetry run python sac_rlhf.py ... --feedback_server_autostart` the feedback server will stat automatically on port 5001.
+With the flag `--feedback_server_url remoteurl:5001` a remote url or `feedback_server_url localhost:1234` a different port for the local server can be used
+The feedback server can be startet manually by:
+```
+python3 humanFeedback/feedback_server.py
+```
+
+## Tensorboard
 By running `tensorboard --logdir=runs` a local instance of TensorBoard will be started (http://localhost:6006/)
 
 ## Performance metrics

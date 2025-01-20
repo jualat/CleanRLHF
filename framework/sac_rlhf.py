@@ -22,6 +22,8 @@ from env import (
     save_replay_buffer,
 )
 from evaluation import Evaluation
+from feedback import collect_feedback
+from feedback_util import start_feedback_server, stop_feedback_server
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
@@ -118,6 +120,16 @@ class Args:
     """the dimension of the hidden layers in the actor network"""
     actor_and_q_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
+
+    # Feedback server arguments
+    feedback_server_url: str = "http://localhost:5001"
+    """the url of the feedback server"""
+    feedback_server_autostart: bool = False
+    """toggle the autostart of a local feedback server"""
+
+    # Teacher feedback mode
+    teacher_feedback_mode: str = "simulated"
+    """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
 
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"
@@ -384,7 +396,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         current_step += 1
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in trange(
-            args.total_explore_steps, desc="Exploration step", unit="steps"
+                args.total_explore_steps, desc="Exploration step", unit="steps"
         ):
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
@@ -454,10 +466,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 if (
-                    explore_step % args.policy_frequency == 0
+                        explore_step % args.policy_frequency == 0
                 ):  # TD 3 Delayed update support
                     for _ in range(
-                        args.policy_frequency
+                            args.policy_frequency
                     ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                         actor_loss, alpha, alpha_loss = update_actor(
                             data,
@@ -525,7 +537,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         teacher_total_queries = args.teacher_feedback_total_queries
         teacher_num_sessions = (
-            teacher_total_queries // args.teacher_feedback_num_queries_per_session
+                teacher_total_queries // args.teacher_feedback_num_queries_per_session
         )
         teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
         teacher_session_steps = teacher_feedback_schedule(
@@ -551,48 +563,27 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
             if global_step >= teacher_session_steps[next_session_idx] and (
-                global_step != 0
-                or args.exploration_load
-                or args.unsupervised_exploration
+                    global_step != 0
+                    or args.exploration_load
+                    or args.unsupervised_exploration
             ):
-                for i in trange(
-                    args.teacher_feedback_num_queries_per_session,
-                    desc="Queries",
-                    unit="queries",
-                ):
-                    # Sample trajectories from replay buffer to query teacher
-                    first_trajectory, second_trajectory = sample_trajectories(
-                        rb, args.preference_sampling, reward_net, args.trajectory_length
-                    )
-
-                    logging.debug(f"step {global_step}, {i}")
-
-                    # Create video of the two trajectories. For now, we only render if capture_video is True.
-                    # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                    if args.capture_video:
-                        video_recorder.record_trajectory(first_trajectory, run_name)
-                        video_recorder.record_trajectory(second_trajectory, run_name)
-
-                    # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                    preference = sim_teacher.give_preference(
-                        first_trajectory, second_trajectory
-                    )
-
-                    # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
-                    if preference is None:
-                        continue
-
-                    # Store preferences
-                    if np.random.rand() < (
-                        1 - args.reward_net_val_split
-                    ):  # 1 - (Val Split)% for training
-                        train_pref_buffer.add(
-                            first_trajectory, second_trajectory, preference
-                        )
-                    else:  # (Val Split)% for validation
-                        val_pref_buffer.add(
-                            first_trajectory, second_trajectory, preference
-                        )
+                train_pref_buffer = collect_feedback(
+                    mode=args.teacher_feedback_mode,
+                    feedback_server_url=args.feedback_server_url,
+                    pref_buffer=train_pref_buffer,
+                    run_name=run_name,
+                    preference_sampling=args.preference_sampling,
+                    replay_buffer=rb,
+                    trajectory_length=args.trajectory_length,
+                    reward_net=reward_net,
+                    val_pref_buffer=val_pref_buffer,
+                    train_pref_buffer=train_pref_buffer,
+                    reward_net_val_split=args.reward_net_val_split,
+                    teacher_feedback_num_queries_per_session=args.teacher_feedback_num_queries_per_session,
+                    capture_video=args.capture_video,
+                    video_recorder=video_recorder,
+                    sim_teacher=sim_teacher,
+                )
 
                 next_session_idx += 1
 
@@ -673,13 +664,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env_info[key] = value[env_idx]
 
             rb.add(
-                obs[env_idx : env_idx + 1],
-                real_next_obs[env_idx : env_idx + 1],
-                actions[env_idx : env_idx + 1],
-                rewards[env_idx : env_idx + 1].squeeze(),
-                rewards_std[env_idx : env_idx + 1].squeeze(),
-                groundTruthRewards[env_idx : env_idx + 1],
-                dones[env_idx : env_idx + 1],
+                obs[env_idx: env_idx + 1],
+                real_next_obs[env_idx: env_idx + 1],
+                actions[env_idx: env_idx + 1],
+                rewards[env_idx: env_idx + 1].squeeze(),
+                rewards_std[env_idx: env_idx + 1].squeeze(),
+                groundTruthRewards[env_idx: env_idx + 1],
+                dones[env_idx: env_idx + 1],
                 single_env_info,
                 global_step,
                 qpos,
@@ -711,10 +702,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 if (
-                    global_step % args.policy_frequency == 0
+                        global_step % args.policy_frequency == 0
                 ):  # TD 3 Delayed update support
                     for _ in range(
-                        args.policy_frequency
+                            args.policy_frequency
                     ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                         actor_loss, alpha, alpha_loss = update_actor(
                             data,
@@ -751,9 +742,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         start_time,
                     )
             if global_step % args.evaluation_frequency == 0 and (
-                global_step != 0
-                or args.exploration_load
-                or args.unsupervised_exploration
+                    global_step != 0
+                    or args.exploration_load
+                    or args.unsupervised_exploration
             ):
                 render = global_step % 100000 == 0 and global_step != 0
                 track = global_step % 100000 == 0 and global_step != 0 and args.track
@@ -768,18 +759,18 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 evaluate.plot(eval_dict, global_step)
                 metrics.log_evaluate_metrics(global_step, eval_dict)
             if (
-                global_step > args.early_stopping_step == 0
-                and (
+                    global_step > args.early_stopping_step == 0
+                    and (
                     (
-                        np.mean(reward_means) > args.early_stopping_mean
-                        and args.enable_greater_or_smaller_check
+                            np.mean(reward_means) > args.early_stopping_mean
+                            and args.enable_greater_or_smaller_check
                     )
                     or (
-                        np.mean(reward_means) < args.early_stopping_mean
-                        and not args.enable_greater_or_smaller_check
+                            np.mean(reward_means) < args.early_stopping_mean
+                            and not args.enable_greater_or_smaller_check
                     )
-                )
-                and args.early_stopping
+            )
+                    and args.early_stopping
             ):
                 break
         eval_dict = evaluate.evaluate_policy(
@@ -814,4 +805,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
 if __name__ == "__main__":
     cli_args = tyro.cli(Args)
-    train(cli_args)
+    try:
+        if cli_args.feedback_server_autostart:
+            if "localhost" in cli_args.feedback_server_url or "127.0.0" in cli_args.feedback_server_url:
+                feedback_server_process = start_feedback_server(cli_args.feedback_server_url.split(":")[-1])
+        train(cli_args)
+    except Exception as e:
+        logging.exception(e)
+    finally:
+        if cli_args.feedback_server_autostart:
+            stop_feedback_server(feedback_server_process)
