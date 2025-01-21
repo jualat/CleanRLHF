@@ -250,9 +250,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
     )
-    assert isinstance(
-        envs.single_action_space, gym.spaces.Box
-    ), "only continuous action space is supported"
+    assert isinstance(envs.single_action_space, gym.spaces.Box), (
+        "only continuous action space is supported"
+    )
 
     actor = Actor(
         env=envs,
@@ -397,7 +397,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             real_next_obs = next_obs.copy()
 
             if is_mujoco_env(envs.envs[0]):
-
                 try:
                     skipped_qpos = envs.envs[0].unwrapped.observation_structure[
                         "skipped_qpos"
@@ -635,7 +634,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
-
                 try:
                     skipped_qpos = envs.envs[0].unwrapped.observation_structure[
                         "skipped_qpos"

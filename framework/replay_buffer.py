@@ -280,9 +280,9 @@ class ReplayBuffer(SB3ReplayBuffer):
                 f"Buffer Index {idx}: Old Reward = {old_rewards[i]}, New Reward = {new_rewards[i]}"
             )
 
-        assert not np.allclose(
-            old_rewards, new_rewards
-        ), "No change in rewards after relabeling!"
+        assert not np.allclose(old_rewards, new_rewards), (
+            "No change in rewards after relabeling!"
+        )
 
     def temporal_data_augmentation(
         self, traj: Trajectory, H_max=55, H_min=45, env: Optional[VecNormalize] = None

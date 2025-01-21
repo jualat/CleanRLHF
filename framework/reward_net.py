@@ -450,7 +450,6 @@ def train_reward(
     :return:
     """
     for epoch in range(epochs):
-
         # ==== 1) TRAINING STEP ====
         train_prefs = train_pref_buffer.sample(
             sample_strategy=batch_sample_strategy,
@@ -524,8 +523,8 @@ def train_reward(
                 if surf:
                     logging.info(
                         f"Reward epoch {epoch}, "
-                        f"Train Loss {train_loss_dict['train_total_loss'] :.4f}, "
-                        f"Val Loss {val_loss_dict['val_total_loss'] :.4f}, "
+                        f"Train Loss {train_loss_dict['train_total_loss']:.4f}, "
+                        f"Val Loss {val_loss_dict['val_total_loss']:.4f}, "
                         f"Train Supervised Loss {train_loss_dict['train_supervised_loss']:.4f}, "
                         f"Val Supervised Loss {val_loss_dict['val_supervised_loss']:.4f}, "
                         f"Train Unsupervised Loss {train_loss_dict['train_unsupervised_loss']:.4f}, "
@@ -534,8 +533,8 @@ def train_reward(
                 else:
                     logging.info(
                         f"Reward epoch {epoch}, "
-                        f"Train Loss {train_loss_dict['train_total_loss'] :.4f}, "
-                        f"Val Loss {val_loss_dict['val_total_loss'] :.4f}"
+                        f"Train Loss {train_loss_dict['train_total_loss']:.4f}, "
+                        f"Val Loss {val_loss_dict['val_total_loss']:.4f}"
                     )
             else:
                 if surf:

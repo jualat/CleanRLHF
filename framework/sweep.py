@@ -52,7 +52,7 @@ def wrapped_train():
                 field.name: config[field.name]
                 for field in fields(Args)
                 if field.name in config
-            }
+            },
         )
 
         train(cmd_args)
