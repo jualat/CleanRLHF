@@ -138,7 +138,7 @@ class Args:
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
-    pref_buffer_size_sessions: int = 50
+    pref_buffer_size_sessions: int = 7
     """the number of sessions to store in the preference buffer"""
 
     # Simulated Teacher
