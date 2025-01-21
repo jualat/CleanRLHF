@@ -112,3 +112,12 @@ def is_mujoco_env(env) -> bool:
     """
     # Try to check the internal `mujoco` attribute
     return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")
+
+
+def is_pusher_v5(env_id: str) -> bool:
+    """
+    Check if the environment is the Pusher-v5 environment
+    :param env_id: The environment id
+    :return:
+    """
+    return env_id == "Pusher-v5"

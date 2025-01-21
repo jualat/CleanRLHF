@@ -13,7 +13,7 @@ import torch
 import tyro
 import wandb
 from actor import Actor
-from env import load_model_all
+from env import is_pusher_v5, load_model_all
 from plotnine import aes, geom_line, geom_point, ggplot, labs
 from scipy.stats import norm
 from tqdm import trange
@@ -61,6 +61,13 @@ class Evaluation:
         self.seed = seed
         self.run_name = run_name
         self.env_id = env_id
+        self.DEFAULT_CAMERA_CONFIG_PUSHER = {
+            "trackbodyid": -1,
+            # "distance": 4.0,
+            "distance": 3.0,
+            "azimuth": 135.0,
+            "elevation": -22.5,
+        }
         env = gym.make(self.env_id)
         if path_to_model:
             self.actor = Actor(
@@ -204,7 +211,14 @@ class Evaluation:
         :return:
         """
         if render:
-            env = gym.make(self.env_id, render_mode="rgb_array")
+            if is_pusher_v5(self.env_id):
+                env = gym.make(
+                    self.env_id,
+                    default_camera_config=self.DEFAULT_CAMERA_CONFIG_PUSHER,
+                    render_mode="rgb_array",
+                )
+            else:
+                env = gym.make(self.env_id, render_mode="rgb_array")
         else:
             env = gym.make(self.env_id)
         env.action_space.seed(self.seed)
