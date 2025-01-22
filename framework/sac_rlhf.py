@@ -65,7 +65,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "dm_control/dog-run-v0"
+    env_id: str = "Hopper-v5"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -224,13 +224,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
-        level=args.log_level.upper(),
     )
+    logging.getLogger().setLevel(args.log_level)
+
     if args.log_file:
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
+        file_path = os.path.join("runs", run_name, "log.log")
         logging.getLogger().addHandler(
-            logging.FileHandler(filename=f"runs/{run_name}/logger.log")
+            logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
+
     if args.track:
         import wandb
 
