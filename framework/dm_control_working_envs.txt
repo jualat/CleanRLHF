@@ -27,8 +27,6 @@
  'dm_control/humanoid_CMU-stand-v0',
  'dm_control/humanoid_CMU-walk-v0',
  'dm_control/humanoid_CMU-run-v0',
- 'dm_control/lqr-lqr_2_1-v0',
- 'dm_control/lqr-lqr_6_2-v0',
  'dm_control/manipulator-bring_ball-v0',
  'dm_control/manipulator-bring_peg-v0',
  'dm_control/manipulator-insert_ball-v0',
@@ -76,3 +74,8 @@ Should work, but I don't have enough memory to run them:
  'dm_control/RodentTwoTouch-v0']
 
  numpy._core._exceptions._ArrayMemoryError: Unable to allocate 46.4 GiB for an array with shape (1000000, 1, 12456) and data type float32
+
+Does not work:
+ 'dm_control/lqr-lqr_2_1-v0',
+ 'dm_control/lqr-lqr_6_2-v0',
+ dm_control.rl.control.PhysicsError: Physics state is invalid. Warning(s) raised: mjWARN_BADQACC

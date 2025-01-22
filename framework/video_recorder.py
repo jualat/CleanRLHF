@@ -43,9 +43,7 @@ class VideoRecorder:
 
         env = make_single_env(env_id=self.env_id, render="rgb_array")
         if self.dm_control:
-            env = FlattenVectorObservationWrapper(
-                env
-            )  # still testing if I can remove this
+            env = FlattenVectorObservationWrapper(env)
 
         try:
             self._initialize_env_state(env, trajectory)

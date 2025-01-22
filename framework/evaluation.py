@@ -213,8 +213,8 @@ class Evaluation:
         else:
             env = make_single_env(self.env_id)
         env.action_space.seed(self.seed)
-        # if self.dm_control:
-        #   env = FlattenVectorObservationWrapper(env)
+        if self.dm_control:
+            env = FlattenVectorObservationWrapper(env)
         return env
 
 
