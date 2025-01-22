@@ -128,7 +128,7 @@ def make_env(env_id, seed, render=None):
     :param render: Set rendering mode
     :return:
     """
-    if render == "human":
+    if render == "":
         render = None
 
     def thunk():
