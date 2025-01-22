@@ -16,6 +16,7 @@ from actor import Actor, select_actions, update_actor, update_target_networks
 from critic import SoftQNetwork, train_q_network
 from env import (
     FlattenVectorObservationWrapper,
+    is_dm_control,
     is_mujoco_env,
     load_model_all,
     load_replay_buffer,
@@ -53,6 +54,8 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
+    render_mode: str = ""
+    """set render_mode to 'human' to watch training"""
     num_envs: int = 1
     """the number of parallel environments to accelerate training.
     Set this to the number of available CPU threads for best performance."""
@@ -62,7 +65,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "dm_control/acrobot-swingup_sparse-v0"
+    env_id: str = "dm_control/dog-run-v0"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -96,7 +99,7 @@ class Args:
     """the number of evaluation episodes"""
 
     ## Early Stop
-    early_stopping: bool = True
+    early_stopping: bool = False
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
@@ -252,13 +255,17 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
+        [
+            make_env(args.env_id, args.seed, args.render_mode)
+            for i in range(args.num_envs)
+        ]
     )
-    envs = FlattenVectorObservationWrapper(envs)
     assert isinstance(envs.single_action_space, gym.spaces.Box), (
         "only continuous action space is supported"
     )
-
+    dm_control_bool = is_dm_control(env_id=args.env_id)
+    if dm_control_bool:
+        envs = FlattenVectorObservationWrapper(envs)
     actor = Actor(
         env=envs,
         hidden_dim=args.actor_and_q_net_hidden_dim,
@@ -362,7 +369,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id)
+    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -760,7 +767,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                render = global_step % 100000 == 0  # and global_step != 0
+                render = global_step % 100000 == 0 and global_step != 0
                 track = global_step % 100000 == 0 and global_step != 0 and args.track
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,

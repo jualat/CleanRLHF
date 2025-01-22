@@ -13,7 +13,7 @@ import torch
 import tyro
 import wandb
 from actor import Actor
-from env import FlattenVectorObservationWrapper, load_model_all
+from env import FlattenVectorObservationWrapper, load_model_all, make_single_env
 from plotnine import aes, geom_line, geom_point, ggplot, labs
 from scipy.stats import norm
 from tqdm import trange
@@ -43,6 +43,8 @@ class Args:
     """the dimension of the hidden layers in the actor network"""
     actor_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
+    dm_control_bool: bool = True
+    """toggle if env is dm_control"""
 
 
 class Evaluation:
@@ -56,16 +58,18 @@ class Evaluation:
         run_name=None,
         hidden_dim=256,
         hidden_layers=4,
+        dm_control_bool=False,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.seed = seed
         self.run_name = run_name
         self.env_id = env_id
-        env = gym.make(self.env_id)
+        env = make_single_env(env_id)
+        env = gym.vector.SyncVectorEnv([lambda: env])
+        if dm_control_bool:
+            env = FlattenVectorObservationWrapper(env)
         if path_to_model:
-            self.actor = Actor(
-                gym.vector.SyncVectorEnv([lambda: env]), hidden_dim, hidden_layers
-            )
+            self.actor = Actor(env, hidden_dim, hidden_layers)
             state_dict = {"actor": self.actor}
             load_model_all(state_dict, path_to_model, self.device)
         else:
@@ -76,6 +80,7 @@ class Evaluation:
             np.random.seed(seed)
             torch.manual_seed(seed)
         torch.backends.cudnn.deterministic = torch_deterministic
+        self.dm_control = dm_control_bool
 
     def evaluate_policy(
         self,
@@ -204,11 +209,12 @@ class Evaluation:
         :return:
         """
         if render:
-            env = gym.make(self.env_id, render_mode="rgb_array")
+            env = make_single_env(self.env_id, render="rgb_array")
         else:
-            env = gym.make(self.env_id)
+            env = make_single_env(self.env_id)
         env.action_space.seed(self.seed)
-        env = FlattenVectorObservationWrapper(env)
+        # if self.dm_control:
+        #   env = FlattenVectorObservationWrapper(env)
         return env
 
 
@@ -223,6 +229,7 @@ if __name__ == "__main__":
         run_name=args.run_name,
         hidden_layers=args.actor_net_hidden_layers,
         hidden_dim=args.actor_net_hidden_dim,
+        dm_control_bool=args.dm_control_bool,
     )
 
     eval_dict = evaluation.evaluate_policy(

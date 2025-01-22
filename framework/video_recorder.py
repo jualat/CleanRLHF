@@ -1,10 +1,9 @@
 import logging
 import os
 
-import gymnasium as gym
 import numpy as np
 import torch
-from env import FlattenVectorObservationWrapper, is_mujoco_env
+from env import FlattenVectorObservationWrapper, is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
 
@@ -24,10 +23,12 @@ class VideoRecorder:
         rb: ReplayBuffer,
         seed: int,
         env_id: str,
+        dm_control: bool,
     ):
         self.rb = rb
         self.seed = seed
         self.env_id = env_id
+        self.dm_control = dm_control
 
     def record_trajectory(self, trajectory: Trajectory, run_name: str, fps=30):
         start_idx = trajectory.replay_buffer_start_idx
@@ -40,8 +41,11 @@ class VideoRecorder:
         os.makedirs(video_folder, exist_ok=True)
         out_path = f"{video_folder}/"
 
-        env = gym.make(self.env_id, render_mode="rgb_array")
-        env = FlattenVectorObservationWrapper(env)
+        env = make_single_env(env_id=self.env_id, render="rgb_array")
+        if self.dm_control:
+            env = FlattenVectorObservationWrapper(
+                env
+            )  # still testing if I can remove this
 
         try:
             self._initialize_env_state(env, trajectory)
