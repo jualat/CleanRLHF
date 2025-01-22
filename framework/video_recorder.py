@@ -4,7 +4,7 @@ import os
 import gymnasium as gym
 import numpy as np
 import torch
-from env import is_mujoco_env
+from env import FlattenVectorObservationWrapper, is_mujoco_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
 
@@ -41,6 +41,7 @@ class VideoRecorder:
         out_path = f"{video_folder}/"
 
         env = gym.make(self.env_id, render_mode="rgb_array")
+        env = FlattenVectorObservationWrapper(env)
 
         try:
             self._initialize_env_state(env, trajectory)

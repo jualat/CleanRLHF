@@ -8,12 +8,14 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+import shimmy
 import torch
 import torch.optim as optim
 import tyro
 from actor import Actor, select_actions, update_actor, update_target_networks
 from critic import SoftQNetwork, train_q_network
 from env import (
+    FlattenVectorObservationWrapper,
     is_mujoco_env,
     load_model_all,
     load_replay_buffer,
@@ -60,7 +62,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "Hopper-v5"
+    env_id: str = "dm_control/acrobot-swingup_sparse-v0"
     """the environment id of the task"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -238,7 +240,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-
+    shimmy.dm_control_compatibility
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -252,6 +254,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
     )
+    envs = FlattenVectorObservationWrapper(envs)
     assert isinstance(envs.single_action_space, gym.spaces.Box), (
         "only continuous action space is supported"
     )
@@ -321,8 +324,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 dtype=np.float32,
             )
     else:
-        qpos = np.zeros((2, 2))
-        qvel = np.zeros((2, 2))
+        qpos = np.zeros((1, 2))
+        qvel = np.zeros((1, 2))
 
     rb = ReplayBuffer(
         args.buffer_size,
@@ -757,7 +760,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                render = global_step % 100000 == 0 and global_step != 0
+                render = global_step % 100000 == 0  # and global_step != 0
                 track = global_step % 100000 == 0 and global_step != 0 and args.track
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,

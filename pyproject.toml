@@ -28,6 +28,8 @@ imageio-ffmpeg = "^0.5"
 stable-baselines3 = {version = "^2.5.0a1", allow-prereleases = true}
 tqdm = "^4.67"
 moviepy = "^2.1"
+shimmy = {extras = ["dm-control"], version = "^2.0.0"}
+gym = "^0.26.2"
 
 [build-system]
 requires = ["poetry-core"]

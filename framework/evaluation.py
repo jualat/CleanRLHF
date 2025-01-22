@@ -13,7 +13,7 @@ import torch
 import tyro
 import wandb
 from actor import Actor
-from env import load_model_all
+from env import FlattenVectorObservationWrapper, load_model_all
 from plotnine import aes, geom_line, geom_point, ggplot, labs
 from scipy.stats import norm
 from tqdm import trange
@@ -208,6 +208,7 @@ class Evaluation:
         else:
             env = gym.make(self.env_id)
         env.action_space.seed(self.seed)
+        env = FlattenVectorObservationWrapper(env)
         return env
 
 
