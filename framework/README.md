@@ -18,19 +18,19 @@ A framework for Reinforcement Learning from Human Feedback.
     * [Hyperparameter Tuning](#hyperparameter-tuning)
 
 
-## Introduction 👋
+## 👋 Introduction
 
 This framework implements RLHF and is oriented towards [PEBBLE](https://arxiv.org/abs/2106.05091). It is based on [SAC](https://arxiv.org/abs/1801.01290), an off-policy actor-critic algorithm for deep RL.
 
 There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to implementing these two papers, several features have been added. They are aimed at improving the performance as well as the user experience of our program and are documented [below](#features).
 
 
-## Performance 🚀
+## 🚀 Performance
 (WIP)
 <!--TODO-->
 
 
-## Getting Started 💡
+## 💡 Getting Started
 
 ### Prerequisites
 
@@ -60,20 +60,20 @@ poetry install
 ```
 
 
-## Usage 🎯
+## 🎯 Usage
 
 ### Basic Code Execution
 
-To run the code, execute the following command from the `framework` directory, replacing Hopper-v4 with the desired environment ID (from either [Mujoco](https://gymnasium.farama.org/environments/mujoco/) or [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)):
+To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (from either [Mujoco](https://gymnasium.farama.org/environments/mujoco/) or [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)):
 
 ```sh
-python3 sac_rlhf.py --env-id Hopper-v4
+python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
 Use the xvfb-run command to execute the script in a headless Linux environment:
 
 ```sh
-xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v4 --capture-video
+xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
 ```
 
 Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `../[ENV_ID].sh` with the hyperparameters that we found best for a specific environment.
@@ -87,11 +87,15 @@ python3 sac_rlhf.py -h
 
 #### SURF
 
-Collecting human feedback on a scale is pretty costly. [SURF](https://arxiv.org/abs/2203.10050) uses data augmentation to extract the highest possible amount of information from human labels.
+Collecting human feedback on a scale is pretty costly. An idea proposed in [SURF](https://arxiv.org/abs/2203.10050) is to use data augmentation to extract the highest possible amount of information from human labels.
 
 SURF is enabled by default and can be disabled with the `--no-surf` flag. 
 
 #### RUNE
+
+The exploration/exploitation trade-off is a problem central to RL. [RUNE](https://arxiv.org/abs/2205.12401) presents an intrinsic reward to encourage exploration.
+
+RUNE is disabled by default and can be enabled with the `--rune` flag.
 
 #### Video Recording
 
@@ -99,10 +103,19 @@ Use the `--capture-video` flag to record a video of the agent's performance as w
 the selected trajectories for human preference:
 
 ```sh
-python3 sac_rlhf.py --env-id Hopper-v4 --capture-video
+python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
 ```
 
 #### Model Saving/Loading
+
+Once you have done unsupervised pre-exploration, the replay buffer and the model are automatically saved in `./models/[RUN]/[EXPLORATION_STEPS]/`.
+To save time, instead of exploring the same environment every time, you can now load both results, e.g.:
+
+```sh
+python3 sac_rlhf.py --exploration-load --path-to-replay-buffer=models/myrun/10000/replay_buffer.pth --path-to-model=models/myrun/10000/checkpoint.pth
+```
+
+Note that the states of both objects are also saved at the end of a run or on KeyBoardInterrupt.
 
 #### Tracking
 
@@ -139,7 +152,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 2. Run the sweep with W&B:
 
    ```bash
-   python sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
+   python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
    ```
    `--sweep-count`:  Number of runs to launch in this session.
    `--project-name`: The name of your W&B project.
@@ -149,7 +162,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 3. Run the Sweep with Sweep ID
 
     ```bash
-   python sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
+   python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
    ```
 
     `--sweep_id`:  You can find this ID on the W&B dashboard.
