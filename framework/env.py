@@ -107,12 +107,16 @@ def make_single_env(env_id, render=None, camera_settings=None):
         name = env_id.split("/")[1]
         domain = name.split("-")[0]
         task = name.split("-")[1]
-        if render is not None and render != "human":
-            render = "multi_camera"
-        env = suite.load(domain_name=domain, task_name=task)
-        env = shimmy.dm_control_compatibility.DmControlCompatibilityV0(
-            env, render_mode=render
-        )
+        if task != "v0":
+            if render is not None and render != "human":
+                render = "multi_camera"
+            env = suite.load(domain_name=domain, task_name=task)
+            env = shimmy.dm_control_compatibility.DmControlCompatibilityV0(
+                env, render_mode=render
+            )
+        else:
+            env = gym.make(env_id, render_mode=render)
+
     else:
         env = gym.make(
             env_id, render_mode=render, default_camera_config=camera_settings
