@@ -2,18 +2,18 @@
 
 A framework for Reinforcement Learning from Human Feedback. 
 
-* [Introduction](#introduction)
-* [Performance](#performance)
-* [Getting Started](#getting-started)
+* [Introduction](#introduction-)
+* [Performance](#performance-)
+* [Getting Started](#getting-started-)
   * [Prerequisites](#prerequisites)
   * [Installing the Dependencies](#installing-the-dependencies)
-* [Usage](#usage)
+* [Usage](#usage-)
   * [Basic Code Execution](#basic-code-execution)
   * [Features](#features)
     * [Surf](#surf)
     * [Rune](#rune)
     * [Video Recording](#video-recording)
-    * [Model Saving/Loading](#model-saving\/loading)
+    * [Model Saving/Loading](#model-savingloading)
     * [Tracking](#tracking)
     * [Hyperparameter Tuning](#hyperparameter-tuning)
 
