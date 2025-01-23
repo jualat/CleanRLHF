@@ -1,6 +1,7 @@
 import logging
 import os
 
+import glfw
 import numpy as np
 import torch
 from env import FlattenVectorObservationWrapper, is_mujoco_env, make_single_env
@@ -61,6 +62,7 @@ class VideoRecorder:
             )
         finally:
             env.close()
+            glfw.terminate()
 
     def _initialize_env_state(self, env, trajectory):
         """Initialize the environment state based on Mujoco or non-Mujoco trajectories."""

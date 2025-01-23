@@ -30,6 +30,7 @@ tqdm = "^4.67"
 moviepy = "^2.1"
 shimmy = {extras = ["dm-control"], version = "^2.0.0"}
 gym = "^0.26.2"
+glfw = "^2.8.0"
 
 [build-system]
 requires = ["poetry-core"]
