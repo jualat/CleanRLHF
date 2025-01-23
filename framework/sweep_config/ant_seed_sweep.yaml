@@ -59,7 +59,7 @@ parameters:
   evaluation_episodes:
     values: [10]
 
-  early_stop:
+  early_stopping:
     values: [false]
   early_stopping_step:
     values: [500000]
