@@ -138,6 +138,8 @@ class Args:
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
+    pref_buffer_size_sessions: int = 7
+    """the number of sessions to store in the preference buffer"""
 
     # Simulated Teacher
     trajectory_length: int = 64
@@ -342,7 +344,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    train_pref_buffer_size = args.teacher_feedback_num_queries_per_session
+    train_pref_buffer_size = (
+        args.teacher_feedback_num_queries_per_session * args.pref_buffer_size_sessions
+    )
     train_pref_buffer = PreferenceBuffer(
         buffer_size=train_pref_buffer_size, seed=args.seed
     )
@@ -524,7 +528,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         teacher_session_steps = teacher_feedback_schedule(
             num_sessions=teacher_num_sessions,
             total_steps=total_steps,
-            schedule="exponential",
+            schedule=args.teacher_feedback_schedule,
             lambda_=teacher_exponential_lambda,
         )
 
@@ -612,8 +616,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     H_min=surf_H_min,
                 )
                 rb.relabel_rewards(reward_net)
-                train_pref_buffer.reset()
-                val_pref_buffer.reset()
                 logging.info("Rewards relabeled")
 
             ### AGENT LEARNING ###

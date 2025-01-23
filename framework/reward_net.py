@@ -522,7 +522,7 @@ def train_reward(
                     val_loss_dict["val_supervised_loss"] += val_loss_dict_model[
                         "val_supervised_loss"
                     ]
-                    val_loss_dict["val_unsupervised_loss"] = val_loss_dict_model[
+                    val_loss_dict["val_unsupervised_loss"] += val_loss_dict_model[
                         "val_unsupervised_loss"
                     ]
 
