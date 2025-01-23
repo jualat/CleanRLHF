@@ -73,7 +73,7 @@ python3 sac_rlhf.py --env-id Hopper-v5
 Use the xvfb-run command to execute the script in a headless Linux environment:
 
 ```sh
-xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
+xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
 Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `../[ENV_ID].sh` with the hyperparameters that we found best for a specific environment.
