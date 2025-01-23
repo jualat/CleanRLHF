@@ -219,13 +219,15 @@ def train(args: Any):
 poetry run pip install "stable_baselines3==2.0.0a1"
 """
         )
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
 
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
+        level=args.log_level.upper(),
     )
-    logging.getLogger().setLevel(args.log_level)
 
     if args.log_file:
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
