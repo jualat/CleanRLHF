@@ -55,7 +55,7 @@ class Args:
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     render_mode: str = ""
-    """set render_mode to 'human' to watch training"""
+    """set render_mode to 'human' to watch training (it is not possible to render human and capture videos with the flag '--capture-video')"""
     num_envs: int = 1
     """the number of parallel environments to accelerate training.
     Set this to the number of available CPU threads for best performance."""
@@ -219,13 +219,15 @@ def train(args: Any):
 poetry run pip install "stable_baselines3==2.0.0a1"
 """
         )
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
 
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
+        level=args.log_level.upper(),
     )
-    logging.getLogger().setLevel(args.log_level)
 
     if args.log_file:
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
@@ -588,7 +590,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                     # Create video of the two trajectories. For now, we only render if capture_video is True.
                     # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                    if args.capture_video:
+                    if args.capture_video and args.render_mode != "human":
                         video_recorder.record_trajectory(first_trajectory, run_name)
                         video_recorder.record_trajectory(second_trajectory, run_name)
 
@@ -772,8 +774,17 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                render = global_step % 100000 == 0 and global_step != 0
-                track = global_step % 100000 == 0 and global_step != 0 and args.track
+                render = (
+                    global_step % 100000 == 0
+                    and global_step != 0
+                    and args.render_mode != "human"
+                )
+                track = (
+                    global_step % 100000 == 0
+                    and global_step != 0
+                    and args.track
+                    and args.render_mode != "human"
+                )
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,
                     step=global_step,

@@ -2,6 +2,7 @@ import os
 import random
 from dataclasses import dataclass
 
+import glfw
 import gymnasium as gym
 import imageio
 import matplotlib
@@ -81,6 +82,7 @@ class Evaluation:
             torch.manual_seed(seed)
         torch.backends.cudnn.deterministic = torch_deterministic
         self.dm_control = dm_control_bool
+        env.close()
 
     def evaluate_policy(
         self,
@@ -145,7 +147,10 @@ class Evaluation:
                 imageio.mimsave(uri=out_path, ims=images, fps=fps)
                 video_paths.append(reward_path)
             episode_rewards.append(total_episode_reward)
-        env.close()
+        if env is not None:
+            env.close()
+        if render:
+            glfw.terminate()
         mean_episode_reward = np.mean(episode_rewards)
         std_episode_reward = np.std(episode_rewards)
         alpha = 1 - confidence
@@ -161,8 +166,8 @@ class Evaluation:
             worst_video_path = os.path.join(video_folder, worst_video)
             wandb.log(
                 {
-                    "Best Video": wandb.Video(best_video_path, fps=fps, format="mp4"),
-                    "Worst Video": wandb.Video(worst_video_path, fps=fps, format="mp4"),
+                    "Best Video": wandb.Video(best_video_path, format="mp4"),
+                    "Worst Video": wandb.Video(worst_video_path, format="mp4"),
                 }
             )
 
