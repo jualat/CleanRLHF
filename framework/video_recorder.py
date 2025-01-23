@@ -2,7 +2,6 @@ import logging
 import os
 
 import glfw
-import numpy as np
 import torch
 from env import FlattenVectorObservationWrapper, is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
@@ -81,15 +80,8 @@ class VideoRecorder:
                 if isinstance(qvel_list[0], torch.Tensor)
                 else qvel_list[0]
             )
-            # Append zeros to qpos for skipped qpos values
-            try:
-                skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
-            except (KeyError, AttributeError):
-                skipped_qpos = 0
 
-            qpos_extended = np.append(qpos, [0] * skipped_qpos)
-
-            env.unwrapped.set_state(qpos_extended, qvel)
+            env.unwrapped.set_state(qpos, qvel)
         else:
             env.reset(seed=self.seed)
             if hasattr(env, "state"):
@@ -112,14 +104,8 @@ class VideoRecorder:
                     if isinstance(qvel_list[i], torch.Tensor)
                     else qvel_list[i]
                 )
-                # Append zeros to qpos for skipped qpos values
-                try:
-                    skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-                qpos_extended = np.append(qpos, [0] * skipped_qpos)
 
-                env.unwrapped.set_state(qpos_extended, qvel)
+                env.unwrapped.set_state(qpos, qvel)
                 frames.append(env.render())
         else:
             actions = trajectory.samples.actions
