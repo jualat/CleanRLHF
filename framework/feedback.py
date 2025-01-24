@@ -13,7 +13,6 @@ def collect_feedback(
         mode,
         feedback_server_url,
         replay_buffer,
-        pref_buffer,
         run_name,
         preference_sampling,
         teacher_feedback_num_queries_per_session,
@@ -141,42 +140,6 @@ def collect_feedback(
                     first_trajectory, second_trajectory, preference
                 )
 
-        # todo rm
-        # for i in trange(
-        #         teacher_feedback_num_queries_per_session,
-        #         desc="Queries",
-        #         unit="queries",
-        # ):
-        #     # Sample trajectories from replay buffer to query teacher
-        #     if preference_sampling == "disagree":
-        #         first_trajectory, second_trajectory = disagreement_sampling(
-        #             replay_buffer, reward_net, trajectory_length
-        #         )
-        #     elif preference_sampling == "entropy":
-        #         first_trajectory, second_trajectory = entropy_sampling(
-        #             replay_buffer, reward_net, trajectory_length
-        #         )
-        #     else:
-        #         first_trajectory, second_trajectory = uniform_sampling(
-        #             replay_buffer, trajectory_length
-        #         )
-        #     if capture_video:
-        #         video_recorder.record_trajectory(first_trajectory, run_name)
-        #         video_recorder.record_trajectory(second_trajectory, run_name)
-        #
-        # for _ in range(teacher_feedback_num_queries_per_session):
-        #
-        #     # Sample trajectories (modify to use your preferred sampling strategy)
-        #     first_trajectory, second_trajectory = uniform_sampling(
-        #         replay_buffer, trajectory_length
-        #     )
-        #     # Query simulated teacher
-        #     preference = sim_teacher.give_preference(
-        #         first_trajectory, second_trajectory
-        #     )
-        #     if preference is not None:
-        #         pref_buffer.add(first_trajectory, second_trajectory, preference)
-
     elif mode == "human":
         logging.info("Collecting human feedback")
         human_feedback_preparation(
@@ -211,10 +174,18 @@ def collect_feedback(
                                 preference = feedback["preference"]
                                 if preference == "-1": preference = None
 
-                                if not pref_buffer.contains(first_trajectory, second_trajectory, preference):
-                                    pref_buffer.add(first_trajectory, second_trajectory, preference)
-                                    logging.info(
-                                        f"Adding to pref_buffer: {first_trajectory, second_trajectory, preference}")
+                                if not val_pref_buffer.contains(first_trajectory, second_trajectory, preference) | train_pref_buffer.contains(first_trajectory, second_trajectory, preference):
+                                    # Store preferences
+                                    if np.random.rand() < (
+                                            1 - reward_net_val_split
+                                    ):  # 1 - (Val Split)% for training
+                                        train_pref_buffer.add(
+                                            first_trajectory, second_trajectory, preference
+                                        )
+                                    else:  # (Val Split)% for validation
+                                        val_pref_buffer.add(
+                                            first_trajectory, second_trajectory, preference
+                                        )
                                     collected_feedback += 1
                                     pbar.update(1)
                     else:
@@ -234,13 +205,13 @@ def collect_feedback(
             first_trajectory = feedback["trajectory_1"]
             second_trajectory = feedback["trajectory_2"]
             preference = feedback["preference"]
-            pref_buffer.add(first_trajectory, second_trajectory, preference)
+            val_pref_buffer.add(first_trajectory, second_trajectory, preference)
 
     else:
         raise ValueError(f"Unknown feedback mode: {mode}")
 
     logging.info(f"Collected feedback with mode: {mode}")
-    return pref_buffer
+    return train_pref_buffer, val_pref_buffer
 
 
 def human_feedback_preparation(

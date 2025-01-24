@@ -134,7 +134,7 @@ class Args:
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"
     """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
-    teacher_feedback_total_queries: int = 1400
+    teacher_feedback_total_queries: int = 500
     """the total number of queries the teacher will provide"""
     teacher_feedback_num_queries_per_session: int = 20
     """the number of queries per feedback session"""
@@ -567,17 +567,16 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     or args.exploration_load
                     or args.unsupervised_exploration
             ):
-                train_pref_buffer = collect_feedback(
+                train_pref_buffer, val_pref_buffer = collect_feedback(
                     mode=args.teacher_feedback_mode,
                     feedback_server_url=args.feedback_server_url,
-                    pref_buffer=train_pref_buffer,
                     run_name=run_name,
                     preference_sampling=args.preference_sampling,
                     replay_buffer=rb,
                     trajectory_length=args.trajectory_length,
                     reward_net=reward_net,
-                    val_pref_buffer=val_pref_buffer,
                     train_pref_buffer=train_pref_buffer,
+                    val_pref_buffer=val_pref_buffer,
                     reward_net_val_split=args.reward_net_val_split,
                     teacher_feedback_num_queries_per_session=args.teacher_feedback_num_queries_per_session,
                     capture_video=args.capture_video,
@@ -586,7 +585,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 next_session_idx += 1
-
+                logging.info(f"next_session_idx {next_session_idx}")
                 train_reward(
                     model=reward_net,
                     optimizer=reward_optimizer,

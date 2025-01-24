@@ -206,8 +206,11 @@ def get_feedback(run_name):
     """
     with lock:
         if run_name in feedback_buffers:
-            buffer_copy = feedback_buffers[run_name][:]
-            return jsonify(buffer_copy), 200
+            try:
+                buffer_copy = feedback_buffers[run_name][:]
+                return jsonify(buffer_copy), 200
+            finally:
+                feedback_buffers[run_name].clear()
         else:
             return (
                 jsonify(
@@ -218,6 +221,7 @@ def get_feedback(run_name):
                 ),
                 404,
             )
+
 
 @app.route('/favicon.ico')
 def favicon():

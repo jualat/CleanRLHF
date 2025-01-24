@@ -478,6 +478,12 @@ def train_reward(
         )
 
         # ==== 2) VALIDATION STEP ====
+        val_loss_dict = {
+            "val_total_loss": 0.0,
+            "val_supervised_loss": 0.0,
+            "val_unsupervised_loss": 0.0,
+        }
+
         if val_pref_buffer is not None and val_pref_buffer.size > 0:
             # no need to compute gradients
             with torch.no_grad():
