@@ -28,7 +28,6 @@ from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
-from sampling import sample_trajectories
 from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
@@ -404,7 +403,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         current_step += 1
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in trange(
-                args.total_explore_steps, desc="Exploration step", unit="steps"
+            args.total_explore_steps, desc="Exploration step", unit="steps"
         ):
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
@@ -463,10 +462,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 if (
-                        explore_step % args.policy_frequency == 0
+                    explore_step % args.policy_frequency == 0
                 ):  # TD 3 Delayed update support
                     for _ in range(
-                            args.policy_frequency
+                        args.policy_frequency
                     ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                         actor_loss, alpha, alpha_loss = update_actor(
                             data,
@@ -534,7 +533,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         teacher_total_queries = args.teacher_feedback_total_queries
         teacher_num_sessions = (
-                teacher_total_queries // args.teacher_feedback_num_queries_per_session
+            teacher_total_queries // args.teacher_feedback_num_queries_per_session
         )
         teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
         teacher_session_steps = teacher_feedback_schedule(
@@ -560,9 +559,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
             if global_step >= teacher_session_steps[next_session_idx] and (
-                    global_step != 0
-                    or args.exploration_load
-                    or args.unsupervised_exploration
+                global_step != 0
+                or args.exploration_load
+                or args.unsupervised_exploration
             ):
                 train_pref_buffer, val_pref_buffer = collect_feedback(
                     mode=args.teacher_feedback_mode,
@@ -647,13 +646,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env_info[key] = value[env_idx]
 
             rb.add(
-                obs[env_idx: env_idx + 1],
-                real_next_obs[env_idx: env_idx + 1],
-                actions[env_idx: env_idx + 1],
-                rewards[env_idx: env_idx + 1].squeeze(),
-                rewards_std[env_idx: env_idx + 1].squeeze(),
-                groundTruthRewards[env_idx: env_idx + 1],
-                dones[env_idx: env_idx + 1],
+                obs[env_idx : env_idx + 1],
+                real_next_obs[env_idx : env_idx + 1],
+                actions[env_idx : env_idx + 1],
+                rewards[env_idx : env_idx + 1].squeeze(),
+                rewards_std[env_idx : env_idx + 1].squeeze(),
+                groundTruthRewards[env_idx : env_idx + 1],
+                dones[env_idx : env_idx + 1],
                 single_env_info,
                 global_step,
                 qpos,
@@ -685,10 +684,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 if (
-                        global_step % args.policy_frequency == 0
+                    global_step % args.policy_frequency == 0
                 ):  # TD 3 Delayed update support
                     for _ in range(
-                            args.policy_frequency
+                        args.policy_frequency
                     ):  # compensate for the delay by doing 'actor_update_interval' instead of 1
                         actor_loss, alpha, alpha_loss = update_actor(
                             data,
@@ -725,9 +724,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         start_time,
                     )
             if global_step % args.evaluation_frequency == 0 and (
-                    global_step != 0
-                    or args.exploration_load
-                    or args.unsupervised_exploration
+                global_step != 0
+                or args.exploration_load
+                or args.unsupervised_exploration
             ):
                 render = global_step % 100000 == 0 and global_step != 0
                 track = global_step % 100000 == 0 and global_step != 0 and args.track
@@ -742,18 +741,18 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 evaluate.plot(eval_dict, global_step)
                 metrics.log_evaluate_metrics(global_step, eval_dict)
             if (
-                    global_step > args.early_stopping_step == 0
-                    and (
+                global_step > args.early_stopping_step == 0
+                and (
                     (
-                            np.mean(reward_means) > args.early_stopping_mean
-                            and args.enable_greater_or_smaller_check
+                        np.mean(reward_means) > args.early_stopping_mean
+                        and args.enable_greater_or_smaller_check
                     )
                     or (
-                            np.mean(reward_means) < args.early_stopping_mean
-                            and not args.enable_greater_or_smaller_check
+                        np.mean(reward_means) < args.early_stopping_mean
+                        and not args.enable_greater_or_smaller_check
                     )
-            )
-                    and args.early_stopping
+                )
+                and args.early_stopping
             ):
                 break
         eval_dict = evaluate.evaluate_policy(
@@ -790,8 +789,13 @@ if __name__ == "__main__":
     cli_args = tyro.cli(Args)
     try:
         if cli_args.feedback_server_autostart:
-            if "localhost" in cli_args.feedback_server_url or "127.0.0" in cli_args.feedback_server_url:
-                feedback_server_process = start_feedback_server(cli_args.feedback_server_url.split(":")[-1])
+            if (
+                "localhost" in cli_args.feedback_server_url
+                or "127.0.0" in cli_args.feedback_server_url
+            ):
+                feedback_server_process = start_feedback_server(
+                    cli_args.feedback_server_url.split(":")[-1]
+                )
         train(cli_args)
     except Exception as e:
         logging.exception(e)

@@ -4,27 +4,32 @@ import time
 
 import numpy as np
 import requests
-from sampling import disagreement_sampling, entropy_sampling, uniform_sampling, sample_trajectories
+from sampling import (
+    disagreement_sampling,
+    entropy_sampling,
+    sample_trajectories,
+    uniform_sampling,
+)
 from tqdm import tqdm, trange
 from video_recorder import retrieve_trajectory_by_video_name
 
 
 def collect_feedback(
-        mode,
-        feedback_server_url,
-        replay_buffer,
-        run_name,
-        preference_sampling,
-        teacher_feedback_num_queries_per_session,
-        trajectory_length,
-        train_pref_buffer,
-        val_pref_buffer,
-        reward_net_val_split,
-        sim_teacher=None,
-        reward_net=None,
-        feedback_file=None,
-        capture_video=True,
-        video_recorder=None,
+    mode,
+    feedback_server_url,
+    replay_buffer,
+    run_name,
+    preference_sampling,
+    teacher_feedback_num_queries_per_session,
+    trajectory_length,
+    train_pref_buffer,
+    val_pref_buffer,
+    reward_net_val_split,
+    sim_teacher=None,
+    reward_net=None,
+    feedback_file=None,
+    capture_video=True,
+    video_recorder=None,
 ):
     """
     Collect feedback based on the given mode.
@@ -86,11 +91,9 @@ def collect_feedback(
         :param teacher_feedback_num_queries_per_session:
         :param preference_sampling:
         :param run_name:
-        :param pref_buffer:
         :param replay_buffer:
         :param feedback_server_url:
             Url including port of the feedback server to use
-        :param next_session_idx:
         :param reward_net_val_split:
         :param train_pref_buffer:
 
@@ -104,9 +107,9 @@ def collect_feedback(
         logging.info("Collecting feedback from simulated teacher")
 
         for i in trange(
-                teacher_feedback_num_queries_per_session,
-                desc="Queries",
-                unit="queries",
+            teacher_feedback_num_queries_per_session,
+            desc="Queries",
+            unit="queries",
         ):
             # Sample trajectories from replay buffer to query teacher
             first_trajectory, second_trajectory = sample_trajectories(
@@ -130,15 +133,11 @@ def collect_feedback(
 
             # Store preferences
             if np.random.rand() < (
-                    1 - reward_net_val_split
+                1 - reward_net_val_split
             ):  # 1 - (Val Split)% for training
-                train_pref_buffer.add(
-                    first_trajectory, second_trajectory, preference
-                )
+                train_pref_buffer.add(first_trajectory, second_trajectory, preference)
             else:  # (Val Split)% for validation
-                val_pref_buffer.add(
-                    first_trajectory, second_trajectory, preference
-                )
+                val_pref_buffer.add(first_trajectory, second_trajectory, preference)
 
     elif mode == "human":
         logging.info("Collecting human feedback")
@@ -157,34 +156,47 @@ def collect_feedback(
             collected_feedback = 0
             while collected_feedback < teacher_feedback_num_queries_per_session:
                 with tqdm(
-                        total=teacher_feedback_num_queries_per_session,
-                        initial=collected_feedback,
-                        desc="Collecting Feedback",
-                        unit="feedback",
+                    total=teacher_feedback_num_queries_per_session,
+                    initial=collected_feedback,
+                    desc="Collecting Feedback",
+                    unit="feedback",
                 ) as pbar:
-                    response = requests.get(feedback_server_url + "/api/get_feedback/" + run_name)
+                    response = requests.get(
+                        feedback_server_url + "/api/get_feedback/" + run_name
+                    )
                     if response.status_code == 200:
                         feedback_items = response.json()
                         if feedback_items:
                             for feedback in feedback_items:
-                                first_trajectory = retrieve_trajectory_by_video_name(replay_buffer,
-                                                                                     feedback["trajectory_1"])
-                                second_trajectory = retrieve_trajectory_by_video_name(replay_buffer,
-                                                                                      feedback["trajectory_2"])
+                                first_trajectory = retrieve_trajectory_by_video_name(
+                                    replay_buffer, feedback["trajectory_1"]
+                                )
+                                second_trajectory = retrieve_trajectory_by_video_name(
+                                    replay_buffer, feedback["trajectory_2"]
+                                )
                                 preference = feedback["preference"]
-                                if preference == "-1": preference = None
+                                if preference == "-1":
+                                    preference = None
 
-                                if not val_pref_buffer.contains(first_trajectory, second_trajectory, preference) | train_pref_buffer.contains(first_trajectory, second_trajectory, preference):
+                                if not val_pref_buffer.contains(
+                                    first_trajectory, second_trajectory, preference
+                                ) | train_pref_buffer.contains(
+                                    first_trajectory, second_trajectory, preference
+                                ):
                                     # Store preferences
                                     if np.random.rand() < (
-                                            1 - reward_net_val_split
+                                        1 - reward_net_val_split
                                     ):  # 1 - (Val Split)% for training
                                         train_pref_buffer.add(
-                                            first_trajectory, second_trajectory, preference
+                                            first_trajectory,
+                                            second_trajectory,
+                                            preference,
                                         )
                                     else:  # (Val Split)% for validation
                                         val_pref_buffer.add(
-                                            first_trajectory, second_trajectory, preference
+                                            first_trajectory,
+                                            second_trajectory,
+                                            preference,
                                         )
                                     collected_feedback += 1
                                     pbar.update(1)
@@ -215,20 +227,20 @@ def collect_feedback(
 
 
 def human_feedback_preparation(
-        feedback_server_url,
-        teacher_feedback_num_queries_per_session,
-        preference_sampling,
-        replay_buffer,
-        reward_net,
-        run_name,
-        trajectory_length,
-        video_recorder,
+    feedback_server_url,
+    teacher_feedback_num_queries_per_session,
+    preference_sampling,
+    replay_buffer,
+    reward_net,
+    run_name,
+    trajectory_length,
+    video_recorder,
 ):
     sampled_trajectory_videos = []
     for i in trange(
-            teacher_feedback_num_queries_per_session,
-            desc="Feedback pairs prepared:",
-            # unit="",
+        teacher_feedback_num_queries_per_session,
+        desc="Feedback pairs prepared:",
+        # unit="",
     ):
         """
         Prepares human feedback data by sampling trajectory pairs, recording their videos,

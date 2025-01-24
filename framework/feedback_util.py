@@ -15,8 +15,9 @@ def start_feedback_server(port):
         logging.info(f"Starting feedback server on port {port}...")
     else:
         logging.error(f"Port {port} is already in use. Please choose a different port.")
-    server_process = Popen(["python3", "../humanFeedback/feedback_server.py", "--port", str(port)])
-
+    server_process = Popen(
+        ["python3", "../humanFeedback/feedback_server.py", "--port", str(port)]
+    )
     return server_process
 
 
