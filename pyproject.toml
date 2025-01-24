@@ -14,7 +14,7 @@ profile = "black"
 [tool.poetry.dependencies]
 python = "^3.10"
 gymnasium = "^1.0"
-mujoco = "^3.2"
+mujoco = "3.2"
 tensorboard = "^2.18"
 torch = "^2.5"
 tyro = "^0.9.5"

@@ -44,7 +44,7 @@ class Args:
     """the dimension of the hidden layers in the actor network"""
     actor_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
-    dm_control_bool: bool = True
+    dm_control_bool: bool = False
     """toggle if env is dm_control"""
 
 
