@@ -134,7 +134,7 @@ class Args:
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"
     """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
-    teacher_feedback_total_queries: int = 500
+    teacher_feedback_total_queries: int = 1400
     """the total number of queries the teacher will provide"""
     teacher_feedback_num_queries_per_session: int = 20
     """the number of queries per feedback session"""
@@ -150,6 +150,8 @@ class Args:
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
+    pref_buffer_size_sessions: int = 7
+    """the number of sessions to store in the preference buffer"""
 
     # Simulated Teacher
     trajectory_length: int = 64
@@ -314,7 +316,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     if is_mujoco_env(envs.envs[0]):
         try:
             qpos = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
+                (
+                    args.num_envs,
+                    envs.envs[0].unwrapped.observation_structure["qpos"]
+                    + envs.envs[0].unwrapped.observation_structure["skipped_qpos"],
+                ),
                 dtype=np.float32,
             )
             qvel = np.zeros(
@@ -350,7 +356,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
     start_time = time.time()
 
-    train_pref_buffer_size = args.teacher_feedback_num_queries_per_session
+    train_pref_buffer_size = (
+        args.teacher_feedback_num_queries_per_session * args.pref_buffer_size_sessions
+    )
     train_pref_buffer = PreferenceBuffer(
         buffer_size=train_pref_buffer_size, seed=args.seed
     )
@@ -409,20 +417,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             real_next_obs = next_obs.copy()
 
             if is_mujoco_env(envs.envs[0]):
-                try:
-                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                        "skipped_qpos"
-                    ]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = (
-                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
-                        if skipped_qpos > 0
-                        else single_env.unwrapped.data.qpos.copy()
-                    )
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
@@ -543,7 +540,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         teacher_session_steps = teacher_feedback_schedule(
             num_sessions=teacher_num_sessions,
             total_steps=total_steps,
-            schedule="exponential",
+            schedule=args.teacher_feedback_schedule,
             lambda_=teacher_exponential_lambda,
         )
 
@@ -609,8 +606,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     H_min=surf_H_min,
                 )
                 rb.relabel_rewards(reward_net)
-                train_pref_buffer.reset()
-                val_pref_buffer.reset()
                 logging.info("Rewards relabeled")
 
             ### AGENT LEARNING ###
@@ -624,20 +619,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
-                try:
-                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                        "skipped_qpos"
-                    ]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = (
-                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
-                        if skipped_qpos > 0
-                        else single_env.unwrapped.data.qpos.copy()
-                    )
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             if infos and "episode" in infos:
