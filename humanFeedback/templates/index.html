@@ -3,6 +3,31 @@
 <head>
     <title>Feedback Server</title>
     <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        video + video {
+            margin-left: 20px;
+        }
+
+        video {
+            width: 45vw;
+            height: auto;
+            max-height: 80vh;
+            margin: 0 10px;
+        }
+
+        div {
+            text-align: center;
+            margin-top: 20px;
+        }
+
         #toastContainer {
             position: fixed;
             bottom: 20px;
@@ -67,7 +92,7 @@
                     // Reload the page after a short delay after submitting feedback
                     setTimeout(() => {
                         location.reload();
-                    }, 500);
+                    }, 300);
                 } else {
                     showToast("Error submitting feedback: " + result.message);
                 }
