@@ -2,7 +2,6 @@ import os
 import random
 from dataclasses import dataclass
 
-import glfw
 import gymnasium as gym
 import imageio
 import matplotlib
@@ -122,19 +121,19 @@ class Evaluation:
             total_episode_reward = 0
             if render:
                 images = []
-                img = env.render()
+                img = env.render()[0]
                 images.append(img)
 
             while not done:
                 action, _, _ = actor.get_action(
-                    torch.Tensor(obs).to(self.device).unsqueeze(0)
+                    torch.Tensor(obs).unsqueeze(0).to(self.device)
                 )
                 obs, reward, termination, truncation, _ = env.step(
                     action.detach().cpu().numpy().squeeze(0)
                 )
                 if render:
-                    images.append(env.render())
-                total_episode_reward += reward
+                    images.append(env.render()[0])
+                total_episode_reward += reward.item()
                 done = termination or truncation
 
             if render:
@@ -149,8 +148,6 @@ class Evaluation:
             episode_rewards.append(total_episode_reward)
         if env is not None:
             env.close()
-        if render:
-            glfw.terminate()
         mean_episode_reward = np.mean(episode_rewards)
         std_episode_reward = np.std(episode_rewards)
         alpha = 1 - confidence
@@ -218,6 +215,7 @@ class Evaluation:
         else:
             env = make_single_env(self.env_id)
         env.action_space.seed(self.seed)
+        env = gym.vector.SyncVectorEnv([lambda: env])
         if self.dm_control:
             env = FlattenVectorObservationWrapper(env)
         return env
