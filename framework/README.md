@@ -10,8 +10,10 @@ A framework for Reinforcement Learning from Human Feedback.
 * [Usage](#-usage)
   * [Basic Code Execution](#basic-code-execution)
   * [Features](#features)
-    * [Surf](#surf)
-    * [Rune](#rune)
+    * [Unsupervised Exploration](#unsupervised-exploration)
+    * [Ensemble Reward Models](#ensemble-reward-models)
+    * [SURF](#surf)
+    * [RUNE](#rune)
     * [Video Recording](#video-recording)
     * [Model Saving/Loading](#model-savingloading)
     * [Tracking](#tracking)
@@ -22,7 +24,7 @@ A framework for Reinforcement Learning from Human Feedback.
 
 This framework implements RLHF and is oriented towards [PEBBLE](https://arxiv.org/abs/2106.05091). It is based on [SAC](https://arxiv.org/abs/1801.01290), an off-policy actor-critic algorithm for deep RL.
 
-There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to implementing these two papers, several features have been added. They are aimed at improving the performance as well as the user experience of our program and are documented [below](#features).
+There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discuessed](#-performance) and are [documented](#features) below.
 
 
 ## 🚀 Performance
@@ -84,6 +86,12 @@ For a full list of available command-line arguments, take a look at `sac_rlhf.py
 ```sh
 python3 sac_rlhf.py -h
 ```
+
+#### Unsupervised Exploration
+
+
+#### Ensemble Reward Models
+
 
 #### SURF
 
