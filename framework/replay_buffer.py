@@ -59,6 +59,9 @@ class ReplayBuffer(SB3ReplayBuffer):
         handle_timeout_termination: bool = True,
         qpos_shape: int = 1,
         qvel_shape: int = 1,
+        rune: bool = False,
+        rune_beta: float = 0,
+        rune_beta_decay: float = 0.999,
         seed: int = None,
     ):
         super().__init__(
@@ -69,6 +72,20 @@ class ReplayBuffer(SB3ReplayBuffer):
             n_envs=n_envs,
             optimize_memory_usage=optimize_memory_usage,
             handle_timeout_termination=handle_timeout_termination,
+        )
+        self.rune = rune
+        self.rune_beta_decay = rune_beta_decay
+
+        if rune:
+            self.rune_beta = rune_beta
+        else:
+            self.rune_beta = 0
+
+        self.extrinsic_rewards = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
+        )
+        self.intrinsic_rewards = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
         )
         self.ground_truth_rewards = np.zeros(
             (self.buffer_size, self.n_envs), dtype=np.float32
@@ -93,10 +110,12 @@ class ReplayBuffer(SB3ReplayBuffer):
         obs: np.ndarray,
         next_obs: np.ndarray,
         action: np.ndarray,
-        reward: np.ndarray,
-        ground_truth_rewards: np.ndarray,
+        extrinsic_reward: np.ndarray,
+        intrinsic_reward: np.ndarray,
+        ground_truth_reward: np.ndarray,
         done: np.ndarray,
         infos: list[dict[str, any]],
+        global_step: int,
         qpos: np.ndarray,
         qvel: np.ndarray,
     ) -> None:
@@ -105,18 +124,27 @@ class ReplayBuffer(SB3ReplayBuffer):
         :param obs: observation
         :param next_obs: next observation
         :param action: action
-        :param reward: reward
-        :param ground_truth_rewards: ground truth rewards
+        :param extrinsic_reward: extrinsic reward  (mean of the ensemble predictions)
+        :param intrinsic_reward: intrinsic reward (standard deviation of the ensemble predictions
+        :param ground_truth_reward: ground truth rewards
         :param done: done
         :param infos: info
+        :param global_step:
         :param qpos: qpos
         :param qvel: qvel
         :return:
         """
-        super().add(obs, next_obs, action, reward, done, infos)
-        self.ground_truth_rewards[self.pos] = ground_truth_rewards
+        super().add(obs, next_obs, action, extrinsic_reward, done, infos)
+        self.intrinsic_rewards[self.pos] = intrinsic_reward
+        self.ground_truth_rewards[self.pos] = ground_truth_reward
         self.qpos[self.pos] = qpos
         self.qvel[self.pos] = qvel
+        self.rewards = (
+            self.extrinsic_rewards
+            + self.rune_beta
+            * ((1 - self.rune_beta_decay) ** global_step)
+            * self.intrinsic_rewards
+        )
 
     def sample_trajectories(
         self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
@@ -234,28 +262,33 @@ class ReplayBuffer(SB3ReplayBuffer):
 
         # Sample a set of indices before relabeling for comparison
         sample_indices = np.random.randint(0, self.pos, size=10)
-        old_rewards = self.rewards[sample_indices].copy()
+        old_rewards = self.extrinsic_rewards[sample_indices].copy()
 
         # Calculate the new rewards using the reward_net
         with torch.no_grad():
-            new_rewards = reward_net.predict_reward(observations, actions).reshape(
-                self.buffer_size, self.n_envs
+            new_extrinsic_rewards, new_intrinsic_rewards = reward_net.predict_reward(
+                observations, actions
             )
+            new_extrinsic_rewards.reshape(self.buffer_size, self.n_envs)
 
-        # Update the rewards in the replay buffer
-        self.rewards = new_rewards
+        # Update the extrinsic rewards in the replay buffer
+        self.extrinsic_rewards = new_extrinsic_rewards
+
+        # Update the intrinsic rewards in the replay buffer
+        self.intrinsic_rewards = new_intrinsic_rewards
 
         # Check the new rewards at the same indices
-        new_rewards = self.rewards[sample_indices]
+        new_rewards = self.extrinsic_rewards[sample_indices]
+
         for i in range(len(sample_indices)):
             idx = sample_indices[i]
             logging.debug(
                 f"Buffer Index {idx}: Old Reward = {old_rewards[i]}, New Reward = {new_rewards[i]}"
             )
 
-        assert not np.allclose(
-            old_rewards, new_rewards
-        ), "No change in rewards after relabeling!"
+        assert not np.allclose(old_rewards, new_rewards), (
+            "No change in rewards after relabeling!"
+        )
 
     def reset_buffer(self):
         """Reset replay buffer"""

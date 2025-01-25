@@ -60,9 +60,7 @@ class PerformanceMetrics:
         dev_ground_truths = self.ground_truths - np.mean(self.ground_truths)
 
         numerator = np.sum(dev_predictions * dev_ground_truths)
-        denominator = np.sqrt(
-            np.sum(dev_predictions**2) * np.sum(dev_ground_truths**2)
-        )
+        denominator = np.sqrt(np.sum(dev_predictions**2) * np.sum(dev_ground_truths**2))
 
         if denominator == 0:
             return 0
@@ -209,8 +207,8 @@ class PerformanceMetrics:
         )
 
         if cuda:
-            logging.debug(f"Allocated cuda memory: {allocated / (1024 ** 2)} MB")
-            logging.debug(f"Reserved cuda memory: {reserved / (1024 ** 2)} MB")
+            logging.debug(f"Allocated cuda memory: {allocated / (1024**2)} MB")
+            logging.debug(f"Reserved cuda memory: {reserved / (1024**2)} MB")
             self.writer.add_scalar(
                 "hardware/cuda_memory",
                 allocated / (1024**2),
@@ -232,10 +230,14 @@ class PerformanceMetrics:
             "evaluate/median", eval_dict["median_reward"], global_step
         )
 
-    def log_reward_net_losses(self, loss_dict, global_step):
+    def log_losses(
+        self,
+        loss_dict,
+        global_step,
+    ):
         """
         Log reward net losses to TensorBoard.
-        :param loss_dict: Dictionary of losses
+        :param loss_dict: The dictionary of losses
         :param global_step: The global step
         :return:
         """

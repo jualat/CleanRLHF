@@ -27,7 +27,7 @@ from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from sampling import sample_trajectories
-from teacher import Teacher
+from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
@@ -98,6 +98,8 @@ class Args:
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
+    early_stop_patience: int = 5
+    """the number of evaluation before early stopping"""
     early_stopping_mean: float = 900
     """the threshold of early stopping"""
     enable_greater_or_smaller_check: bool = False
@@ -108,26 +110,36 @@ class Args:
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
-    actor_net_hidden_dim: int = 256
+    reward_net_val_split: float = 0.2
+    """the validation split for the reward network"""
+    reward_net_dropout: float = 0.2
+    """the dropout rate for the reward network"""
+    actor_and_q_net_hidden_dim: int = 256
     """the dimension of the hidden layers in the actor network"""
-    actor_net_hidden_layers: int = 4
+    actor_and_q_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
-    soft_q_net_hidden_dim: int = 256
-    """the dimension of the hidden layers in the SoftQNetwork"""
-    soft_q_net_hidden_layers: int = 4
-    """the number of hidden layers in the SoftQNetwork"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 35712
-    """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 50
+    teacher_feedback_schedule: str = "exponential"
+    """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
+    teacher_feedback_total_queries: int = 1400
+    """the total number of queries the teacher will provide"""
+    teacher_feedback_num_queries_per_session: int = 20
     """the number of queries per feedback session"""
+    teacher_feedback_exponential_lambda: float = 0.1
+    """the lambda parameter for the exponential feedback schedule"""
     teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
+    teacher_batch_strategy: str = "minibatch"
+    """the sampling method for teacher training, must be 'minibatch' ,'batch' or 'full'"""
+    teacher_minibatch_size: int = 10
+    """the mini batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
+    pref_buffer_size_sessions: int = 7
+    """the number of sessions to store in the preference buffer"""
 
     # Simulated Teacher
     trajectory_length: int = 64
@@ -154,6 +166,30 @@ class Args:
     """the batch size of the explore sampled from the replay buffer"""
     explore_learning_starts: int = 512
     """timestep to start learning in the exploration"""
+
+    # SURF
+    surf: bool = True
+    """Toggle SURF on/off"""
+    unlabeled_batch_ratio: int = 1
+    """Ratio of unlabeled to labeled batch size"""
+    surf_sampling_strategy: str = "uniform"
+    """the sampling method for SURF, must be 'uniform', 'disagree' or 'entropy'"""
+    surf_tau: float = 0.999
+    """Confidence threshold for pseudo-labeling"""
+    lambda_ssl: float = 0.1
+    """Weight for the unsupervised (pseudo-labeled) loss"""
+    max_augmentation_offset: int = 10
+    """Max offset for the data augmentation"""
+    min_augmentation_offset: int = 5
+    """Min offset for the data augmentation"""
+
+    ### RUNE
+    rune: bool = False
+    """Toggle RUNE on/off"""
+    rune_beta: float = 100
+    """Beta parameter for RUNE"""
+    rune_beta_decay: float = 0.0001
+    """Beta decay parameter for RUNE"""
 
     # Load Model
     exploration_load: bool = False
@@ -215,34 +251,34 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
     )
-    assert isinstance(
-        envs.single_action_space, gym.spaces.Box
-    ), "only continuous action space is supported"
+    assert isinstance(envs.single_action_space, gym.spaces.Box), (
+        "only continuous action space is supported"
+    )
 
     actor = Actor(
         env=envs,
-        hidden_dim=args.actor_net_hidden_dim,
-        hidden_layers=args.actor_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1 = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf2 = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1_target = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf2_target = SoftQNetwork(
         envs,
-        hidden_dim=args.soft_q_net_hidden_dim,
-        hidden_layers=args.soft_q_net_hidden_layers,
+        hidden_dim=args.actor_and_q_net_hidden_dim,
+        hidden_layers=args.actor_and_q_net_hidden_layers,
     ).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
@@ -267,7 +303,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     if is_mujoco_env(envs.envs[0]):
         try:
             qpos = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
+                (
+                    args.num_envs,
+                    envs.envs[0].unwrapped.observation_structure["qpos"]
+                    + envs.envs[0].unwrapped.observation_structure["skipped_qpos"],
+                ),
                 dtype=np.float32,
             )
             qvel = np.zeros(
@@ -296,18 +336,28 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         n_envs=1,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
+        rune=args.rune,
+        rune_beta=args.rune_beta,
+        rune_beta_decay=args.rune_beta_decay,
         seed=args.seed,
     )
     start_time = time.time()
 
-    pref_buffer = PreferenceBuffer(
-        (args.buffer_size // args.teacher_feedback_frequency)
-        * args.teacher_feedback_num_queries_per_session
+    train_pref_buffer_size = (
+        args.teacher_feedback_num_queries_per_session * args.pref_buffer_size_sessions
     )
+    train_pref_buffer = PreferenceBuffer(
+        buffer_size=train_pref_buffer_size, seed=args.seed
+    )
+
+    val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
+    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size, seed=args.seed)
+
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
         env=envs,
+        dropout=args.reward_net_dropout,
     ).to(device)
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
@@ -332,6 +382,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
+    surf_H_max = args.trajectory_length - args.min_augmentation_offset
+    surf_H_min = args.trajectory_length - args.max_augmentation_offset
 
     current_step = 0
     if args.unsupervised_exploration and not args.exploration_load:
@@ -352,21 +404,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             real_next_obs = next_obs.copy()
 
             if is_mujoco_env(envs.envs[0]):
-
-                try:
-                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                        "skipped_qpos"
-                    ]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = (
-                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
-                        if skipped_qpos > 0
-                        else single_env.unwrapped.data.qpos.copy()
-                    )
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
@@ -377,9 +417,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs,
                 actions,
                 intrinsic_reward,
+                np.zeros(
+                    args.num_envs
+                ),  # There is no standard deviation during the exploration phase
                 ground_truth_reward,
                 dones,
                 infos,
+                current_step,
                 qpos,
                 qvel,
             )
@@ -450,7 +494,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         }
         save_model_all(run_name, args.total_explore_steps, state_dict)
         save_replay_buffer(run_name, args.total_explore_steps, rb)
-        obs, _ = envs.reset(seed=args.seed)
 
     if args.exploration_load:
         load_replay_buffer(rb, path=args.path_to_replay_buffer)
@@ -468,17 +511,42 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         load_model_all(state_dict, path=args.path_to_model, device=device)
 
     try:
-        reward_means = deque(maxlen=3)
+        reward_means = deque(maxlen=args.early_stop_patience)
+        obs, _ = envs.reset(seed=args.seed)
         total_steps = (
             args.total_timesteps - args.total_explore_steps
             if args.exploration_load or args.unsupervised_exploration
             else args.total_timesteps
         )
+
+        teacher_total_queries = args.teacher_feedback_total_queries
+        teacher_num_sessions = (
+            teacher_total_queries // args.teacher_feedback_num_queries_per_session
+        )
+        teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
+        teacher_session_steps = teacher_feedback_schedule(
+            num_sessions=teacher_num_sessions,
+            total_steps=total_steps,
+            schedule=args.teacher_feedback_schedule,
+            lambda_=teacher_exponential_lambda,
+        )
+
+        model_folder = f"./models/{run_name}"
+        os.makedirs(model_folder, exist_ok=True)
+
+        sessions_steps_plt = plot_feedback_schedule(
+            schedule=teacher_session_steps,
+            num_queries=teacher_total_queries,
+        )
+        sessions_steps_plt.savefig(f"{model_folder}/feedback_schedule.png")
+
+        next_session_idx = 0
+
         for global_step in trange(total_steps, desc="Training steps", unit="steps"):
             ### REWARD LEARNING ###
             current_step += 1
             # If we pre-train we can start at step 0 with training our rewards
-            if global_step % args.teacher_feedback_frequency == 0 and (
+            if global_step >= teacher_session_steps[next_session_idx] and (
                 global_step != 0
                 or args.exploration_load
                 or args.unsupervised_exploration
@@ -511,20 +579,41 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         continue
 
                     # Store preferences
-                    pref_buffer.add(first_trajectory, second_trajectory, preference)
+                    if np.random.rand() < (
+                        1 - args.reward_net_val_split
+                    ):  # 1 - (Val Split)% for training
+                        train_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
+                    else:  # (Val Split)% for validation
+                        val_pref_buffer.add(
+                            first_trajectory, second_trajectory, preference
+                        )
+
+                next_session_idx += 1
 
                 train_reward(
-                    reward_net,
-                    reward_optimizer,
-                    metrics,
-                    pref_buffer,
-                    rb,
-                    global_step,
-                    args.teacher_update_epochs,
-                    args.teacher_feedback_batch_size,
-                    device,
+                    model=reward_net,
+                    optimizer=reward_optimizer,
+                    metrics=metrics,
+                    train_pref_buffer=train_pref_buffer,
+                    val_pref_buffer=val_pref_buffer,
+                    rb=rb,
+                    global_step=global_step,
+                    epochs=args.teacher_update_epochs,
+                    batch_size=args.teacher_feedback_batch_size,
+                    mini_batch_size=args.teacher_minibatch_size,
+                    batch_sample_strategy=args.teacher_batch_strategy,
+                    device=device,
+                    surf=args.surf,
+                    sampling_strategy=args.surf_sampling_strategy,
+                    trajectory_length=args.trajectory_length,
+                    unlabeled_batch_ratio=args.unlabeled_batch_ratio,
+                    tau=args.surf_tau,
+                    lambda_ssl=args.lambda_ssl,
+                    H_max=surf_H_max,
+                    H_min=surf_H_min,
                 )
-
                 rb.relabel_rewards(reward_net)
                 logging.info("Rewards relabeled")
 
@@ -539,21 +628,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions
             )
             if is_mujoco_env(envs.envs[0]):
-
-                try:
-                    skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                        "skipped_qpos"
-                    ]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-
                 for idx in range(args.num_envs):
                     single_env = envs.envs[idx]
-                    qpos[idx] = (
-                        single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
-                        if skipped_qpos > 0
-                        else single_env.unwrapped.data.qpos.copy()
-                    )
+                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
             if infos and "episode" in infos:
@@ -570,7 +647,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             dones = terminations | truncations
             with torch.no_grad():
-                rewards = reward_net.predict_reward(obs, actions)
+                rewards, rewards_std = reward_net.predict_reward(obs, actions)
 
             env_idx = 0
             single_env_info = {}
@@ -583,9 +660,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 real_next_obs[env_idx : env_idx + 1],
                 actions[env_idx : env_idx + 1],
                 rewards[env_idx : env_idx + 1].squeeze(),
+                rewards_std[env_idx : env_idx + 1].squeeze(),
                 groundTruthRewards[env_idx : env_idx + 1],
                 dones[env_idx : env_idx + 1],
                 single_env_info,
+                global_step,
                 qpos,
                 qvel,
             )
