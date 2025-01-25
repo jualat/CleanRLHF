@@ -2,6 +2,7 @@ import gzip
 import logging
 import os
 import pickle
+import warnings
 
 import gymnasium as gym
 import numpy as np
@@ -111,9 +112,11 @@ def make_single_env(env_id, render=None, camera_settings=None):
             if render is not None and render != "human":
                 render = "multi_camera"
             env = suite.load(domain_name=domain, task_name=task)
-            env = shimmy.dm_control_compatibility.DmControlCompatibilityV0(
-                env, render_mode=render
-            )
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+                env = shimmy.dm_control_compatibility.DmControlCompatibilityV0(
+                    env, render_mode=render
+                )
         else:
             env = gym.make(env_id, render_mode=render)
 

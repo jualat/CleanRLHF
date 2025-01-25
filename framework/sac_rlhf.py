@@ -189,9 +189,9 @@ class Args:
     """Min offset for the data augmentation"""
 
     ### RUNE
-    rune: bool = False
+    rune: bool = True
     """Toggle RUNE on/off"""
-    rune_beta: float = 100
+    rune_beta: float = 0.05
     """Beta parameter for RUNE"""
     rune_beta_decay: float = 0.0001
     """Beta decay parameter for RUNE"""
@@ -339,6 +339,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
                 dtype=np.float32,
             )
+    elif dm_control_bool:
+        qpos = np.zeros(
+            (args.num_envs, envs.envs[0].env.physics.data.qpos.shape[0]),
+            dtype=np.float32,
+        )
+        qvel = np.zeros(
+            (args.num_envs, envs.envs[0].env.physics.data.qvel.shape[0]),
+            dtype=np.float32,
+        )
     else:
         qpos = np.zeros((1, 2))
         qvel = np.zeros((1, 2))
@@ -426,6 +435,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env = envs.envs[idx]
                     qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
+            if dm_control_bool:
+                for idx in range(args.num_envs):
+                    qpos[idx] = envs.envs[0].env.physics.data.qpos.copy()
+                    qvel[idx] = envs.envs[0].env.physics.data.qvel.copy()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -650,6 +663,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env = envs.envs[idx]
                     qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
+            if dm_control_bool:
+                for idx in range(args.num_envs):
+                    qpos[idx] = envs.envs[0].env.physics.data.qpos.copy()
+                    qvel[idx] = envs.envs[0].env.physics.data.qvel.copy()
 
             if infos and "episode" in infos:
                 allocated, reserved = 0, 0
