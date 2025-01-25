@@ -290,28 +290,95 @@ class ReplayBuffer(SB3ReplayBuffer):
             "No change in rewards after relabeling!"
         )
 
-    def reset_buffer(self):
-        """Reset replay buffer"""
-        self.pos = 0
-        self.full = False
+
+class RolloutBuffer(ReplayBuffer):
+    def __init__(
+        self,
+        buffer_size: int,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[torch.device, str] = "auto",
+        n_envs: int = 1,
+        optimize_memory_usage: bool = False,
+        handle_timeout_termination: bool = True,
+        qpos_shape: int = 1,
+        qvel_shape: int = 1,
+        rune: bool = False,
+        rune_beta: float = 0,
+        rune_beta_decay: float = 0.999,
+        seed: int = None,
+    ):
+        super().__init__(
+            buffer_size,
+            observation_space,
+            action_space,
+            device,
+            n_envs,
+            optimize_memory_usage,
+            handle_timeout_termination,
+            qpos_shape,
+            qvel_shape,
+            rune,
+            rune_beta,
+            rune_beta_decay,
+            seed,
+        )
+
+        self.log_props = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+
+    def add(
+        self,
+        obs: np.ndarray,
+        next_obs: np.ndarray,
+        action: np.ndarray,
+        extrinsic_reward: np.ndarray,
+        intrinsic_reward: np.ndarray,
+        ground_truth_reward: np.ndarray,
+        done: np.ndarray,
+        infos: list[dict[str, any]],
+        global_step: int,
+        qpos: np.ndarray,
+        qvel: np.ndarray,
+        logprops: np.ndarray,
+        values: np.ndarray,
+    ):
+        super().add(
+            obs=obs,
+            next_obs=next_obs,
+            action=action,
+            extrinsic_reward=extrinsic_reward,
+            intrinsic_reward=intrinsic_reward,
+            ground_truth_reward=ground_truth_reward,
+            done=done,
+            infos=infos,
+            global_step=global_step,
+            qpos=qpos,
+            qvel=qvel,
+        )
+        self.log_props[self.pos] = logprops
+        self.values[self.pos] = values
+
+    def sample(self):
+        pass
+
+    def reset(self):
         self.observations = np.zeros(
             (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32
         )
-        self.next_observations = np.zeros(
-            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32
-        )
-        self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.actions = np.zeros(
             (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32
         )
-        self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.qpos = np.zeros(
-            (self.buffer_size, self.n_envs, self.qpos_shape), dtype=np.float32
+        self.extrinsic_rewards = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
         )
-        self.qvel = np.zeros(
-            (self.buffer_size, self.n_envs, self.qvel_shape), dtype=np.float32
+        self.intrinsic_rewards = np.zeros(
+            (self.buffer_size, self.n_envs), dtype=np.float32
         )
         self.ground_truth_rewards = np.zeros(
             (self.buffer_size, self.n_envs), dtype=np.float32
         )
-        logging.debug("Replay Buffer reset")
+        self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.bool)
+        self.log_props = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)

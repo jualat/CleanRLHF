@@ -275,13 +275,15 @@ def train(args: Any):
     # TODO: ADAPT TO NEW PREFERENCE BUFFER
     pref_buffer = PreferenceBuffer(
         (args.buffer_size // args.teacher_feedback_frequency)
-        * args.teacher_feedback_num_queries_per_session
+        * args.teacher_feedback_num_queries_per_session,
+        seed=args.seed,
     )
     # TODO: ADAPT TO NEW REWARD NET
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
         env=envs,
+        dropout=args.reward_net_dropout,
     ).to(device)
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
@@ -318,20 +320,11 @@ def train(args: Any):
             for step in range(0, args.num_steps):
                 current_step += 1
                 global_step += args.num_envs
-                obs[step] = next_obs
-                dones[step] = next_done
-                single_obs = next_obs
                 with torch.no_grad():
-                    action, logprob, _, value = agent.get_action_and_value(next_obs)
-                    values[step] = value.flatten()
-                actions[step] = action
-                logprobs[step] = logprob
+                    action, logprob, _, value = agent.get_action_and_value(obs)
+                    values = value.flatten()
 
                 # TODO: ADAPT TO RUNE
-                intrinsic_reward = knn_estimator.compute_intrinsic_rewards(
-                    next_obs.cpu().numpy()
-                )
-                knn_estimator.update_states(next_obs.cpu().numpy())
 
                 (
                     next_obs,
@@ -340,42 +333,32 @@ def train(args: Any):
                     truncations,
                     infos,
                 ) = envs.step(action.cpu().numpy())
-                next_done = np.logical_or(terminations, truncations)
+
+                intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
+                knn_estimator.update_states(next_obs)
+                done = np.logical_or(terminations, truncations)
 
                 if is_mujoco_env(envs.envs[0]):
-                    try:
-                        skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                            "skipped_qpos"
-                        ]
-                    except (KeyError, AttributeError):
-                        skipped_qpos = 0
-
                     for idx in range(args.num_envs):
                         single_env = envs.envs[idx]
-                        qpos[idx] = (
-                            single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
-                            if skipped_qpos > 0
-                            else single_env.unwrapped.data.qpos.copy()
-                        )
+                        qpos[idx] = single_env.unwrapped.data.qpos.copy()
                         qvel[idx] = single_env.unwrapped.data.qvel.copy()
 
-                next_obs = next_obs.astype(np.float32)
                 rb.add(
-                    obs=single_obs.cpu().numpy(),
+                    obs=obs,
                     next_obs=next_obs,
-                    action=action.cpu().numpy(),
-                    reward=intrinsic_reward,
-                    ground_truth_rewards=ground_truth_rewards,
-                    done=next_done,
+                    action=action,
+                    intrinsic_reward=intrinsic_reward,
+                    extrinsic_reward=np.zeros(
+                        args.num_envs
+                    ),  # There is no standard deviation during the exploration phase
+                    ground_truth_reward=ground_truth_rewards,
+                    done=done,
                     infos=infos,
                     qpos=qpos,
                     qvel=qvel,
                 )
-                rewards[step] = torch.tensor(intrinsic_reward).to(device).view(-1)
-                next_obs, next_done = (
-                    torch.Tensor(next_obs).to(device),
-                    torch.Tensor(next_done).to(device),
-                )
+                obs = next_obs
 
                 if infos and "final_info" in infos:
                     for info in infos["final_info"]:
@@ -406,6 +389,7 @@ def train(args: Any):
                 returns = advantages + values
 
             # flatten the batch
+
             b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
             b_logprobs = logprobs.reshape(-1)
             b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
@@ -502,8 +486,8 @@ def train(args: Any):
         }
         save_model_all(run_name, args.total_explore_steps, state_dict)
         save_replay_buffer(run_name, args.total_explore_steps, rb)
-        next_obs, _ = envs.reset(seed=args.seed)
-        next_obs = torch.Tensor(next_obs).to(device)
+        next_obs, _ = envs.reset(seed=args.seed)  #
+        next_obs = torch.Tensor(next_obs).to(device)  #
 
     if args.exploration_load:
         load_replay_buffer(rb, path=args.path_to_replay_buffer)
