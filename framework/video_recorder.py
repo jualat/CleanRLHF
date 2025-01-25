@@ -1,7 +1,6 @@
 import logging
 import os
 
-import numpy as np
 import torch
 from env import FlattenVectorObservationWrapper, is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
@@ -80,10 +79,7 @@ class VideoRecorder:
                 else qvel_list[0]
             )
             if self.dm_control:
-                full_state = np.zeros(env.physics.get_state().shape)
-                full_state[: len(qpos)] = qpos
-                full_state[len(qpos) : len(qpos) + len(qvel)] = qvel
-                env.physics.set_state(full_state)
+                env.physics.set_state(qpos)
             else:
                 env.unwrapped.set_state(qpos, qvel)
         else:
@@ -109,10 +105,7 @@ class VideoRecorder:
                     else qvel_list[i]
                 )
                 if self.dm_control:
-                    full_state = np.zeros(env.physics.get_state().shape)
-                    full_state[: len(qpos)] = qpos
-                    full_state[len(qpos) : len(qpos) + len(qvel)] = qvel
-                    env.physics.set_state(full_state)
+                    env.physics.set_state(qpos)
                     env.physics.forward()
                     frames.append(env.render())
                 else:

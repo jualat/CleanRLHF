@@ -341,13 +341,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             )
     elif dm_control_bool:
         qpos = np.zeros(
-            (args.num_envs, envs.envs[0].env.physics.data.qpos.shape[0]),
+            (args.num_envs, envs.envs[0].unwrapped.physics.get_state().shape[0]),
             dtype=np.float32,
         )
-        qvel = np.zeros(
-            (args.num_envs, envs.envs[0].env.physics.data.qvel.shape[0]),
-            dtype=np.float32,
-        )
+        qvel = np.zeros((1, 2))
     else:
         qpos = np.zeros((1, 2))
         qvel = np.zeros((1, 2))
@@ -437,8 +434,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
             if dm_control_bool:
                 for idx in range(args.num_envs):
-                    qpos[idx] = envs.envs[0].env.physics.data.qpos.copy()
-                    qvel[idx] = envs.envs[0].env.physics.data.qvel.copy()
+                    qpos[idx] = envs.envs[idx].unwrapped.physics.get_state()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -665,8 +661,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
             if dm_control_bool:
                 for idx in range(args.num_envs):
-                    qpos[idx] = envs.envs[0].env.physics.data.qpos.copy()
-                    qvel[idx] = envs.envs[0].env.physics.data.qvel.copy()
+                    qpos[idx] = envs.envs[idx].unwrapped.physics.get_state()
 
             if infos and "episode" in infos:
                 allocated, reserved = 0, 0
