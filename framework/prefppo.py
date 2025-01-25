@@ -214,15 +214,16 @@ def train(args: Any):
     envs = gym.vector.SyncVectorEnv(
         [make_env_ppo(args.env_id, args.gamma) for _ in range(args.num_envs)]
     )
-    assert isinstance(
-        envs.single_action_space, gym.spaces.Box
-    ), "only continuous action space is supported"
-
+    assert isinstance(envs.single_action_space, gym.spaces.Box), (
+        "only continuous action space is supported"
+    )
+    # TODO ADAPT TO DM CONTROL ENVS
     agent = Agent(
         envs, hidden_dim=args.agent_net_hidden_dim, layers=args.agent_net_hidden_layers
     ).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # TODO: WRITE CUSTOM REPLAY BUFFER FOR THIS
     obs = torch.zeros(
         (args.num_steps, args.num_envs) + envs.single_observation_space.shape
     ).to(device)
@@ -239,7 +240,7 @@ def train(args: Any):
     next_obs, _ = envs.reset(seed=args.seed)
     next_obs = torch.Tensor(next_obs).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
-
+    # TODO ADAPT TO NEW VIDEO REC
     if is_mujoco_env(envs.envs[0]):
         try:
             qpos = np.zeros(
@@ -259,7 +260,7 @@ def train(args: Any):
                 (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
                 dtype=np.float32,
             )
-
+    # TODO: ADAPT TO REPLAY BUFFER CHANGES
     rb = ReplayBuffer(
         args.buffer_size,
         envs.single_observation_space,
@@ -271,10 +272,12 @@ def train(args: Any):
         qvel_shape=qvel.shape[1],
         seed=args.seed,
     )
+    # TODO: ADAPT TO NEW PREFERENCE BUFFER
     pref_buffer = PreferenceBuffer(
         (args.buffer_size // args.teacher_feedback_frequency)
         * args.teacher_feedback_num_queries_per_session
     )
+    # TODO: ADAPT TO NEW REWARD NET
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
@@ -311,7 +314,7 @@ def train(args: Any):
                 frac = 1.0 - (iteration - 1.0) / args.num_iterations
                 lrnow = frac * args.learning_rate
                 optimizer.param_groups[0]["lr"] = lrnow
-
+            # TODO: SPLIT UP THE METHODS
             for step in range(0, args.num_steps):
                 current_step += 1
                 global_step += args.num_envs
@@ -323,6 +326,8 @@ def train(args: Any):
                     values[step] = value.flatten()
                 actions[step] = action
                 logprobs[step] = logprob
+
+                # TODO: ADAPT TO RUNE
                 intrinsic_reward = knn_estimator.compute_intrinsic_rewards(
                     next_obs.cpu().numpy()
                 )
@@ -367,9 +372,10 @@ def train(args: Any):
                     qvel=qvel,
                 )
                 rewards[step] = torch.tensor(intrinsic_reward).to(device).view(-1)
-                next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(
-                    next_done
-                ).to(device)
+                next_obs, next_done = (
+                    torch.Tensor(next_obs).to(device),
+                    torch.Tensor(next_done).to(device),
+                )
 
                 if infos and "final_info" in infos:
                     for info in infos["final_info"]:
@@ -512,12 +518,11 @@ def train(args: Any):
     reward_means = deque(maxlen=3)
     try:
         for iteration in trange(1, args.num_iterations + 1):
-
             if args.anneal_lr:
                 frac = 1.0 - (iteration - 1.0) / args.num_iterations
                 lrnow = frac * args.learning_rate
                 optimizer.param_groups[0]["lr"] = lrnow
-
+            # TODO: ADAPT TO NEW FEEDBACK SCHEDULING
             for step in range(0, args.num_steps):
                 if global_step % args.teacher_feedback_frequency == 0 and (
                     global_step != 0
@@ -556,7 +561,7 @@ def train(args: Any):
 
                         # Store preferences
                         pref_buffer.add(first_trajectory, second_trajectory, preference)
-
+                    # TODO ADAPT TO NEW TRAINING
                     train_reward(
                         reward_net,
                         reward_optimizer,
@@ -568,7 +573,6 @@ def train(args: Any):
                         args.teacher_feedback_batch_size,
                         device,
                     )
-                    rb.reset_buffer()
 
                 current_step += 1
                 global_step += args.num_envs
@@ -624,9 +628,10 @@ def train(args: Any):
                     qvel=qvel,
                 )
                 rewards[step] = torch.tensor(reward).to(device).view(-1)
-                next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(
-                    next_done
-                ).to(device)
+                next_obs, next_done = (
+                    torch.Tensor(next_obs).to(device),
+                    torch.Tensor(next_done).to(device),
+                )
 
                 if infos and "episode" in infos:
                     allocated, reserved = 0, 0
