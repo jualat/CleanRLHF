@@ -3,7 +3,7 @@ from dataclasses import dataclass, fields, replace
 import tyro
 import wandb
 import yaml
-from sac_rlhf import Args, train
+from sac_rlhf import Args, run as run_sac_rlhf
 
 
 @dataclass
@@ -55,7 +55,7 @@ def wrapped_train():
             },
         )
 
-        train(cmd_args)
+        run_sac_rlhf(cmd_args)
     except Exception as e:
         wandb.log({"error": str(e)})
         raise e

@@ -214,10 +214,32 @@ class Args:
     path_to_model: str = ""
     """path to model"""
 
+def run(args: Any):
+    try:
+        if args.feedback_server_autostart:
+            if (
+                    "localhost" in args.feedback_server_url
+                    or "127.0.0" in args.feedback_server_url
+            ):
+                feedback_server_process = start_feedback_server(
+                    args.feedback_server_url.split(":")[-1]
+                )
+            else:
+                logging.error("feedback server autostart", args.feedback_server_url)
+                raise ValueError(
+                    "Feedback server autostart only works with localhost. Please start the feedback server manually."
+                )
+        else:
+            logging.info("Feedback server autostart is disabled.")
+        train(args)
+    except Exception as e:
+        logging.exception(e)
+    finally:
+        if args.feedback_server_autostart:
+            stop_feedback_server(feedback_server_process)
 
 def train(args: Any):
     """
-    The training function.
     :param args: run arguments
     :return:
     """
@@ -823,18 +845,4 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
 if __name__ == "__main__":
     cli_args = tyro.cli(Args)
-    try:
-        if cli_args.feedback_server_autostart:
-            if (
-                "localhost" in cli_args.feedback_server_url
-                or "127.0.0" in cli_args.feedback_server_url
-            ):
-                feedback_server_process = start_feedback_server(
-                    cli_args.feedback_server_url.split(":")[-1]
-                )
-        train(cli_args)
-    except Exception as e:
-        logging.exception(e)
-    finally:
-        if cli_args.feedback_server_autostart:
-            stop_feedback_server(feedback_server_process)
+    run(cli_args)
