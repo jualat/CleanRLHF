@@ -2,9 +2,14 @@ import gzip
 import logging
 import os
 import pickle
+import warnings
 
 import gymnasium as gym
+import shimmy
 import torch
+from dm_control import suite
+from gymnasium.envs.registration import registry
+from gymnasium.wrappers import FlattenObservation
 from replay_buffer import ReplayBuffer
 
 
@@ -87,16 +92,54 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str):
     logging.info(f"Replay buffer loaded from {path}")
 
 
-def make_env(env_id, seed):
+def is_dm_control(env_id):
+    DM_CONTROL_ENV_IDS = [
+        env_id
+        for env_id in registry
+        if env_id.startswith("dm_control")
+        and env_id != "dm_control/compatibility-env-v0"
+    ]
+    return isinstance(DM_CONTROL_ENV_IDS, list) and env_id in DM_CONTROL_ENV_IDS
+
+
+def make_single_env(env_id, render=None, camera_settings=None):
+    if is_dm_control(env_id):
+        name = env_id.split("/")[1]
+        domain = name.split("-")[0]
+        task = name.split("-")[1]
+        if task != "v0":
+            if render is not None and render != "human":
+                render = "multi_camera"
+            env = suite.load(domain_name=domain, task_name=task)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+                env = shimmy.dm_control_compatibility.DmControlCompatibilityV0(
+                    env, render_mode=render
+                )
+        else:
+            env = gym.make(env_id, render_mode=render)
+        env = FlattenObservation(env)
+
+    else:
+        env = gym.make(
+            env_id, render_mode=render, default_camera_config=camera_settings
+        )
+    return env
+
+
+def make_env(env_id, seed, render=None):
     """
     Create an environment
     :param env_id: The run argument env_id
     :param seed: The seed for creating the environment
+    :param render: Set rendering mode
     :return:
     """
+    if render == "":
+        render = None
 
     def thunk():
-        env = gym.make(env_id)
+        env = make_single_env(env_id, render=render)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env

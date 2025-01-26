@@ -8,12 +8,14 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+import shimmy  # noqa
 import torch
 import torch.optim as optim
 import tyro
 from actor import Actor, select_actions, update_actor, update_target_networks
 from critic import SoftQNetwork, train_q_network
 from env import (
+    is_dm_control,
     is_mujoco_env,
     load_model_all,
     load_replay_buffer,
@@ -51,6 +53,8 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
+    render_mode: str = ""
+    """set render_mode to 'human' to watch training (it is not possible to render human and capture videos with the flag '--capture-video')"""
     num_envs: int = 1
     """the number of parallel environments to accelerate training.
     Set this to the number of available CPU threads for best performance."""
@@ -94,7 +98,7 @@ class Args:
     """the number of evaluation episodes"""
 
     ## Early Stop
-    early_stopping: bool = True
+    early_stopping: bool = False
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
@@ -184,9 +188,9 @@ class Args:
     """Min offset for the data augmentation"""
 
     ### RUNE
-    rune: bool = False
+    rune: bool = True
     """Toggle RUNE on/off"""
-    rune_beta: float = 100
+    rune_beta: float = 0.05
     """Beta parameter for RUNE"""
     rune_beta_decay: float = 0.0001
     """Beta decay parameter for RUNE"""
@@ -214,6 +218,8 @@ def train(args: Any):
 poetry run pip install "stable_baselines3==2.0.0a1"
 """
         )
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
 
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     logging.basicConfig(
@@ -221,11 +227,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         datefmt="%d/%m/%Y %H:%M:%S",
         level=args.log_level.upper(),
     )
+
     if args.log_file:
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
+        file_path = os.path.join("runs", run_name, "log.log")
         logging.getLogger().addHandler(
-            logging.FileHandler(filename=f"runs/{run_name}/logger.log")
+            logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
+
     if args.track:
         import wandb
 
@@ -238,7 +247,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -250,12 +258,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, args.seed) for i in range(args.num_envs)]
+        [
+            make_env(args.env_id, args.seed, args.render_mode)
+            for i in range(args.num_envs)
+        ]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), (
         "only continuous action space is supported"
     )
-
+    dm_control_bool = is_dm_control(env_id=args.env_id)
     actor = Actor(
         env=envs,
         hidden_dim=args.actor_and_q_net_hidden_dim,
@@ -324,9 +335,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
                 dtype=np.float32,
             )
+    elif dm_control_bool:
+        qpos = np.zeros(
+            (args.num_envs, envs.envs[0].unwrapped.physics.get_state().shape[0]),
+            dtype=np.float32,
+        )
+        qvel = np.zeros((1, 2))
     else:
-        qpos = np.zeros((2, 2))
-        qvel = np.zeros((2, 2))
+        qpos = np.zeros((1, 2))
+        qvel = np.zeros((1, 2))
 
     rb = ReplayBuffer(
         args.buffer_size,
@@ -363,7 +380,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id)
+    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -397,11 +414,14 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
             )
+            assert envs.action_space.contains(actions), "Action is out of bounds!"
 
             next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(
                 actions
             )
-
+            assert envs.observation_space.contains(next_obs), (
+                "Observation is out of bounds!"
+            )
             real_next_obs = next_obs.copy()
 
             if is_mujoco_env(envs.envs[0]):
@@ -409,6 +429,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env = envs.envs[idx]
                     qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
+            if dm_control_bool:
+                for idx in range(args.num_envs):
+                    qpos[idx] = envs.envs[idx].unwrapped.physics.get_state()
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -566,7 +589,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
                     # Create video of the two trajectories. For now, we only render if capture_video is True.
                     # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                    if args.capture_video:
+                    if args.capture_video and args.render_mode != "human":
                         video_recorder.record_trajectory(first_trajectory, run_name)
                         video_recorder.record_trajectory(second_trajectory, run_name)
 
@@ -633,6 +656,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     single_env = envs.envs[idx]
                     qpos[idx] = single_env.unwrapped.data.qpos.copy()
                     qvel[idx] = single_env.unwrapped.data.qvel.copy()
+            if dm_control_bool:
+                for idx in range(args.num_envs):
+                    qpos[idx] = envs.envs[idx].unwrapped.physics.get_state()
 
             if infos and "episode" in infos:
                 allocated, reserved = 0, 0
@@ -739,8 +765,17 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                render = global_step % 100000 == 0 and global_step != 0
-                track = global_step % 100000 == 0 and global_step != 0 and args.track
+                render = (
+                    global_step % 100000 == 0
+                    and global_step != 0
+                    and args.render_mode != "human"
+                )
+                track = (
+                    global_step % 100000 == 0
+                    and global_step != 0
+                    and args.track
+                    and args.render_mode != "human"
+                )
                 eval_dict = evaluate.evaluate_policy(
                     episodes=args.evaluation_episodes,
                     step=global_step,

@@ -14,7 +14,7 @@ profile = "black"
 [tool.poetry.dependencies]
 python = "^3.10"
 gymnasium = "^1.0"
-mujoco = "^3.2"
+mujoco = "3.2"
 tensorboard = "^2.18"
 torch = "^2.5"
 tyro = "^0.9.5"
@@ -28,6 +28,9 @@ imageio-ffmpeg = "^0.5"
 stable-baselines3 = {version = "^2.5.0a1", allow-prereleases = true}
 tqdm = "^4.67"
 moviepy = "^2.1"
+shimmy = {extras = ["dm-control"], version = "^2.0.0"}
+gym = "^0.26.2"
+glfw = "^2.8.0"
 
 [build-system]
 requires = ["poetry-core"]
