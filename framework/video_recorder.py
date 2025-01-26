@@ -2,7 +2,7 @@ import logging
 import os
 
 import torch
-from env import FlattenVectorObservationWrapper, is_mujoco_env, make_single_env
+from env import is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
 
@@ -41,8 +41,6 @@ class VideoRecorder:
         out_path = f"{video_folder}/"
 
         env = make_single_env(env_id=self.env_id, render="rgb_array")
-        if self.dm_control:
-            env = FlattenVectorObservationWrapper(env)
 
         try:
             self._initialize_env_state(env, trajectory)

@@ -5,12 +5,11 @@ import pickle
 import warnings
 
 import gymnasium as gym
-import numpy as np
 import shimmy
 import torch
 from dm_control import suite
-from gym import Wrapper
 from gymnasium.envs.registration import registry
+from gymnasium.wrappers import FlattenObservation
 from replay_buffer import ReplayBuffer
 
 
@@ -119,6 +118,7 @@ def make_single_env(env_id, render=None, camera_settings=None):
                 )
         else:
             env = gym.make(env_id, render_mode=render)
+        env = FlattenObservation(env)
 
     else:
         env = gym.make(
@@ -155,58 +155,3 @@ def is_mujoco_env(env) -> bool:
     """
     # Try to check the internal `mujoco` attribute
     return hasattr(env.unwrapped, "model") and hasattr(env.unwrapped, "do_simulation")
-
-
-class FlattenVectorObservationWrapper(Wrapper):
-    def __init__(self, env):
-        super().__init__(env)
-        original_obs_space = self.env.observation_space
-        if isinstance(original_obs_space, gym.spaces.dict.Dict):
-            low = np.concatenate(
-                [
-                    space.low.flatten()
-                    for space in original_obs_space.spaces.values()
-                    if space.shape != (0,)
-                ]
-            )
-            high = np.concatenate(
-                [
-                    space.high.flatten()
-                    for space in original_obs_space.spaces.values()
-                    if space.shape != (0,)
-                ]
-            )
-            self.single_observation_space = gym.spaces.Box(
-                low=low, high=high, dtype=np.float64
-            )
-            self.shimmy = True
-        else:
-            self.shimmy = False
-            self.single_observation_space = original_obs_space
-
-    def reset(self, **kwargs):
-        if self.shimmy:
-            obs, x = self.env.reset(**kwargs)
-            return self.flatten_observation(obs), x
-        return self.env.reset(**kwargs)
-
-    def step(self, action):
-        if self.shimmy:
-            obs, rewards, terminations, truncations, infos = self.env.step(action)
-            return (
-                self.flatten_observation(obs),
-                rewards,
-                terminations,
-                truncations,
-                infos,
-            )
-        return self.env.step(action)
-
-    def flatten_observation(self, obs):
-        # Apply flattening to all observations in the batch
-        obs_dict = obs  # Obs is a dictionary with different keys and each obs is stored concatenated in a numpy array
-        flat_obs = np.concatenate(
-            [obs_dict[key].flatten() for key in obs.keys()]
-        )  # This currently only works with single env
-        flat_obs = flat_obs[np.newaxis, :]
-        return flat_obs

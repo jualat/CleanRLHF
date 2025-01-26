@@ -8,14 +8,13 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-import shimmy
+import shimmy  # noqa
 import torch
 import torch.optim as optim
 import tyro
 from actor import Actor, select_actions, update_actor, update_target_networks
 from critic import SoftQNetwork, train_q_network
 from env import (
-    FlattenVectorObservationWrapper,
     is_dm_control,
     is_mujoco_env,
     load_model_all,
@@ -248,7 +247,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    shimmy.dm_control_compatibility
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -269,8 +267,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         "only continuous action space is supported"
     )
     dm_control_bool = is_dm_control(env_id=args.env_id)
-    if dm_control_bool:
-        envs = FlattenVectorObservationWrapper(envs)
     actor = Actor(
         env=envs,
         hidden_dim=args.actor_and_q_net_hidden_dim,
@@ -401,7 +397,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
-        dm_control_bool=dm_control_bool,
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
@@ -424,7 +419,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(
                 actions
             )
-
+            assert envs.observation_space.contains(next_obs), (
+                "Observation is out of bounds!"
+            )
             real_next_obs = next_obs.copy()
 
             if is_mujoco_env(envs.envs[0]):
