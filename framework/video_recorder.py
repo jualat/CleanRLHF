@@ -1,9 +1,8 @@
 import logging
 import os
 
-import gymnasium as gym
 import torch
-from env import is_mujoco_env
+from env import is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
 import re
@@ -25,10 +24,12 @@ class VideoRecorder:
         rb: ReplayBuffer,
         seed: int,
         env_id: str,
+        dm_control: bool,
     ):
         self.rb = rb
         self.seed = seed
         self.env_id = env_id
+        self.dm_control = dm_control
 
     def record_trajectory(self, trajectory: Trajectory, run_name: str, fps=30):
         start_idx = trajectory.replay_buffer_start_idx
@@ -40,7 +41,7 @@ class VideoRecorder:
         video_folder = f"./videos/{run_name}/trajectories/"
         os.makedirs(video_folder, exist_ok=True)
         name_prefix = f"trajectory_{start_idx}_{end_idx}_{env_idx}"
-        env = gym.make(self.env_id, render_mode="rgb_array")
+        env = make_single_env(env_id=self.env_id, render="rgb_array")
 
         try:
             self._initialize_env_state(env, trajectory)
@@ -65,7 +66,7 @@ class VideoRecorder:
 
     def _initialize_env_state(self, env, trajectory):
         """Initialize the environment state based on Mujoco or non-Mujoco trajectories."""
-        if is_mujoco_env(env):
+        if is_mujoco_env(env) or self.dm_control:
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             env.reset(seed=self.seed)
@@ -80,8 +81,10 @@ class VideoRecorder:
                 if isinstance(qvel_list[0], torch.Tensor)
                 else qvel_list[0]
             )
-
-            env.unwrapped.set_state(qpos, qvel)
+            if self.dm_control:
+                env.physics.set_state(qpos)
+            else:
+                env.unwrapped.set_state(qpos, qvel)
         else:
             env.reset(seed=self.seed)
             if hasattr(env, "state"):
@@ -90,7 +93,7 @@ class VideoRecorder:
     def _generate_frames(self, env, trajectory):
         """Generate frames for the video from the trajectory."""
         frames = [env.render()]
-        if is_mujoco_env(env):
+        if is_mujoco_env(env) or self.dm_control:
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             for i in range(1, len(qpos_list)):
@@ -104,9 +107,13 @@ class VideoRecorder:
                     if isinstance(qvel_list[i], torch.Tensor)
                     else qvel_list[i]
                 )
-
-                env.unwrapped.set_state(qpos, qvel)
-                frames.append(env.render())
+                if self.dm_control:
+                    env.physics.set_state(qpos)
+                    env.physics.forward()
+                    frames.append(env.render())
+                else:
+                    env.unwrapped.set_state(qpos, qvel)
+                    frames.append(env.render())
         else:
             actions = trajectory.samples.actions
             for action in actions:

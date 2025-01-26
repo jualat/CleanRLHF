@@ -29,6 +29,7 @@ def collect_feedback(
     reward_net=None,
     feedback_file=None,
     capture_video=True,
+    render_mode="simulated",
     video_recorder=None,
 ):
     """
@@ -75,6 +76,9 @@ def collect_feedback(
         capture_video (bool, optional):
             Whether to record videos of sampled trajectory pairs. Defaults to True.
 
+        render_mode (str, optional):
+            The rendering mode for the video recorder. Options: "simulated", "human", or "multi_camera".
+
         video_recorder (VideoRecorder, optional):
             An object responsible for recording trajectory videos.
             Used only when `capture_video` is True or "human_feedback" mode is selected.
@@ -83,6 +87,7 @@ def collect_feedback(
         :param mode:
         :param video_recorder:
         :param capture_video:
+        :param render_mode:
         :param feedback_file:
         :param reward_net:
         :param sim_teacher:
@@ -118,7 +123,7 @@ def collect_feedback(
 
             # Create video of the two trajectories. For now, we only render if capture_video is True.
             # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-            if capture_video:
+            if capture_video and render_mode != "human":
                 video_recorder.record_trajectory(first_trajectory, run_name)
                 video_recorder.record_trajectory(second_trajectory, run_name)
 
