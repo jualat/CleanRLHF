@@ -4,12 +4,7 @@ import time
 
 import numpy as np
 import requests
-from sampling import (
-    disagreement_sampling,
-    entropy_sampling,
-    sample_trajectories,
-    uniform_sampling,
-)
+from sampling import sample_trajectories
 from tqdm import tqdm, trange
 from video_recorder import retrieve_trajectory_by_video_name
 
@@ -19,12 +14,12 @@ def collect_feedback(
     feedback_server_url,
     replay_buffer,
     run_name,
-    preference_sampling,
     teacher_feedback_num_queries_per_session,
     trajectory_length,
     train_pref_buffer,
     val_pref_buffer,
     reward_net_val_split,
+    preference_sampling="disagree",
     sim_teacher=None,
     reward_net=None,
     feedback_file=None,
@@ -33,77 +28,68 @@ def collect_feedback(
     video_recorder=None,
 ):
     """
-    Collect feedback based on the given mode.
+    Collects feedback for trajectories from either a simulated teacher, human interaction or a file.
+    The function handles querying various sources, manages preferences,
+    and updates training and validation buffers as appropriate.
 
-    Parameters:
-        mode (str):
-            Specifies the feedback mode. Possible values:
-            - "simulated_teacher": Uses a simulated teacher to generate trajectory preferences.
-            - "human_feedback": Requests feedback from a human evaluator via a feedback server.
+    :param mode: Specifies the feedback collection mode. It can be one of the following:
+        - "simulated": Collect feedback using a simulated teacher.
+        - "human": Collect feedback from a human teacher via a feedback server.
+        - "file": Load feedback from a pre-recorded file.
+    :type mode: str
 
-        feedback_server_url (str):
-            Url including port of the feedback server to use
+    :param feedback_server_url: URL of the feedback server for hosting human feedback collection. Required only
+        if mode is set to "human".
+    :type feedback_server_url: str, optional
 
-        replay_buffer (ReplayBuffer):
-            Replay buffer containing the trajectories available for sampling.
+    :param replay_buffer: A buffer containing trajectories from which samples are drawn for feedback.
+    :type replay_buffer: object
 
-        pref_buffer (PreferenceBuffer):
-            Preference buffer where the collected feedback will be recorded.
+    :param run_name: Unique identifier for the current feedback collection session.
+    :type run_name: str
 
-        run_name (str):
+    :param preference_sampling: A strategy to select trajectory pairs for sampling and feedback.
+    :type preference_sampling: object
 
+    :param teacher_feedback_num_queries_per_session: Total number of feedback queries to perform
+        during one collection session.
+    :type teacher_feedback_num_queries_per_session: int
 
-        preference_sampling (str):
-            The trajectory-pair sampling strategy. Options include:
-            - "disagree": Pairs where the reward network shows high disagreement.
-            - "entropy": Pairs with high uncertainty or entropy in predicted rewards.
-            - Any other value defaults to uniform random sampling.
+    :param trajectory_length: The length or number of steps in one trajectory.
+    :type trajectory_length: int
 
-        teacher_feedback_num_queries_per_session (int):
-            The number of feedback queries to collect per session.
+    :param train_pref_buffer: Buffer to store preferences for training purposes.
+    :type train_pref_buffer: object
 
-        sim_teacher (SimulatedTeacher, optional):
-            A simulated teacher object used to generate preferences automatically.
-            Required for the "simulated_teacher" mode.
+    :param val_pref_buffer: Buffer to store preferences for validation purposes.
+    :type val_pref_buffer: object
 
-        reward_net (RewardNet, optional):
-            Reward network used for advanced sampling strategies like "disagree" or "entropy"
-            (only used if applicable).
+    :param reward_net_val_split: Fraction of collected preferences to dedicate for validation.
+    :type reward_net_val_split: float
 
-        trajectory_length (int):
-            The number of steps in each sampled trajectory.
+    :param sim_teacher: A simulated teacher providing preferences based on trajectory pairs.
+        Required if mode is set to "simulated".
+    :type sim_teacher: object, optional
 
-        capture_video (bool, optional):
-            Whether to record videos of sampled trajectory pairs. Defaults to True.
+    :param reward_net: Reward network used for evaluating trajectories during preference query.
+    :type reward_net: object, optional
 
-        render_mode (str, optional):
-            The rendering mode for the video recorder. Options: "simulated", "human", or "multi_camera".
+    :param feedback_file: Path to a file containing pre-recorded feedback to load. Required only if
+        mode is set to "file".
+    :type feedback_file: str, optional
 
-        video_recorder (VideoRecorder, optional):
-            An object responsible for recording trajectory videos.
-            Used only when `capture_video` is True or "human_feedback" mode is selected.
-    Returns:
-        PreferenceBuffer: Updated preference buffer with collected feedback.
-        :param mode:
-        :param video_recorder:
-        :param capture_video:
-        :param render_mode:
-        :param feedback_file:
-        :param reward_net:
-        :param sim_teacher:
-        :param val_pref_buffer:
-        :param trajectory_length:
-        :param teacher_feedback_num_queries_per_session:
-        :param preference_sampling:
-        :param run_name:
-        :param replay_buffer:
-        :param feedback_server_url:
-            Url including port of the feedback server to use
-        :param reward_net_val_split:
-        :param train_pref_buffer:
+    :param capture_video: If True, videos of sampled trajectories will be captured for feedback.
+    :type capture_video: bool
+
+    :param render_mode: Specifies the mode for rendering sampled trajectories. By default, this is
+        set to "simulated". In "human" mode, trajectories are rendered for humans to annotate.
+    :type render_mode: str
+
+    :param video_recorder: Object responsible for recording videos of sampled trajectories.
+        Used only if `capture_video` or mode `human` is enabled.
+    :type video_recorder: object, optional
 
     """
-
     if mode == "simulated":
         if not sim_teacher:
             raise ValueError(
@@ -131,11 +117,9 @@ def collect_feedback(
             preference = sim_teacher.give_preference(
                 first_trajectory, second_trajectory
             )
-
             # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
             if preference is None:
                 continue
-
             # Store preferences
             if np.random.rand() < (
                 1 - reward_net_val_split
@@ -208,7 +192,6 @@ def collect_feedback(
                     else:
                         logging.debug("Could not fetch feedback; retrying...")
                     time.sleep(5)
-
         except KeyboardInterrupt:
             logging.error("Human feedback process interrupted.")
 
@@ -222,13 +205,16 @@ def collect_feedback(
             first_trajectory = feedback["trajectory_1"]
             second_trajectory = feedback["trajectory_2"]
             preference = feedback["preference"]
-            val_pref_buffer.add(first_trajectory, second_trajectory, preference)
+            if np.random.rand() < (
+                1 - reward_net_val_split
+            ):  # 1 - (Val Split)% for training
+                train_pref_buffer.add(first_trajectory, second_trajectory, preference)
+            else:  # (Val Split)% for validation
+                val_pref_buffer.add(first_trajectory, second_trajectory, preference)
 
     else:
         raise ValueError(f"Unknown feedback mode: {mode}")
-
-    logging.info(f"Collected feedback with mode: {mode}")
-    return train_pref_buffer, val_pref_buffer
+    logging.debug(f"Collected feedback with mode: {mode}")
 
 
 def human_feedback_preparation(
@@ -241,90 +227,61 @@ def human_feedback_preparation(
     trajectory_length,
     video_recorder,
 ):
+    """
+    Prepares human feedback data by sampling trajectory pairs, recording their videos,
+    and sending them to the server for human evaluation.
+
+    Parameters:
+    ----------
+    num_queries : int
+        The number of trajectory queries to prepare for human feedback.
+
+    preference_sampling : str
+        The sampling strategy to use for selecting trajectory pairs. Options:
+        - "disagree": Use trajectories where the reward network has high disagreement.
+        - "entropy": Use trajectories with high entropy in the reward distribution.
+        - Any other value: Defaults to uniform sampling from the replay buffer.
+
+    replay_buffer : ReplayBuffer
+        The replay buffer containing experience data to sample trajectories from.
+
+    reward_net : RewardNetwork
+        The reward network used for disagreement or entropy-based sampling
+        (only used when preference_sampling is "disagree" or "entropy").
+
+    run_name : str
+        A name or identifier for the current run. Used for recording trajectory videos.
+
+    trajectory_length : int
+        The length of the trajectories to sample.
+
+    video_recorder : VideoRecorder
+        An object responsible for recording trajectory videos to the file system.
+        It should expose a `record_trajectory` method that returns the recorded
+        video file path and corresponding `env_id`.
+
+    Workflow:
+    ---------
+    1. **Sample Trajectories**:
+       - Based on the `preference_sampling` strategy, it samples trajectory pairs
+         using disagreement sampling, entropy sampling, or uniform sampling.
+
+    2. **Record Videos**:
+       - Records videos of each sampled trajectory using the `video_recorder` object.
+       - The videos are stored locally, and the paths are retrieved.
+
+    3. **Send Data to Server**:
+       - Sends the generated video filenames as a `POST` request to the server
+         under the corresponding `env_id` for human evaluation.
+    """
     sampled_trajectory_videos = []
     for i in trange(
         teacher_feedback_num_queries_per_session,
         desc="Feedback pairs prepared:",
-        # unit="",
     ):
-        """
-        Prepares human feedback data by sampling trajectory pairs, recording their videos,
-        and sending them to the server for human evaluation.
-
-        Parameters:
-        ----------
-        num_queries : int
-            The number of trajectory queries to prepare for human feedback.
-
-        preference_sampling : str
-            The sampling strategy to use for selecting trajectory pairs. Options:
-            - "disagree": Use trajectories where the reward network has high disagreement.
-            - "entropy": Use trajectories with high entropy in the reward distribution.
-            - Any other value: Defaults to uniform sampling from the replay buffer.
-
-        replay_buffer : ReplayBuffer
-            The replay buffer containing experience data to sample trajectories from.
-
-        reward_net : RewardNetwork
-            The reward network used for disagreement or entropy-based sampling
-            (only used when preference_sampling is "disagree" or "entropy").
-
-        run_name : str
-            A name or identifier for the current run. Used for recording trajectory videos.
-
-        trajectory_length : int
-            The length of the trajectories to sample.
-
-        video_recorder : VideoRecorder
-            An object responsible for recording trajectory videos to the file system.
-            It should expose a `record_trajectory` method that returns the recorded
-            video file path and corresponding `env_id`.
-
-        Returns:
-        --------
-        None
-            The method does not return anything. It prepares and sends trajectory videos as a
-            POST request to a server.
-
-        Workflow:
-        ---------
-        1. **Sample Trajectories**:
-           - Based on the `preference_sampling` strategy, it samples trajectory pairs
-             using disagreement sampling, entropy sampling, or uniform sampling.
-
-        2. **Record Videos**:
-           - Records videos of each sampled trajectory using the `video_recorder` object.
-           - The videos are stored locally, and the paths are retrieved.
-
-        3. **Send Data to Server**:
-           - Sends the generated video filenames as a `POST` request to the server
-             under the corresponding `env_id` for human evaluation.
-
-        Example:
-        --------
-        prepare_human_feedback_data(
-            num_queries=50,
-            preference_sampling="disagree",
-            replay_buffer=replay_buffer,
-            reward_net=reward_net,
-            run_name="experiment_01",
-            sampled_trajectories=[],
-            trajectory_length=100,
-            video_recorder=video_recorder
+        first_trajectory, second_trajectory = sample_trajectories(
+            replay_buffer, preference_sampling, reward_net, trajectory_length
         )
-        """
-        if preference_sampling == "disagree":
-            first_trajectory, second_trajectory = disagreement_sampling(
-                replay_buffer, reward_net, trajectory_length
-            )
-        elif preference_sampling == "entropy":
-            first_trajectory, second_trajectory = entropy_sampling(
-                replay_buffer, reward_net, trajectory_length
-            )
-        else:
-            first_trajectory, second_trajectory = uniform_sampling(
-                replay_buffer, trajectory_length
-            )
         first_trajectory_video = video_recorder.record_trajectory(
             first_trajectory, run_name
         )

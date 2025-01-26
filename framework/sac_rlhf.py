@@ -214,12 +214,13 @@ class Args:
     path_to_model: str = ""
     """path to model"""
 
+
 def run(args: Any):
     try:
         if args.feedback_server_autostart:
             if (
-                    "localhost" in args.feedback_server_url
-                    or "127.0.0" in args.feedback_server_url
+                "localhost" in args.feedback_server_url
+                or "127.0.0" in args.feedback_server_url
             ):
                 feedback_server_process = start_feedback_server(
                     args.feedback_server_url.split(":")[-1]
@@ -237,6 +238,7 @@ def run(args: Any):
     finally:
         if args.feedback_server_autostart:
             stop_feedback_server(feedback_server_process)
+
 
 def train(args: Any):
     """
@@ -608,7 +610,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                train_pref_buffer, val_pref_buffer = collect_feedback(
+                collect_feedback(
                     mode=args.teacher_feedback_mode,
                     feedback_server_url=args.feedback_server_url,
                     run_name=run_name,
@@ -627,7 +629,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 )
 
                 next_session_idx += 1
-                logging.info(f"next_session_idx {next_session_idx}")
+                logging.debug(f"next_session_idx {next_session_idx}")
                 train_reward(
                     model=reward_net,
                     optimizer=reward_optimizer,
