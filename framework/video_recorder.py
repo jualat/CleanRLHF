@@ -1,12 +1,11 @@
 import logging
 import os
+import re
 
 import torch
 from env import is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
-import re
-
 
 
 class VideoRecorder:
@@ -52,9 +51,11 @@ class VideoRecorder:
                 video_folder=video_folder,
                 fps=fps,
                 name_prefix=name_prefix,
-                episode_index=episode_index
+                episode_index=episode_index,
             )
-            video_file_name = f"{run_name}/trajectories/{name_prefix}-episode-{episode_index}.mp4"
+            video_file_name = (
+                f"{run_name}/trajectories/{name_prefix}-episode-{episode_index}.mp4"
+            )
             logging.info(f"Finished recording trajectory video: {video_file_name}")
             return video_file_name
         except Exception as e:
@@ -123,7 +124,6 @@ class VideoRecorder:
         return frames
 
 
-
 def parse_video_filename(video_name: str):
     """
     Parse the video file name and extract trajectory-related indices.
@@ -140,7 +140,9 @@ def parse_video_filename(video_name: str):
     return start_idx, end_idx, env_idx
 
 
-def retrieve_trajectory_by_video_name(replay_buffer: ReplayBuffer, video_name: str, env=None) -> Trajectory:
+def retrieve_trajectory_by_video_name(
+    replay_buffer: ReplayBuffer, video_name: str, env=None
+) -> Trajectory:
     """
     Retrieve the trajectory object corresponding to a given video name.
 
@@ -154,4 +156,3 @@ def retrieve_trajectory_by_video_name(replay_buffer: ReplayBuffer, video_name: s
     """
     start_idx, end_idx, _ = parse_video_filename(video_name.split("/")[-1])
     return replay_buffer.get_trajectory(start_idx, end_idx, env)
-

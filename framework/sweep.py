@@ -3,7 +3,8 @@ from dataclasses import dataclass, fields, replace
 import tyro
 import wandb
 import yaml
-from sac_rlhf import Args, run as run_sac_rlhf
+from sac_rlhf import Args
+from sac_rlhf import run as run_sac_rlhf
 
 
 @dataclass

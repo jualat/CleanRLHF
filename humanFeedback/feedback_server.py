@@ -1,8 +1,7 @@
+import argparse
 import logging
 import os
 import threading
-import argparse
-import logging
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
@@ -48,7 +47,7 @@ def fetch_video(filename):
     except Exception as e:
         logging.error(f"Failed to fetch video: {e}")
         return (
-            jsonify({"status": "error", "message": f"File not found: {filename} " }),
+            jsonify({"status": "error", "message": f"File not found: {filename} "}),
             404,
         )
 
@@ -96,9 +95,7 @@ def add_videos(env_id):
             {
                 "status": "success",
                 "message": f"Added {len(data['video_pairs'])} video pairs to env_id {env_id}.",
-                "total_pairs": len(
-                    sampled_videos[env_id]
-                ),
+                "total_pairs": len(sampled_videos[env_id]),
             }
         ),
         200,
@@ -118,7 +115,8 @@ def get_videos():
 
                 # Check if this pair already has feedback
                 feedback_exists = any(
-                    feedback["trajectory_1"] == video_pair[0] and feedback["trajectory_2"] == video_pair[1]
+                    feedback["trajectory_1"] == video_pair[0]
+                    and feedback["trajectory_2"] == video_pair[1]
                     for feedback in feedback_buffers.get(run_name, [])
                 )
 
@@ -134,9 +132,10 @@ def get_videos():
                         ),
                         200,
                     )
-                logging.info(f"Skipped pair {video_pair} for run: {run_name} as feedback already exists.")
+                logging.info(
+                    f"Skipped pair {video_pair} for run: {run_name} as feedback already exists."
+                )
         return "", 204
-
 
 
 @app.route("/api/submit_feedback/<run_name>", methods=["POST"])
@@ -154,7 +153,6 @@ def submit_feedback(run_name):
     if "trajectory_1" in data and "trajectory_2" in data and "preference" in data:
         trajectory_1 = data["trajectory_1"]
         trajectory_2 = data["trajectory_2"]
-        preference = data["preference"]
 
         with lock:
             if run_name not in feedback_buffers:
@@ -162,16 +160,22 @@ def submit_feedback(run_name):
 
             # Check if feedback for the same pair already exists
             existing_feedback = next(
-                (feedback for feedback in feedback_buffers[run_name]
-                 if feedback["trajectory_1"] == trajectory_1 and feedback["trajectory_2"] == trajectory_2),
-                None
+                (
+                    feedback
+                    for feedback in feedback_buffers[run_name]
+                    if feedback["trajectory_1"] == trajectory_1
+                    and feedback["trajectory_2"] == trajectory_2
+                ),
+                None,
             )
 
             if existing_feedback:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Feedback already exists for pair: ({trajectory_1}, {trajectory_2}) in run: {run_name}."
-                }), 400
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Feedback already exists for pair: ({trajectory_1}, {trajectory_2}) in run: {run_name}.",
+                    }
+                ), 400
 
             feedback_buffers[run_name].append(data)
 
@@ -181,9 +185,13 @@ def submit_feedback(run_name):
                 pair_to_remove = [trajectory_1, trajectory_2]
                 if pair_to_remove in video_stack:
                     video_stack.remove(pair_to_remove)
-                    logging.info(f"Removed pair {pair_to_remove} from queue for run: {run_name}")
+                    logging.info(
+                        f"Removed pair {pair_to_remove} from queue for run: {run_name}"
+                    )
                 else:
-                    logging.warning(f"Pair {pair_to_remove} not found in queue for run: {run_name}")
+                    logging.warning(
+                        f"Pair {pair_to_remove} not found in queue for run: {run_name}"
+                    )
 
         return (
             jsonify(
@@ -196,7 +204,6 @@ def submit_feedback(run_name):
         )
     else:
         return jsonify({"status": "error", "message": "Invalid feedback format"}), 400
-
 
 
 @app.route("/api/get_feedback/<run_name>", methods=["GET"])
@@ -223,10 +230,14 @@ def get_feedback(run_name):
             )
 
 
-@app.route('/favicon.ico')
+@app.route("/favicon.ico")
 def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    return send_from_directory(
+        os.path.join(app.root_path, "static"),
+        "favicon.ico",
+        mimetype="image/vnd.microsoft.icon",
+    )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Feedback Server")
@@ -239,4 +250,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app.run(debug=True, port=args.port)
-
