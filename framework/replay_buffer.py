@@ -21,6 +21,15 @@ class ReplayBufferSampleHF(NamedTuple):
     env_idx: int
 
 
+class RolloutBufferSampleHF(NamedTuple):
+    observations: torch.Tensor
+    actions: torch.Tensor
+    returns: torch.Tensor
+    advantages: torch.Tensor
+    values: torch.Tensor
+    log_probs: torch.Tensor
+
+
 class Trajectory(NamedTuple):
     replay_buffer_start_idx: int
     replay_buffer_end_idx: int
@@ -229,7 +238,9 @@ class ReplayBuffer(SB3ReplayBuffer):
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         if copy:
             return torch.tensor(array, dtype=torch.float32, device=self.device)
-        return torch.as_tensor(array, dtype=torch.float32, device=self.device)
+        return torch.as_tensor(
+            array, dtype=torch.float32, device=self.device
+        )  # test if still needed
 
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
@@ -290,6 +301,22 @@ class ReplayBuffer(SB3ReplayBuffer):
             "No change in rewards after relabeling!"
         )
 
+    def temporal_data_augmentation(
+        self, traj: Trajectory, H_max=55, H_min=45, env: Optional[VecNormalize] = None
+    ):
+        start_idx = traj.replay_buffer_start_idx
+        end_idx = traj.replay_buffer_end_idx
+        H = end_idx - start_idx
+
+        H_prime = np.random.randint(low=H_min, high=min(H_max, H) + 1)
+        offset = np.random.randint(low=0, high=H - H_prime + 1)
+
+        slice_start_idx = start_idx + offset
+        slice_end_idx = start_idx + offset + H_prime - 1
+        assert slice_start_idx < slice_end_idx, "Invalid slice"
+        assert slice_end_idx <= end_idx, "Index out of range"
+        return self.get_trajectory(slice_start_idx, slice_end_idx, env=env)
+
 
 class RolloutBuffer(ReplayBuffer):
     def __init__(
@@ -307,6 +334,8 @@ class RolloutBuffer(ReplayBuffer):
         rune_beta: float = 0,
         rune_beta_decay: float = 0.999,
         seed: int = None,
+        gae_lambda: float = 0.95,
+        gamma: float = 0.99,
     ):
         super().__init__(
             buffer_size,
@@ -324,8 +353,12 @@ class RolloutBuffer(ReplayBuffer):
             seed,
         )
 
-        self.log_props = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.gae_lambda = gae_lambda
+        self.gamma = gamma
 
     def add(
         self,
@@ -340,7 +373,7 @@ class RolloutBuffer(ReplayBuffer):
         global_step: int,
         qpos: np.ndarray,
         qvel: np.ndarray,
-        logprops: np.ndarray,
+        logprobs: np.ndarray,
         values: np.ndarray,
     ):
         super().add(
@@ -356,11 +389,8 @@ class RolloutBuffer(ReplayBuffer):
             qpos=qpos,
             qvel=qvel,
         )
-        self.log_props[self.pos] = logprops
+        self.log_probs[self.pos] = logprobs
         self.values[self.pos] = values
-
-    def sample(self):
-        pass
 
     def reset(self):
         self.observations = np.zeros(
@@ -379,6 +409,62 @@ class RolloutBuffer(ReplayBuffer):
             (self.buffer_size, self.n_envs), dtype=np.float32
         )
         self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.bool)
-        self.log_props = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+
+    def compute_gae_and_returns(self, agent):
+        """Compute advantages and returns using GAE."""
+        with torch.no_grad():
+            next_observations = torch.Tensor(
+                self.observations[self.buffer_size - 1]
+            ).to(self.device)
+            next_value = agent.get_value(next_observations).cpu().numpy().reshape(1, -1)
+            lastgaelam = 0
+            for t in reversed(range(self.buffer_size)):
+                if t == self.buffer_size - 1:
+                    nextnonterminal = 1.0 - self.dones[self.buffer_size - 1]
+                    nextvalues = next_value
+                else:
+                    nextnonterminal = 1.0 - self.dones[t + 1]
+                    nextvalues = self.values[t + 1]
+                delta = (
+                    self.rewards[t]
+                    + self.gamma * nextvalues * nextnonterminal
+                    - self.values[t]
+                )
+                lastgaelam = (
+                    delta + self.gamma * self.gae_lambda * nextnonterminal * lastgaelam
+                )
+                self.advantages[t] = lastgaelam
+
+        self.returns = self.advantages + self.values
+
+    def get(
+        self,
+    ) -> RolloutBufferSampleHF:
+        return RolloutBufferSampleHF(
+            observations=torch.Tensor(self.observations)
+            .to(self.device)
+            .reshape((-1,) + self.obs_shape),
+            log_probs=torch.Tensor(self.log_probs).reshape(-1),
+            actions=torch.Tensor(self.actions)
+            .to(self.device)
+            .reshape((-1,) + self.action_space.shape),
+            advantages=torch.Tensor(self.advantages)
+            .to(self.device)
+            .reshape(
+                -1,
+            ),
+            returns=torch.Tensor(self.returns)
+            .to(self.device)
+            .reshape(
+                -1,
+            ),
+            values=torch.Tensor(self.values)
+            .to(self.device)
+            .reshape(
+                -1,
+            ),
+        )

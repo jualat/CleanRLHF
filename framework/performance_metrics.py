@@ -254,13 +254,7 @@ class PerformanceMetrics:
         self,
         global_step,
         optimizer,
-        v_loss,
-        pg_loss,
-        entropy_loss,
-        old_approx_kl,
-        approx_kl,
-        clipfracs,
-        explained_var,
+        loss_dict,
         start_time,
     ):
         """
@@ -268,28 +262,20 @@ class PerformanceMetrics:
 
         :param global_step: Current global training step.
         :param optimizer: Optimizer used for parameter updates.
-        :param v_loss: Value loss term.
-        :param pg_loss: Policy gradient loss term.
-        :param entropy_loss: Entropy loss term.
-        :param old_approx_kl: Previous KL divergence estimate.
-        :param approx_kl: Current KL divergence estimate.
-        :param clipfracs: Fraction of clipped actions.
-        :param explained_var: Explained variance of the value function.
+        :param loss_dict: The dictionary of the PPO losses
         :param start_time: Start time for calculating steps per second (SPS).
         :return: None
         """
         self.writer.add_scalar(
             "charts/learning_rate", optimizer.param_groups[0]["lr"], global_step
         )
-        self.writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-        self.writer.add_scalar("losses/policy_loss", pg_loss.item(), global_step)
-        self.writer.add_scalar("losses/entropy", entropy_loss.item(), global_step)
-        self.writer.add_scalar(
-            "losses/old_approx_kl", old_approx_kl.item(), global_step
-        )
-        self.writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
-        self.writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
-        self.writer.add_scalar("losses/explained_variance", explained_var, global_step)
+        for loss_name, loss_value in loss_dict.items():
+            if loss_value is not None:
+                if loss_name == "clipfracs":
+                    loss_value = np.mean(loss_value)
+                self.writer.add_scalar(
+                    f"losses/{loss_name}", float(loss_value), global_step
+                )
         logging.debug(f"SPS: {int(global_step / (time.time() - start_time))}")
         self.writer.add_scalar(
             "charts/SPS", int(global_step / (time.time() - start_time)), global_step

@@ -9,12 +9,13 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import tyro
 from agent import Agent
 from env import (
-    is_mujoco_env,
+    get_qpos_qvel,
+    initialize_qpos_qvel,
+    is_dm_control,
     load_model_all,
     load_replay_buffer,
     make_env_ppo,
@@ -24,12 +25,11 @@ from env import (
 from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
-from replay_buffer import ReplayBuffer
+from replay_buffer import RolloutBuffer
 from reward_net import RewardNet, train_reward
 from sampling import sample_trajectories
-from teacher import Teacher
+from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
-from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
 
 
@@ -51,22 +51,22 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
+    render_mode: str = ""
+    """set render_mode to 'human' to watch training (it is not possible to render human and capture videos with the flag '--capture-video')"""
+    num_envs: int = 1
+    """the number of parallel game environments"""
     log_file: bool = True
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "HalfCheetah-v5"
+    env_id: str = "Hopper-v5"
     """the id of the environment"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
-    buffer_size: int = int(total_timesteps)
-    """the replay memory buffer size"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 1
-    """the number of parallel game environments"""
     num_steps: int = 2048
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
@@ -105,6 +105,8 @@ class Args:
     """enable early stopping"""
     early_stopping_step: int = 500000
     """the number of steps before early stopping"""
+    early_stop_patience: int = 5
+    """the number of evaluation before early stopping"""
     early_stopping_mean: float = 900
     """the threshold of early stopping"""
     enable_greater_or_smaller_check: bool = False
@@ -115,22 +117,36 @@ class Args:
     """the dimension of the hidden layers in the reward network"""
     reward_net_hidden_layers: int = 4
     """the number of hidden layers in the reward network"""
+    reward_net_val_split: float = 0.2
+    """the validation split for the reward network"""
+    reward_net_dropout: float = 0.2
+    """the dropout rate for the reward network"""
     agent_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the actor network"""
     agent_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
 
     # Human feedback arguments
-    teacher_feedback_frequency: int = 5000
-    """the frequency of teacher feedback (every K iterations)"""
-    teacher_feedback_num_queries_per_session: int = 50
+    teacher_feedback_schedule: str = "linear"
+    """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
+    teacher_feedback_total_queries: int = 5000
+    """the total number of queries the teacher will provide"""
+    teacher_feedback_num_queries_per_session: int = 40
     """the number of queries per feedback session"""
+    teacher_feedback_exponential_lambda: float = 0.1
+    """the lambda parameter for the exponential feedback schedule"""
     teacher_update_epochs: int = 16
     """the amount of gradient steps to take on the teacher feedback"""
+    teacher_batch_strategy: str = "minibatch"
+    """the sampling method for teacher training, must be 'minibatch' ,'batch' or 'full'"""
+    teacher_minibatch_size: int = 10
+    """the mini batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_feedback_batch_size: int = 32
     """the batch size of the teacher feedback sampled from the feedback buffer"""
     teacher_learning_rate: float = 0.00082
     """the learning rate of the teacher"""
+    pref_buffer_size_sessions: int = 7
+    """the number of sessions to store in the preference buffer"""
 
     # Simulated Teacher
     trajectory_length: int = 64
@@ -154,6 +170,30 @@ class Args:
     total_explore_steps: int = 10000
     """total number of explore steps"""
 
+    # SURF
+    surf: bool = False
+    """Toggle SURF on/off"""
+    unlabeled_batch_ratio: int = 1
+    """Ratio of unlabeled to labeled batch size"""
+    surf_sampling_strategy: str = "uniform"
+    """the sampling method for SURF, must be 'uniform', 'disagree' or 'entropy'"""
+    surf_tau: float = 0.999
+    """Confidence threshold for pseudo-labeling"""
+    lambda_ssl: float = 0.1
+    """Weight for the unsupervised (pseudo-labeled) loss"""
+    max_augmentation_offset: int = 10
+    """Max offset for the data augmentation"""
+    min_augmentation_offset: int = 5
+    """Min offset for the data augmentation"""
+
+    ### RUNE
+    rune: bool = False
+    """Toggle RUNE on/off"""
+    rune_beta: float = 100
+    """Beta parameter for RUNE"""
+    rune_beta_decay: float = 0.0001
+    """Beta decay parameter for RUNE"""
+
     # Load Model
     exploration_load: bool = False
     """skip exploration and load the pre-trained model and buffer from a file"""
@@ -171,6 +211,8 @@ class Args:
     """the number of iterations (computed in runtime)"""
     num_iterations_exploration: int = 0
     """the number of exploration iterations (computed in runtime)"""
+    buffer_size: int = 0
+    """the replay memory buffer size (computed in runtime)"""
 
 
 def train(args: Any):
@@ -178,6 +220,11 @@ def train(args: Any):
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_iterations = args.total_timesteps // args.batch_size
     args.num_iterations_exploration = args.total_explore_steps // args.batch_size
+    args.buffer_size = int(args.batch_size)
+
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s",
@@ -212,56 +259,33 @@ def train(args: Any):
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env_ppo(args.env_id, args.gamma) for _ in range(args.num_envs)]
+        [
+            make_env_ppo(
+                args.env_id, args.gamma, args.seed, i, render_mode=args.render_mode
+            )
+            for i in range(args.num_envs)
+        ]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), (
         "only continuous action space is supported"
     )
-    # TODO ADAPT TO DM CONTROL ENVS
+    envs.single_observation_space.dtype = np.float32
+    dm_control_bool = is_dm_control(env_id=args.env_id)
+
     agent = Agent(
         envs, hidden_dim=args.agent_net_hidden_dim, layers=args.agent_net_hidden_layers
     ).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    # TODO: WRITE CUSTOM REPLAY BUFFER FOR THIS
-    obs = torch.zeros(
-        (args.num_steps, args.num_envs) + envs.single_observation_space.shape
-    ).to(device)
-    actions = torch.zeros(
-        (args.num_steps, args.num_envs) + envs.single_action_space.shape
-    ).to(device)
-    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-
     global_step = 0
     start_time = time.time()
-    next_obs, _ = envs.reset(seed=args.seed)
-    next_obs = torch.Tensor(next_obs).to(device)
-    next_done = torch.zeros(args.num_envs).to(device)
-    # TODO ADAPT TO NEW VIDEO REC
-    if is_mujoco_env(envs.envs[0]):
-        try:
-            qpos = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qpos"]),
-                dtype=np.float32,
-            )
-            qvel = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
-                dtype=np.float32,
-            )
-        except AttributeError:
-            qpos = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.model.key_qpos.shape[1]),
-                dtype=np.float32,
-            )
-            qvel = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
-                dtype=np.float32,
-            )
-    # TODO: ADAPT TO REPLAY BUFFER CHANGES
-    rb = ReplayBuffer(
+    obs, _ = envs.reset(seed=args.seed)
+
+    qpos, qvel = initialize_qpos_qvel(
+        envs=envs, num_envs=args.num_envs, dm_control_bool=dm_control_bool
+    )
+
+    rb = RolloutBuffer(
         args.buffer_size,
         envs.single_observation_space,
         envs.single_action_space,
@@ -270,15 +294,22 @@ def train(args: Any):
         n_envs=1,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
+        rune=args.rune,
+        rune_beta=args.rune_beta,
+        rune_beta_decay=args.rune_beta_decay,
         seed=args.seed,
+        gamma=args.gamma,
+        gae_lambda=args.gae_lambda,
     )
-    # TODO: ADAPT TO NEW PREFERENCE BUFFER
-    pref_buffer = PreferenceBuffer(
-        (args.buffer_size // args.teacher_feedback_frequency)
-        * args.teacher_feedback_num_queries_per_session,
-        seed=args.seed,
+
+    train_pref_buffer_size = (
+        args.teacher_feedback_num_queries_per_session * args.pref_buffer_size_sessions
     )
-    # TODO: ADAPT TO NEW REWARD NET
+    train_pref_buffer = PreferenceBuffer(
+        buffer_size=train_pref_buffer_size, seed=args.seed
+    )
+    val_pref_buffer_size = int(train_pref_buffer_size * args.reward_net_val_split)
+    val_pref_buffer = PreferenceBuffer(buffer_size=val_pref_buffer_size, seed=args.seed)
     reward_net = RewardNet(
         hidden_dim=args.reward_net_hidden_dim,
         hidden_layers=args.reward_net_hidden_layers,
@@ -288,7 +319,7 @@ def train(args: Any):
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id)
+    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -306,188 +337,12 @@ def train(args: Any):
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
     )
-
     metrics = PerformanceMetrics(run_name, args, evaluate)
+    surf_H_max = args.trajectory_length - args.min_augmentation_offset
+    surf_H_min = args.trajectory_length - args.max_augmentation_offset
+
     current_step = 0
-    if args.unsupervised_exploration and not args.exploration_load:
-        knn_estimator = ExplorationRewardKNN(k=3)
-        for iteration in trange(1, args.num_iterations_exploration + 1):
-            if args.anneal_lr:
-                frac = 1.0 - (iteration - 1.0) / args.num_iterations
-                lrnow = frac * args.learning_rate
-                optimizer.param_groups[0]["lr"] = lrnow
-            # TODO: SPLIT UP THE METHODS
-            for step in range(0, args.num_steps):
-                current_step += 1
-                global_step += args.num_envs
-                with torch.no_grad():
-                    action, logprob, _, value = agent.get_action_and_value(obs)
-                    values = value.flatten()
-
-                # TODO: ADAPT TO RUNE
-
-                (
-                    next_obs,
-                    ground_truth_rewards,
-                    terminations,
-                    truncations,
-                    infos,
-                ) = envs.step(action.cpu().numpy())
-
-                intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
-                knn_estimator.update_states(next_obs)
-                done = np.logical_or(terminations, truncations)
-
-                if is_mujoco_env(envs.envs[0]):
-                    for idx in range(args.num_envs):
-                        single_env = envs.envs[idx]
-                        qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                        qvel[idx] = single_env.unwrapped.data.qvel.copy()
-
-                rb.add(
-                    obs=obs,
-                    next_obs=next_obs,
-                    action=action,
-                    intrinsic_reward=intrinsic_reward,
-                    extrinsic_reward=np.zeros(
-                        args.num_envs
-                    ),  # There is no standard deviation during the exploration phase
-                    ground_truth_reward=ground_truth_rewards,
-                    done=done,
-                    infos=infos,
-                    qpos=qpos,
-                    qvel=qvel,
-                )
-                obs = next_obs
-
-                if infos and "final_info" in infos:
-                    for info in infos["final_info"]:
-                        if info:
-                            break
-
-            # bootstrap value if not done
-            with torch.no_grad():
-                next_value = agent.get_value(next_obs).reshape(1, -1)
-                advantages = torch.zeros_like(rewards).to(device)
-                lastgaelam = 0
-                for t in reversed(range(args.num_steps)):
-                    if t == args.num_steps - 1:
-                        nextnonterminal = 1.0 - next_done
-                        nextvalues = next_value
-                    else:
-                        nextnonterminal = 1.0 - dones[t + 1]
-                        nextvalues = values[t + 1]
-                    delta = (
-                        rewards[t]
-                        + args.gamma * nextvalues * nextnonterminal
-                        - values[t]
-                    )
-                    advantages[t] = lastgaelam = (
-                        delta
-                        + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
-                    )
-                returns = advantages + values
-
-            # flatten the batch
-
-            b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
-            b_logprobs = logprobs.reshape(-1)
-            b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
-            b_advantages = advantages.reshape(-1)
-            b_returns = returns.reshape(-1)
-            b_values = values.reshape(-1)
-
-            # Optimizing the policy and value network
-            b_inds = np.arange(args.batch_size)
-            clipfracs = []
-            for epoch in range(args.update_epochs):
-                np.random.shuffle(b_inds)
-                for start in range(0, args.batch_size, args.minibatch_size):
-                    end = start + args.minibatch_size
-                    mb_inds = b_inds[start:end]
-
-                    _, newlogprob, entropy, newvalue = agent.get_action_and_value(
-                        b_obs[mb_inds], b_actions[mb_inds]
-                    )
-                    logratio = newlogprob - b_logprobs[mb_inds]
-                    ratio = logratio.exp()
-
-                    with torch.no_grad():
-                        # calculate approx_kl http://joschu.net/blog/kl-approx.html
-                        old_approx_kl = (-logratio).mean()
-                        approx_kl = ((ratio - 1) - logratio).mean()
-                        clipfracs += [
-                            ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
-                        ]
-
-                    mb_advantages = b_advantages[mb_inds]
-                    if args.norm_adv:
-                        mb_advantages = (mb_advantages - mb_advantages.mean()) / (
-                            mb_advantages.std() + 1e-8
-                        )
-
-                    # Policy loss
-                    pg_loss1 = -mb_advantages * ratio
-                    pg_loss2 = -mb_advantages * torch.clamp(
-                        ratio, 1 - args.clip_coef, 1 + args.clip_coef
-                    )
-                    pg_loss = torch.max(pg_loss1, pg_loss2).mean()
-
-                    # Value loss
-                    newvalue = newvalue.view(-1)
-                    if args.clip_vloss:
-                        v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                        v_clipped = b_values[mb_inds] + torch.clamp(
-                            newvalue - b_values[mb_inds],
-                            -args.clip_coef,
-                            args.clip_coef,
-                        )
-                        v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                        v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                        v_loss = 0.5 * v_loss_max.mean()
-                    else:
-                        v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
-
-                    entropy_loss = entropy.mean()
-                    loss = (
-                        pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
-                    )
-
-                    optimizer.zero_grad()
-                    loss.backward()
-                    nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
-                    optimizer.step()
-
-                if args.target_kl is not None and approx_kl > args.target_kl:
-                    break
-
-            y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-            var_y = np.var(y_true)
-            explained_var = (
-                np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-            )
-            metrics.log_training_metrics_ppo(
-                global_step,
-                optimizer,
-                v_loss,
-                pg_loss,
-                entropy_loss,
-                old_approx_kl,
-                approx_kl,
-                clipfracs,
-                explained_var,
-                start_time,
-            )
-        state_dict = {
-            "agent": agent,
-            "reward_net": reward_net,
-            "optimizer": optimizer,
-            "reward_optimizer": reward_optimizer,
-        }
-        save_model_all(run_name, args.total_explore_steps, state_dict)
-        save_replay_buffer(run_name, args.total_explore_steps, rb)
-        next_obs, _ = envs.reset(seed=args.seed)  #
-        next_obs = torch.Tensor(next_obs).to(device)  #
+    # TODO CHANGE PRE TRAINING
 
     if args.exploration_load:
         load_replay_buffer(rb, path=args.path_to_replay_buffer)
@@ -501,15 +356,45 @@ def train(args: Any):
 
     reward_means = deque(maxlen=3)
     try:
+        total_steps = (
+            args.total_timesteps - args.total_explore_steps
+            if args.exploration_load or args.unsupervised_exploration
+            else args.total_timesteps
+        )
+
+        teacher_total_queries = args.teacher_feedback_total_queries
+        teacher_num_sessions = (
+            teacher_total_queries // args.teacher_feedback_num_queries_per_session
+        )
+        teacher_exponential_lambda = args.teacher_feedback_exponential_lambda
+        teacher_session_steps = teacher_feedback_schedule(
+            num_sessions=teacher_num_sessions,
+            total_steps=total_steps,
+            schedule=args.teacher_feedback_schedule,
+            lambda_=teacher_exponential_lambda,
+        )
+
+        model_folder = f"./models/{run_name}"
+        os.makedirs(model_folder, exist_ok=True)
+
+        sessions_steps_plt = plot_feedback_schedule(
+            schedule=teacher_session_steps,
+            num_queries=teacher_total_queries,
+        )
+        sessions_steps_plt.savefig(f"{model_folder}/feedback_schedule.png")
+
+        next_session_idx = 0
+
         for iteration in trange(1, args.num_iterations + 1):
             if args.anneal_lr:
                 frac = 1.0 - (iteration - 1.0) / args.num_iterations
                 lrnow = frac * args.learning_rate
                 optimizer.param_groups[0]["lr"] = lrnow
-            # TODO: ADAPT TO NEW FEEDBACK SCHEDULING
             for step in range(0, args.num_steps):
-                if global_step % args.teacher_feedback_frequency == 0 and (
+                if global_step >= teacher_session_steps[next_session_idx] and (
                     global_step != 0
+                    or args.exploration_load
+                    or args.unsupervised_exploration
                 ):
                     for i in trange(
                         args.teacher_feedback_num_queries_per_session,
@@ -544,79 +429,78 @@ def train(args: Any):
                             continue
 
                         # Store preferences
-                        pref_buffer.add(first_trajectory, second_trajectory, preference)
-                    # TODO ADAPT TO NEW TRAINING
+                        if np.random.rand() < (
+                            1 - args.reward_net_val_split
+                        ):  # 1 - (Val Split)% for training
+                            train_pref_buffer.add(
+                                first_trajectory, second_trajectory, preference
+                            )
+                        else:  # (Val Split)% for validation
+                            val_pref_buffer.add(
+                                first_trajectory, second_trajectory, preference
+                            )
+
+                    next_session_idx += 1
+
                     train_reward(
-                        reward_net,
-                        reward_optimizer,
-                        metrics,
-                        pref_buffer,
-                        rb,
-                        global_step,
-                        args.teacher_update_epochs,
-                        args.teacher_feedback_batch_size,
-                        device,
+                        model=reward_net,
+                        optimizer=reward_optimizer,
+                        metrics=metrics,
+                        train_pref_buffer=train_pref_buffer,
+                        val_pref_buffer=val_pref_buffer,
+                        rb=rb,
+                        global_step=global_step,
+                        epochs=args.teacher_update_epochs,
+                        batch_size=args.teacher_feedback_batch_size,
+                        mini_batch_size=args.teacher_minibatch_size,
+                        batch_sample_strategy=args.teacher_batch_strategy,
+                        device=device,
+                        surf=args.surf,
+                        sampling_strategy=args.surf_sampling_strategy,
+                        trajectory_length=args.trajectory_length,
+                        unlabeled_batch_ratio=args.unlabeled_batch_ratio,
+                        tau=args.surf_tau,
+                        lambda_ssl=args.lambda_ssl,
+                        H_max=surf_H_max,
+                        H_min=surf_H_min,
                     )
 
                 current_step += 1
                 global_step += args.num_envs
-                obs[step] = next_obs
-                dones[step] = next_done
-                single_obs = next_obs
+
+                ## Agent steps
+                action, logprob, value = agent.select_action(obs, device)
+
                 with torch.no_grad():
-                    action, logprob, _, value = agent.get_action_and_value(next_obs)
-                    values[step] = value.flatten()
-                actions[step] = action
-                logprobs[step] = logprob
-                with torch.no_grad():
-                    reward = reward_net.predict_reward(
-                        next_obs.cpu().numpy(), action.cpu().numpy()
-                    )
+                    rewards, rewards_std = reward_net.predict_reward(obs, action)
 
                 (
                     next_obs,
-                    ground_truth_rewards,
+                    groundTruthRewards,
                     terminations,
                     truncations,
                     infos,
-                ) = envs.step(action.cpu().numpy())
-                next_done = np.logical_or(terminations, truncations)
+                ) = envs.step(action)
+                done = np.logical_or(terminations, truncations)
 
-                if is_mujoco_env(envs.envs[0]):
-                    try:
-                        skipped_qpos = envs.envs[0].unwrapped.observation_structure[
-                            "skipped_qpos"
-                        ]
-                    except (KeyError, AttributeError):
-                        skipped_qpos = 0
+                get_qpos_qvel(envs, qpos, qvel, dm_control_bool)
 
-                    for idx in range(args.num_envs):
-                        single_env = envs.envs[idx]
-                        qpos[idx] = (
-                            single_env.unwrapped.data.qpos[:-skipped_qpos].copy()
-                            if skipped_qpos > 0
-                            else single_env.unwrapped.data.qpos.copy()
-                        )
-                        qvel[idx] = single_env.unwrapped.data.qvel.copy()
-
-                next_obs = next_obs.astype(np.float32)
                 rb.add(
-                    obs=single_obs.cpu().numpy(),
+                    obs=obs,
                     next_obs=next_obs,
-                    action=action.cpu().numpy(),
-                    reward=reward,
-                    ground_truth_rewards=ground_truth_rewards,
-                    done=next_done,
+                    action=action,
+                    extrinsic_reward=rewards.squeeze(),
+                    intrinsic_reward=rewards_std.squeeze(),
+                    ground_truth_reward=groundTruthRewards,
+                    done=done,
                     infos=infos,
+                    global_step=global_step,
                     qpos=qpos,
                     qvel=qvel,
+                    values=value,
+                    logprobs=logprob,
                 )
-                rewards[step] = torch.tensor(reward).to(device).view(-1)
-                next_obs, next_done = (
-                    torch.Tensor(next_obs).to(device),
-                    torch.Tensor(next_done).to(device),
-                )
-
+                obs = next_obs
                 if infos and "episode" in infos:
                     allocated, reserved = 0, 0
                     cuda = False
@@ -664,117 +548,14 @@ def train(args: Any):
                 ):
                     break
 
-            # bootstrap value if not done
-            with torch.no_grad():
-                next_value = agent.get_value(next_obs).reshape(1, -1)
-                advantages = torch.zeros_like(rewards).to(device)
-                lastgaelam = 0
-                for t in reversed(range(args.num_steps)):
-                    if t == args.num_steps - 1:
-                        nextnonterminal = 1.0 - next_done
-                        nextvalues = next_value
-                    else:
-                        nextnonterminal = 1.0 - dones[t + 1]
-                        nextvalues = values[t + 1]
-                    delta = (
-                        rewards[t]
-                        + args.gamma * nextvalues * nextnonterminal
-                        - values[t]
-                    )
-                    advantages[t] = lastgaelam = (
-                        delta
-                        + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
-                    )
-                returns = advantages + values
+            rb.compute_gae_and_returns(agent)
 
-            # flatten the batch
-            b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
-            b_logprobs = logprobs.reshape(-1)
-            b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
-            b_advantages = advantages.reshape(-1)
-            b_returns = returns.reshape(-1)
-            b_values = values.reshape(-1)
-
-            # Optimizing the policy and value network
-            b_inds = np.arange(args.batch_size)
-            clipfracs = []
-            for epoch in range(args.update_epochs):
-                np.random.shuffle(b_inds)
-                for start in range(0, args.batch_size, args.minibatch_size):
-                    end = start + args.minibatch_size
-                    mb_inds = b_inds[start:end]
-
-                    _, newlogprob, entropy, newvalue = agent.get_action_and_value(
-                        b_obs[mb_inds], b_actions[mb_inds]
-                    )
-                    logratio = newlogprob - b_logprobs[mb_inds]
-                    ratio = logratio.exp()
-
-                    with torch.no_grad():
-                        # calculate approx_kl http://joschu.net/blog/kl-approx.html
-                        old_approx_kl = (-logratio).mean()
-                        approx_kl = ((ratio - 1) - logratio).mean()
-                        clipfracs += [
-                            ((ratio - 1.0).abs() > args.clip_coef).float().mean().item()
-                        ]
-
-                    mb_advantages = b_advantages[mb_inds]
-                    if args.norm_adv:
-                        mb_advantages = (mb_advantages - mb_advantages.mean()) / (
-                            mb_advantages.std() + 1e-8
-                        )
-
-                    # Policy loss
-                    pg_loss1 = -mb_advantages * ratio
-                    pg_loss2 = -mb_advantages * torch.clamp(
-                        ratio, 1 - args.clip_coef, 1 + args.clip_coef
-                    )
-                    pg_loss = torch.max(pg_loss1, pg_loss2).mean()
-
-                    # Value loss
-                    newvalue = newvalue.view(-1)
-                    if args.clip_vloss:
-                        v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
-                        v_clipped = b_values[mb_inds] + torch.clamp(
-                            newvalue - b_values[mb_inds],
-                            -args.clip_coef,
-                            args.clip_coef,
-                        )
-                        v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                        v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
-                        v_loss = 0.5 * v_loss_max.mean()
-                    else:
-                        v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
-
-                    entropy_loss = entropy.mean()
-                    loss = (
-                        pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
-                    )
-
-                    optimizer.zero_grad()
-                    loss.backward()
-                    nn.utils.clip_grad_norm_(agent.parameters(), args.max_grad_norm)
-                    optimizer.step()
-
-                if args.target_kl is not None and approx_kl > args.target_kl:
-                    break
-
-            y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-            var_y = np.var(y_true)
-            explained_var = (
-                np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-            )
+            ppo_dict = agent.train_agent(rb, args, optimizer)
 
             metrics.log_training_metrics_ppo(
                 global_step,
                 optimizer,
-                v_loss,
-                pg_loss,
-                entropy_loss,
-                old_approx_kl,
-                approx_kl,
-                clipfracs,
-                explained_var,
+                ppo_dict,
                 start_time,
             )
 
