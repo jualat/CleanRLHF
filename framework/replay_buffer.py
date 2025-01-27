@@ -359,6 +359,7 @@ class RolloutBuffer(ReplayBuffer):
         self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.gae_lambda = gae_lambda
         self.gamma = gamma
+        self.current_size = 0
 
     def add(
         self,
@@ -391,6 +392,10 @@ class RolloutBuffer(ReplayBuffer):
         )
         self.log_probs[self.pos] = logprobs
         self.values[self.pos] = values
+
+        self.pos = (self.pos + 1) % self.buffer_size
+        if self.current_size < self.buffer_size:
+            self.current_size += 1
 
     def reset(self):
         self.observations = np.zeros(
@@ -468,3 +473,36 @@ class RolloutBuffer(ReplayBuffer):
                 -1,
             ),
         )
+
+    def sample_trajectories(
+        self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
+    ) -> tuple[List[Trajectory], List[Trajectory]]:
+        """
+        Sample trajectories from the replay buffer.
+        :param env: associated gym VecEnv to normalize the observations/rewards when sampling
+        :param mb_size: amount of pairs of trajectories to be sampled
+        :param traj_len: length of trajectories
+        :return: two lists of mb_size many trajectories
+        """
+        max_valid_index = max(self.current_size, self.pos) - traj_len
+        if max_valid_index <= 0:
+            raise ValueError(
+                f"Not enough valid data in buffer to sample trajectories. "
+                f"self.pos={self.pos}, traj_len={traj_len}, capacity={self.buffer_size}"
+            )
+
+        if max_valid_index >= 2 * mb_size:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=False)
+        else:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=True)
+
+        trajectories = [
+            self.get_trajectory(
+                start,
+                (start + traj_len),
+                env,
+            )
+            for start in indices
+        ]
+        logging.debug(f"trajectory length: {traj_len}, ")
+        return trajectories[:mb_size], trajectories[mb_size:]
