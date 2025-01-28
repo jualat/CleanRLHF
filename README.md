@@ -12,7 +12,8 @@ This project is focussed on implementing a framework for Reinforcement Learning 
   * [Human Feedback](#human-feedback)
 * [Features](#-features)
     * [Unsupervised Exploration](#unsupervised-exploration)
-    * [Ensemble Reward Models](#ensemble-reward-models)
+    * [Trajectory Sampling](#trajectory-sampling)
+    * [Trajectory Scheduling](#trajectory-scheduling)
     * [SURF](#surf)
     * [RUNE](#rune)
     * [Video Recording](#video-recording)
@@ -93,19 +94,36 @@ python3 sac_rlhf.py -h
 
 ### Unsupervised Exploration
 
+At the beginning of RLHF training, the models are initialized randomly and thus don't always explore states sufficiently. Since informative queries in the early phase of training are essential for its success, this is a major challenge. [Lee et al.](https://arxiv.org/abs/2106.05091) handle this issue using the environment's state entropy as an intrinsic reward in unsupervised pre-exploration that can be carried out before the actual RLHF training begins.
 
-### Ensemble Reward Models
+Unsupervised pre-training is enabled by default and can be disabled with the `--no-unsupervised-exploration` flag.
 
+It suffices to do pre-exploration only once per environment on your machine; see [Model Saving/Loading](#model-savingloading).
+
+### Trajectory Sampling
+
+Every trajectory that the agent produces during the training is saved in the replay buffer. Sampling random pairs of such trajectories when consulting the human expert is inefficient. [Lee et al.](https://arxiv.org/abs/2106.05091) propose two methods for more profitable trajectory sampling. Note that the methods utilize ensemble reward models, a technique which we employ for increased training stability:
+
+* **Disagree**: We use an ensemble of three reward models to stabilize the training. If, given a pair of trajectories, the models are not sure which one to prefer (i.e. the standard deviation of the preferences given by the members of the ensemble is high), then it is efficient to ask the human expert.
+* **Entropy**: If a pair of trajectories is near the decision boundary, that is, the entropy of the preferences given by the members of the ensemble is high, then we prefer to consult the human teacher for this pair.
+
+By default, disagreement sampling is used. It can be set using the `--preference-sampling` flag; values must be 'uniform', 'disagree', or 'entropy'.
+
+### Trajectory Scheduling
+
+Because of the low knowledge of the models at the beginning of the training, it can make sense to consult the human expert more often in earlier phases of the training.
+
+Scheduling must be either 'linear' or 'exponential' and is set to be the latter by default. It can be adjusted with the `--teacher-feedback-schedule` flag.
 
 ### SURF
 
-Collecting human feedback on a scale is pretty costly. An idea proposed in [SURF](https://arxiv.org/abs/2203.10050) is to use data augmentation to extract the highest possible amount of information from human labels.
+Collecting human feedback on a scale is pretty costly. An idea proposed by [Park et al.](https://arxiv.org/abs/2203.10050) is to use data augmentation to extract the highest possible amount of information from human labels.
 
-SURF is enabled by default and can be disabled with the `--no-surf` flag. 
+SURF is enabled by default and can be disabled with the `--no-surf` flag.
 
 ### RUNE
 
-The exploration/exploitation trade-off is a problem central to RL. [RUNE](https://arxiv.org/abs/2205.12401) presents an intrinsic reward to encourage exploration.
+The exploration/exploitation trade-off is a problem central to RL. [Liang et al.](https://arxiv.org/abs/2205.12401) present an intrinsic reward to encourage exploration.
 
 RUNE is disabled by default and can be enabled with the `--rune` flag.
 
