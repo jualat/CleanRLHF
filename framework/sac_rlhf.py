@@ -313,6 +313,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     envs.single_observation_space.dtype = np.float32
 
+    obs, _ = envs.reset(seed=args.seed)
+
     qpos, qvel = initialize_qpos_qvel(
         envs=envs, num_envs=args.num_envs, dm_control_bool=dm_control_bool
     )
