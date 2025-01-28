@@ -1,10 +1,8 @@
 import logging
 import os
 
-import gymnasium as gym
-import numpy as np
 import torch
-from env import is_mujoco_env
+from env import is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
 from replay_buffer import ReplayBuffer, Trajectory
 
@@ -24,10 +22,12 @@ class VideoRecorder:
         rb: ReplayBuffer,
         seed: int,
         env_id: str,
+        dm_control: bool,
     ):
         self.rb = rb
         self.seed = seed
         self.env_id = env_id
+        self.dm_control = dm_control
 
     def record_trajectory(self, trajectory: Trajectory, run_name: str, fps=30):
         start_idx = trajectory.replay_buffer_start_idx
@@ -40,7 +40,7 @@ class VideoRecorder:
         os.makedirs(video_folder, exist_ok=True)
         out_path = f"{video_folder}/"
 
-        env = gym.make(self.env_id, render_mode="rgb_array")
+        env = make_single_env(env_id=self.env_id, render="rgb_array")
 
         try:
             self._initialize_env_state(env, trajectory)
@@ -61,7 +61,7 @@ class VideoRecorder:
 
     def _initialize_env_state(self, env, trajectory):
         """Initialize the environment state based on Mujoco or non-Mujoco trajectories."""
-        if is_mujoco_env(env):
+        if is_mujoco_env(env) or self.dm_control:
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             env.reset(seed=self.seed)
@@ -76,15 +76,10 @@ class VideoRecorder:
                 if isinstance(qvel_list[0], torch.Tensor)
                 else qvel_list[0]
             )
-            # Append zeros to qpos for skipped qpos values
-            try:
-                skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
-            except (KeyError, AttributeError):
-                skipped_qpos = 0
-
-            qpos_extended = np.append(qpos, [0] * skipped_qpos)
-
-            env.unwrapped.set_state(qpos_extended, qvel)
+            if self.dm_control:
+                env.physics.set_state(qpos)
+            else:
+                env.unwrapped.set_state(qpos, qvel)
         else:
             env.reset(seed=self.seed)
             if hasattr(env, "state"):
@@ -93,7 +88,7 @@ class VideoRecorder:
     def _generate_frames(self, env, trajectory):
         """Generate frames for the video from the trajectory."""
         frames = [env.render()]
-        if is_mujoco_env(env):
+        if is_mujoco_env(env) or self.dm_control:
             qpos_list = trajectory.samples.qpos
             qvel_list = trajectory.samples.qvel
             for i in range(1, len(qpos_list)):
@@ -107,15 +102,13 @@ class VideoRecorder:
                     if isinstance(qvel_list[i], torch.Tensor)
                     else qvel_list[i]
                 )
-                # Append zeros to qpos for skipped qpos values
-                try:
-                    skipped_qpos = env.unwrapped.observation_structure["skipped_qpos"]
-                except (KeyError, AttributeError):
-                    skipped_qpos = 0
-                qpos_extended = np.append(qpos, [0] * skipped_qpos)
-
-                env.unwrapped.set_state(qpos_extended, qvel)
-                frames.append(env.render())
+                if self.dm_control:
+                    env.physics.set_state(qpos)
+                    env.physics.forward()
+                    frames.append(env.render())
+                else:
+                    env.unwrapped.set_state(qpos, qvel)
+                    frames.append(env.render())
         else:
             actions = trajectory.samples.actions
             for action in actions:

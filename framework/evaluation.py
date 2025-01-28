@@ -13,7 +13,7 @@ import torch
 import tyro
 import wandb
 from actor import Actor
-from env import is_pusher_v5, load_model_all
+from env import is_pusher_v5, load_model_all, make_single_env
 from plotnine import aes, geom_line, geom_point, ggplot, labs
 from scipy.stats import norm
 from tqdm import trange
@@ -68,11 +68,10 @@ class Evaluation:
             "azimuth": 135.0,
             "elevation": -22.5,
         }
-        env = gym.make(self.env_id)
+        env = make_single_env(env_id)
+        env = gym.vector.SyncVectorEnv([lambda: env])
         if path_to_model:
-            self.actor = Actor(
-                gym.vector.SyncVectorEnv([lambda: env]), hidden_dim, hidden_layers
-            )
+            self.actor = Actor(env, hidden_dim, hidden_layers)
             state_dict = {"actor": self.actor}
             load_model_all(state_dict, path_to_model, self.device)
         else:
@@ -83,6 +82,7 @@ class Evaluation:
             np.random.seed(seed)
             torch.manual_seed(seed)
         torch.backends.cudnn.deterministic = torch_deterministic
+        env.close()
 
     def evaluate_policy(
         self,
@@ -122,19 +122,19 @@ class Evaluation:
             total_episode_reward = 0
             if render:
                 images = []
-                img = env.render()
+                img = env.render()[0]
                 images.append(img)
 
             while not done:
                 action, _, _ = actor.get_action(
-                    torch.Tensor(obs).to(self.device).unsqueeze(0)
+                    torch.Tensor(obs).unsqueeze(0).to(self.device)
                 )
                 obs, reward, termination, truncation, _ = env.step(
                     action.detach().cpu().numpy().squeeze(0)
                 )
                 if render:
-                    images.append(env.render())
-                total_episode_reward += reward
+                    images.append(env.render()[0])
+                total_episode_reward += reward.item()
                 done = termination or truncation
 
             if render:
@@ -147,7 +147,8 @@ class Evaluation:
                 imageio.mimsave(uri=out_path, ims=images, fps=fps)
                 video_paths.append(reward_path)
             episode_rewards.append(total_episode_reward)
-        env.close()
+        if env is not None:
+            env.close()
         mean_episode_reward = np.mean(episode_rewards)
         std_episode_reward = np.std(episode_rewards)
         alpha = 1 - confidence
@@ -163,8 +164,8 @@ class Evaluation:
             worst_video_path = os.path.join(video_folder, worst_video)
             wandb.log(
                 {
-                    "Best Video": wandb.Video(best_video_path, fps=fps, format="mp4"),
-                    "Worst Video": wandb.Video(worst_video_path, fps=fps, format="mp4"),
+                    "Best Video": wandb.Video(best_video_path, format="mp4"),
+                    "Worst Video": wandb.Video(worst_video_path, format="mp4"),
                 }
             )
 
@@ -218,10 +219,11 @@ class Evaluation:
                     render_mode="rgb_array",
                 )
             else:
-                env = gym.make(self.env_id, render_mode="rgb_array")
+                env = make_single_env(self.env_id, render="rgb_array")
         else:
-            env = gym.make(self.env_id)
+            env = make_single_env(self.env_id)
         env.action_space.seed(self.seed)
+        env = gym.vector.SyncVectorEnv([lambda: env])
         return env
 
 

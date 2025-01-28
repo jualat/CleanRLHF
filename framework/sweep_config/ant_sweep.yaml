@@ -128,6 +128,9 @@ parameters:
     values: [-1e7]
   teacher_sim_delta_equal:
     values: [0]
+  pref_buffer_size_sessions:
+    values: [3,7,15,30,50]
+
   unsupervised_exploration:
     values: [true]
   total_explore_steps:
