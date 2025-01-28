@@ -27,7 +27,7 @@ This project is focussed on implementing a framework for Reinforcement Learning 
 
 This framework implements RLHF and is oriented towards [PEBBLE](https://arxiv.org/abs/2106.05091). It is based on [SAC](https://arxiv.org/abs/1801.01290), an off-policy actor-critic algorithm for deep RL.
 
-There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discuessed](#-performance) and are [documented](#-features) below.
+There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discussed](#-performance) and [documented](#-features) below.
 
 
 ## 🚀 Performance
@@ -46,19 +46,19 @@ Ensure the following are installed on your system:
 * xvfb (`sudo apt install xvfb` on Debian-based systems)
 * ffmpeg (`sudo apt install ffmpeg` on Debian-based systems)
 
-If you want to contribute, then you'll also need:
+If you want to contribute, consider installing:
 * [pre-commit](https://pre-commit.com/#install)
 
 ### Installing the Dependencies
 
-Clone this repository and cd into it if you haven't done so already:
+1. Clone this repository and cd into it if you haven't done so already:
 
 ```sh
 git clone https://github.com/jualat/CleanRLHF.git
 cd CleanRLHF
 ```
 
-Execute this command to install all dependencies automatically:
+2. Execute this command to install all dependencies automatically:
 
 ```sh
 poetry install
@@ -201,7 +201,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 
 1. Setup a virtual environment and install the dependencies:
 
-   > Note: This step is only required once. It'll install Miniconda, installs Python3.10. creates a virtual environment
+   > Note: This step is only required once. It'll install Miniconda, installs Python3.10, creates a virtual environment
    > and executes the `poetry install` command.
    > It also clones the CleanRLHF repository into ~/workspace directory
 
