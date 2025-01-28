@@ -6,6 +6,7 @@ import threading
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_cors import CORS
 
+# Flask app setup
 app = Flask(__name__)
 CORS(app)
 
@@ -121,7 +122,9 @@ def get_videos():
                 )
 
                 if not feedback_exists:
-                    # If the pair has no feedback, return this pair
+                    # If the pair has no feedback, return this pair and put it to the end of the list (this is only done
+                    # to get feedback for this pair later if no feedback is given by the person who requested this pair)
+                    video_stack.append(video_pair)
                     return (
                         jsonify(
                             {
@@ -132,9 +135,10 @@ def get_videos():
                         ),
                         200,
                     )
-                logging.info(
-                    f"Skipped pair {video_pair} for run: {run_name} as feedback already exists."
-                )
+                else:
+                    logging.info(
+                        f"Skipped pair {video_pair} for run: {run_name} as feedback already exists."
+                    )
         return "", 204
 
 
@@ -143,7 +147,7 @@ def submit_feedback(run_name):
     """
     Endpoint to collect user feedback for a specific environment ID (env_id).
     Expects JSON: { "trajectory_1": ..., "trajectory_2": ..., "preference": ... }
-    Removes the feedback pair from the sampled videos queue after receiving feedback.
+    Ensures atomic checks and updates to avoid race conditions.
     """
     data = request.json
     if not data:
@@ -151,44 +155,34 @@ def submit_feedback(run_name):
 
     # Validate feedback format
     if "trajectory_1" in data and "trajectory_2" in data and "preference" in data:
-        trajectory_1 = data["trajectory_1"]
-        trajectory_2 = data["trajectory_2"]
+        trajectory_1 = data["trajectory_1"].removeprefix("/video/")
+        trajectory_2 = data["trajectory_2"].removeprefix("/video/")
+        pair_to_remove = [trajectory_1, trajectory_2]
 
         with lock:
             if run_name not in feedback_buffers:
                 feedback_buffers[run_name] = []
 
-            # Check if feedback for the same pair already exists
-            existing_feedback = next(
-                (
-                    feedback
-                    for feedback in feedback_buffers[run_name]
-                    if feedback["trajectory_1"] == trajectory_1
+            for feedback in feedback_buffers[run_name]:
+                if (
+                    feedback["trajectory_1"] == trajectory_1
                     and feedback["trajectory_2"] == trajectory_2
-                ),
-                None,
-            )
-
-            if existing_feedback:
-                return jsonify(
-                    {
-                        "status": "error",
-                        "message": f"Feedback already exists for pair: ({trajectory_1}, {trajectory_2}) in run: {run_name}.",
-                    }
-                ), 400
+                ):
+                    return jsonify(
+                        {
+                            "status": "error",
+                            "message": f"Feedback already exists for pair: ({trajectory_1}, {trajectory_2}) in run: {run_name}.",
+                        }
+                    ), 400
 
             feedback_buffers[run_name].append(data)
 
-            # Remove submitted pair from the sampled videos queue
+            # Remove the pair from video stack if it exists
             if run_name in sampled_videos:
                 video_stack = sampled_videos[run_name]
-                pair_to_remove = [trajectory_1, trajectory_2]
-                if pair_to_remove in video_stack:
+                try:
                     video_stack.remove(pair_to_remove)
-                    logging.info(
-                        f"Removed pair {pair_to_remove} from queue for run: {run_name}"
-                    )
-                else:
+                except ValueError:
                     logging.warning(
                         f"Pair {pair_to_remove} not found in queue for run: {run_name}"
                     )

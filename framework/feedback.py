@@ -8,16 +8,19 @@ from sampling import sample_trajectories
 from tqdm import tqdm, trange
 from video_recorder import retrieve_trajectory_by_video_name
 
+from framework.preference_buffer import PreferenceBuffer
+from framework.replay_buffer import ReplayBuffer
+
 
 def collect_feedback(
     mode,
     feedback_server_url,
-    replay_buffer,
+    replay_buffer: ReplayBuffer,
     run_name,
     teacher_feedback_num_queries_per_session,
     trajectory_length,
-    train_pref_buffer,
-    val_pref_buffer,
+    train_pref_buffer: PreferenceBuffer,
+    val_pref_buffer: PreferenceBuffer,
     reward_net_val_split,
     preference_sampling="disagree",
     sim_teacher=None,
@@ -143,13 +146,13 @@ def collect_feedback(
 
         try:
             collected_feedback = 0
-            while collected_feedback < teacher_feedback_num_queries_per_session:
-                with tqdm(
-                    total=teacher_feedback_num_queries_per_session,
-                    initial=collected_feedback,
-                    desc="Collecting Feedback",
-                    unit="feedback",
-                ) as pbar:
+            with tqdm(
+                total=teacher_feedback_num_queries_per_session,
+                initial=collected_feedback,
+                desc="Collecting Feedback",
+                unit="feedback",
+            ) as pbar:
+                while collected_feedback < teacher_feedback_num_queries_per_session:
                     response = requests.get(
                         feedback_server_url + "/api/get_feedback/" + run_name
                     )

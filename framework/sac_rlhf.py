@@ -216,6 +216,23 @@ class Args:
 
 
 def run(args: Any):
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%d/%m/%Y %H:%M:%S",
+        level=args.log_level.upper(),
+    )
+
+    if args.log_file:
+        os.makedirs(os.path.join("runs", run_name), exist_ok=True)
+        file_path = os.path.join("runs", run_name, "log.log")
+        logging.getLogger().addHandler(
+            logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
+        )
+
     try:
         if args.feedback_server_autostart:
             if (
@@ -232,7 +249,7 @@ def run(args: Any):
                 )
         else:
             logging.info("Feedback server autostart is disabled.")
-        train(args)
+        train(args, run_name)
     except Exception as e:
         logging.exception(e)
     finally:
@@ -240,9 +257,10 @@ def run(args: Any):
             stop_feedback_server(feedback_server_process)
 
 
-def train(args: Any):
+def train(args: Any, run_name):
     """
     :param args: run arguments
+    :param run_name: the name of the run
     :return:
     """
     import stable_baselines3 as sb3
@@ -252,22 +270,6 @@ def train(args: Any):
             """Ongoing migration: run the following command to install the new dependencies:
 poetry run pip install "stable_baselines3==2.0.0a1"
 """
-        )
-    for handler in logging.root.handlers[:]:
-        logging.root.removeHandler(handler)
-
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s: %(message)s",
-        datefmt="%d/%m/%Y %H:%M:%S",
-        level=args.log_level.upper(),
-    )
-
-    if args.log_file:
-        os.makedirs(os.path.join("runs", run_name), exist_ok=True)
-        file_path = os.path.join("runs", run_name, "log.log")
-        logging.getLogger().addHandler(
-            logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
 
     if args.track:

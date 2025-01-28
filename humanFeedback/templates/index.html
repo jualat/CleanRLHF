@@ -92,7 +92,7 @@
                     // Reload the page after a short delay after submitting feedback
                     setTimeout(() => {
                         location.reload();
-                    }, 300);
+                    }, 100);
                 } else {
                     showToast("Error submitting feedback: " + result.message);
                 }
@@ -110,7 +110,7 @@
             setTimeout(() => toast.classList.add("show"), 50);
             setTimeout(() => {
                 toast.classList.remove("show");
-                setTimeout(() => toast.remove(), 300);
+                setTimeout(() => toast.remove(), 1000);
             }, 3000);
         }
 
@@ -189,7 +189,7 @@
                 `;
                 setTimeout(() => {
                     location.reload();
-                }, 3000); // Reload the page every 3 seconds to check if there are new videos to give preference to
+                }, 2000); // Reload the page every 3 seconds to check if there are new videos to give preference to
             } else {
                 console.error("Failed to load videos:", response.statusText);
             }

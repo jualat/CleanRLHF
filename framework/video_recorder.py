@@ -56,7 +56,7 @@ class VideoRecorder:
             video_file_name = (
                 f"{run_name}/trajectories/{name_prefix}-episode-{episode_index}.mp4"
             )
-            logging.info(f"Finished recording trajectory video: {video_file_name}")
+            logging.debug(f"Finished recording trajectory video: {video_file_name}")
             return video_file_name
         except Exception as e:
             logging.error(
