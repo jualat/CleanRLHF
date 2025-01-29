@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 
 import torch
 from env import is_mujoco_env, make_single_env
@@ -34,12 +35,11 @@ class VideoRecorder:
         end_idx = trajectory.replay_buffer_end_idx
         env_idx = trajectory.samples.env_idx
         length = trajectory.replay_buffer_end_idx - trajectory.replay_buffer_start_idx
-
+        episode_index = 0
         # Ensure the directory for videos exists
-        video_folder = f"./videos/{run_name}/trajectories"
+        video_folder = f"./videos/{run_name}/trajectories/"
         os.makedirs(video_folder, exist_ok=True)
-        out_path = f"{video_folder}/"
-
+        name_prefix = f"trajectory_{start_idx}_{end_idx}_{env_idx}"
         env = make_single_env(env_id=self.env_id, render="rgb_array")
 
         try:
@@ -48,10 +48,16 @@ class VideoRecorder:
             save_video(
                 frames=frames,
                 video_length=length,
-                video_folder=out_path,
+                video_folder=video_folder,
                 fps=fps,
-                name_prefix=f"trajectory_{start_idx}_{end_idx}_{env_idx}",
+                name_prefix=name_prefix,
+                episode_index=episode_index,
             )
+            video_file_name = (
+                f"{run_name}/trajectories/{name_prefix}-episode-{episode_index}.mp4"
+            )
+            logging.debug(f"Finished recording trajectory video: {video_file_name}")
+            return video_file_name
         except Exception as e:
             logging.error(
                 f"Error recording trajectory (start_idx={start_idx}, end_idx={end_idx}, env_idx={env_idx}): {e}"
@@ -116,3 +122,37 @@ class VideoRecorder:
                 env.step(action)
                 frames.append(env.render())
         return frames
+
+
+def parse_video_filename(video_name: str):
+    """
+    Parse the video file name and extract trajectory-related indices.
+
+    Example filename: trajectory_100_200_1-episode-0.mp4
+    """
+    match = re.match(r"trajectory_(\d+)_(\d+)_(\d+)-episode-\d+\.mp4", video_name)
+    if not match:
+        raise ValueError(f"Invalid video file name format: {video_name}")
+
+    start_idx = int(match.group(1))
+    end_idx = int(match.group(2))
+    env_idx = int(match.group(3))
+    return start_idx, end_idx, env_idx
+
+
+def retrieve_trajectory_by_video_name(
+    replay_buffer: ReplayBuffer, video_name: str, env=None
+) -> Trajectory:
+    """
+    Retrieve the trajectory object corresponding to a given video name.
+
+    Args:
+        replay_buffer (ReplayBuffer): The replay buffer.
+        video_name (str): The video file name.
+        env: Optional VecNormalize environment for normalizing samples.
+
+    Returns:
+        Trajectory: The corresponding trajectory object.
+    """
+    start_idx, end_idx, _ = parse_video_filename(video_name.split("/")[-1])
+    return replay_buffer.get_trajectory(start_idx, end_idx, env)

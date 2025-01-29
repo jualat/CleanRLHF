@@ -1,0 +1,237 @@
+entity: cleanRLHF
+method: grid
+metric:
+  goal: maximize
+  name: evaluate/mean
+parameters:
+  actor_and_q_net_hidden_dim:
+    values:
+      - 256
+  actor_and_q_net_hidden_layers:
+    values:
+      - 3
+  alpha:
+    values:
+      - 0.2
+  autotune:
+    values:
+      - true
+  batch_size:
+    values:
+      - 256
+  buffer_size:
+    values:
+      - 1000000
+  capture_video:
+    values:
+      - true
+  cuda:
+    values:
+      - true
+  early_stop_patience:
+    values:
+      - 5
+  early_stopping:
+    values:
+      - false
+  early_stopping_mean:
+    values:
+      - 0
+  early_stopping_step:
+    values:
+      - 500000
+  enable_greater_or_smaller_check:
+    values:
+      - false
+  env_id:
+    values:
+      - Ant-v5
+  evaluation_episodes:
+    values:
+      - 10
+  evaluation_frequency:
+    values:
+      - 10000
+  exploration_load:
+    values:
+      - false
+  explore_batch_size:
+    values:
+      - 256
+  explore_learning_starts:
+    values:
+      - 512
+  gamma:
+    values:
+      - 0.9921914450114264
+  lambda_ssl:
+    values:
+      - 0.1
+  learning_starts:
+    values:
+      - 5000
+  log_file:
+    values:
+      - true
+  log_level:
+    values:
+      - INFO
+  max_augmentation_offset:
+    values:
+      - 10
+  min_augmentation_offset:
+    values:
+      - 5
+  num_envs:
+    values:
+      - 1
+  path_to_model:
+    values:
+      - ""
+  path_to_replay_buffer:
+    values:
+      - ""
+  policy_frequency:
+    values:
+      - 2
+  policy_lr:
+    values:
+      - 0.0004475438110935111
+  pref_buffer_size_sessions:
+    values:
+      - 1
+  preference_sampling:
+    values:
+      - disagree
+  q_lr:
+    values:
+      - 0.0007722867867172924
+  reward_net_dropout:
+    values:
+      - 0.2
+  reward_net_hidden_dim:
+    values:
+      - 128
+  reward_net_hidden_layers:
+    values:
+      - 2
+  reward_net_val_split:
+    values:
+      - 0.2
+  rune:
+    values:
+      - false
+  rune_beta:
+    values:
+      - 0.05
+  rune_beta_decay:
+    values:
+      - 0.0001
+  seed:
+    values:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+  surf:
+    values:
+      - false
+  surf_sampling_strategy:
+    values:
+      - uniform
+  surf_tau:
+    values:
+      - 0.999
+  target_network_frequency:
+    values:
+      - 1
+  tau:
+    values:
+      - 0.005
+  teacher_batch_strategy:
+    values:
+      - minibatch
+  teacher_feedback_batch_size:
+    values:
+      - 32
+  teacher_feedback_exponential_lambda:
+    values:
+      - 0.1
+  teacher_feedback_num_queries_per_session:
+    values:
+      - 20
+  teacher_feedback_schedule:
+    values:
+      - linear
+  teacher_feedback_total_queries:
+    values:
+      - 360
+  teacher_learning_rate:
+    values:
+      - 0.0005170954586836862
+  teacher_minibatch_size:
+    values:
+      - 5
+  teacher_sim_beta:
+    values:
+      - -1
+  teacher_sim_delta_equal:
+    values:
+      - 0
+  teacher_sim_delta_skip:
+    values:
+      - -1e+07
+  teacher_sim_epsilon:
+    values:
+      - 0
+  teacher_sim_gamma:
+    values:
+      - 1
+  teacher_update_epochs:
+    values:
+      - 16
+  feedback_server_url:
+    values:
+      - "http://localhost:5001"
+  feedback_server_autostart:
+    values:
+      - true
+  teacher_feedback_mode:
+    values:
+      - human
+
+  torch_deterministic:
+    values:
+      - true
+  total_explore_steps:
+    values:
+      - 10000
+  total_timesteps:
+    values:
+      - 1000000
+  track:
+    values:
+      - true
+  trajectory_length:
+    values:
+      - 128
+  unlabeled_batch_ratio:
+    values:
+      - 2
+  unsupervised_exploration:
+    values:
+      - true
+  wandb_entity:
+    values:
+      - ""
+  wandb_project_name:
+    values:
+      - ""
+program: sac_rlhf.py
+project: Ant_human_feedback

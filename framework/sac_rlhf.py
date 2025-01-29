@@ -24,11 +24,12 @@ from env import (
     save_replay_buffer,
 )
 from evaluation import Evaluation
+from feedback import collect_feedback
+from feedback_util import start_feedback_server, stop_feedback_server
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
-from sampling import sample_trajectories
 from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
 from unsupervised_exploration import ExplorationRewardKNN
@@ -123,6 +124,16 @@ class Args:
     actor_and_q_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
 
+    # Feedback server arguments
+    feedback_server_url: str = "http://localhost:5001"
+    """the url of the feedback server"""
+    feedback_server_autostart: bool = False
+    """toggle the autostart of a local feedback server"""
+
+    # Teacher feedback mode
+    teacher_feedback_mode: str = "simulated"
+    """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
+
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"
     """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
@@ -204,20 +215,7 @@ class Args:
     """path to model"""
 
 
-def train(args: Any):
-    """
-    The training function.
-    :param args: run arguments
-    :return:
-    """
-    import stable_baselines3 as sb3
-
-    if sb3.__version__ < "2.0":
-        raise ValueError(
-            """Ongoing migration: run the following command to install the new dependencies:
-poetry run pip install "stable_baselines3==2.0.0a1"
-"""
-        )
+def run(args: Any):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
@@ -233,6 +231,45 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         file_path = os.path.join("runs", run_name, "log.log")
         logging.getLogger().addHandler(
             logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
+        )
+
+    try:
+        if args.feedback_server_autostart:
+            if (
+                "localhost" in args.feedback_server_url
+                or "127.0.0" in args.feedback_server_url
+            ):
+                feedback_server_process = start_feedback_server(
+                    args.feedback_server_url.split(":")[-1]
+                )
+            else:
+                logging.error("feedback server autostart", args.feedback_server_url)
+                raise ValueError(
+                    "Feedback server autostart only works with localhost. Please start the feedback server manually."
+                )
+        else:
+            logging.info("Feedback server autostart is disabled.")
+        train(args, run_name)
+    except Exception as e:
+        logging.exception(e)
+    finally:
+        if args.feedback_server_autostart:
+            stop_feedback_server(feedback_server_process)
+
+
+def train(args: Any, run_name):
+    """
+    :param args: run arguments
+    :param run_name: the name of the run
+    :return:
+    """
+    import stable_baselines3 as sb3
+
+    if sb3.__version__ < "2.0":
+        raise ValueError(
+            """Ongoing migration: run the following command to install the new dependencies:
+poetry run pip install "stable_baselines3==2.0.0a1"
+"""
         )
 
     if args.track:
@@ -575,47 +612,26 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
-                for i in trange(
-                    args.teacher_feedback_num_queries_per_session,
-                    desc="Queries",
-                    unit="queries",
-                ):
-                    # Sample trajectories from replay buffer to query teacher
-                    first_trajectory, second_trajectory = sample_trajectories(
-                        rb, args.preference_sampling, reward_net, args.trajectory_length
-                    )
-
-                    logging.debug(f"step {global_step}, {i}")
-
-                    # Create video of the two trajectories. For now, we only render if capture_video is True.
-                    # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                    if args.capture_video and args.render_mode != "human":
-                        video_recorder.record_trajectory(first_trajectory, run_name)
-                        video_recorder.record_trajectory(second_trajectory, run_name)
-
-                    # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                    preference = sim_teacher.give_preference(
-                        first_trajectory, second_trajectory
-                    )
-
-                    # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
-                    if preference is None:
-                        continue
-
-                    # Store preferences
-                    if np.random.rand() < (
-                        1 - args.reward_net_val_split
-                    ):  # 1 - (Val Split)% for training
-                        train_pref_buffer.add(
-                            first_trajectory, second_trajectory, preference
-                        )
-                    else:  # (Val Split)% for validation
-                        val_pref_buffer.add(
-                            first_trajectory, second_trajectory, preference
-                        )
+                collect_feedback(
+                    mode=args.teacher_feedback_mode,
+                    feedback_server_url=args.feedback_server_url,
+                    run_name=run_name,
+                    preference_sampling=args.preference_sampling,
+                    replay_buffer=rb,
+                    trajectory_length=args.trajectory_length,
+                    reward_net=reward_net,
+                    train_pref_buffer=train_pref_buffer,
+                    val_pref_buffer=val_pref_buffer,
+                    reward_net_val_split=args.reward_net_val_split,
+                    teacher_feedback_num_queries_per_session=args.teacher_feedback_num_queries_per_session,
+                    capture_video=args.capture_video,
+                    render_mode=args.render_mode,
+                    video_recorder=video_recorder,
+                    sim_teacher=sim_teacher,
+                )
 
                 next_session_idx += 1
-
+                logging.debug(f"next_session_idx {next_session_idx}")
                 train_reward(
                     model=reward_net,
                     optimizer=reward_optimizer,
@@ -833,4 +849,4 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
 if __name__ == "__main__":
     cli_args = tyro.cli(Args)
-    train(cli_args)
+    run(cli_args)
