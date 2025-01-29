@@ -23,11 +23,12 @@ from env import (
     save_replay_buffer,
 )
 from evaluation import Evaluation
+from feedback import collect_feedback
+from feedback_util import start_feedback_server, stop_feedback_server
 from performance_metrics import PerformanceMetrics
 from preference_buffer import PreferenceBuffer
 from replay_buffer import RolloutBuffer
 from reward_net import RewardNet, train_reward
-from sampling import sample_trajectories
 from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
 from video_recorder import VideoRecorder
@@ -126,6 +127,16 @@ class Args:
     agent_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
 
+    # Feedback server arguments
+    feedback_server_url: str = "http://localhost:5001"
+    """the url of the feedback server"""
+    feedback_server_autostart: bool = False
+    """toggle the autostart of a local feedback server"""
+
+    # Teacher feedback mode
+    teacher_feedback_mode: str = "simulated"
+    """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
+
     # Human feedback arguments
     teacher_feedback_schedule: str = "linear"
     """the schedule of teacher feedback, must be 'exponential' or 'linear'"""
@@ -164,11 +175,12 @@ class Args:
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
 
-    # Unsupervised Exploration
-    unsupervised_exploration: bool = True
-    """toggle the unsupervised exploration"""
-    total_explore_steps: int = 10000
-    """total number of explore steps"""
+    # TODO PRE TRAINING
+    # Pre-Training
+    pre_training: bool = True
+    """toggle the pre training"""
+    total_pre_training_steps: int = 10000
+    """total number of pre training steps"""
 
     # SURF
     surf: bool = False
@@ -215,13 +227,7 @@ class Args:
     """the replay memory buffer size (computed in runtime)"""
 
 
-def train(args: Any):
-    args.batch_size = int(args.num_envs * args.num_steps)
-    args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
-    args.num_iterations_exploration = args.total_explore_steps // args.batch_size
-    args.buffer_size = int(args.batch_size)
-
+def run(args: Any):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
@@ -231,11 +237,44 @@ def train(args: Any):
         datefmt="%d/%m/%Y %H:%M:%S",
         level=args.log_level.upper(),
     )
+
     if args.log_file:
         os.makedirs(os.path.join("runs", run_name), exist_ok=True)
+        file_path = os.path.join("runs", run_name, "log.log")
         logging.getLogger().addHandler(
-            logging.FileHandler(filename=f"runs/{run_name}/logger.log")
+            logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
+
+    try:
+        if args.feedback_server_autostart:
+            if (
+                "localhost" in args.feedback_server_url
+                or "127.0.0" in args.feedback_server_url
+            ):
+                feedback_server_process = start_feedback_server(
+                    args.feedback_server_url.split(":")[-1]
+                )
+            else:
+                logging.error("feedback server autostart", args.feedback_server_url)
+                raise ValueError(
+                    "Feedback server autostart only works with localhost. Please start the feedback server manually."
+                )
+        else:
+            logging.info("Feedback server autostart is disabled.")
+        train(args, run_name)
+    except Exception as e:
+        logging.exception(e)
+    finally:
+        if args.feedback_server_autostart:
+            stop_feedback_server(feedback_server_process)
+
+
+def train(args: Any, run_name: str):
+    args.batch_size = int(args.num_envs * args.num_steps)
+    args.minibatch_size = int(args.batch_size // args.num_minibatches)
+    args.num_iterations = args.total_timesteps // args.batch_size
+    args.buffer_size = int(args.batch_size)
+
     if args.track:
         import wandb
 
@@ -358,7 +397,7 @@ def train(args: Any):
     try:
         total_steps = (
             args.total_timesteps - args.total_explore_steps
-            if args.exploration_load or args.unsupervised_exploration
+            if args.exploration_load
             else args.total_timesteps
         )
 
@@ -390,55 +429,28 @@ def train(args: Any):
                 frac = 1.0 - (iteration - 1.0) / args.num_iterations
                 lrnow = frac * args.learning_rate
                 optimizer.param_groups[0]["lr"] = lrnow
+
             for step in range(0, args.num_steps):
                 if global_step >= teacher_session_steps[next_session_idx] and (
-                    global_step != 0
-                    or args.exploration_load
-                    or args.unsupervised_exploration
+                    global_step != 0 or args.exploration_load
                 ):
-                    for i in trange(
-                        args.teacher_feedback_num_queries_per_session,
-                        desc="Queries",
-                        unit="queries",
-                    ):
-                        # Sample trajectories from replay buffer to query teacher
-                        first_trajectory, second_trajectory = sample_trajectories(
-                            rb,
-                            args.preference_sampling,
-                            reward_net,
-                            args.trajectory_length,
-                        )
-
-                        logging.debug(f"step {global_step}, {i}")
-
-                        # Create video of the two trajectories. For now, we only render if capture_video is True.
-                        # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-                        if args.capture_video:
-                            video_recorder.record_trajectory(first_trajectory, run_name)
-                            video_recorder.record_trajectory(
-                                second_trajectory, run_name
-                            )
-
-                        # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-                        preference = sim_teacher.give_preference(
-                            first_trajectory, second_trajectory
-                        )
-
-                        # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
-                        if preference is None:
-                            continue
-
-                        # Store preferences
-                        if np.random.rand() < (
-                            1 - args.reward_net_val_split
-                        ):  # 1 - (Val Split)% for training
-                            train_pref_buffer.add(
-                                first_trajectory, second_trajectory, preference
-                            )
-                        else:  # (Val Split)% for validation
-                            val_pref_buffer.add(
-                                first_trajectory, second_trajectory, preference
-                            )
+                    collect_feedback(
+                        mode=args.teacher_feedback_mode,
+                        feedback_server_url=args.feedback_server_url,
+                        run_name=run_name,
+                        preference_sampling=args.preference_sampling,
+                        replay_buffer=rb,
+                        trajectory_length=args.trajectory_length,
+                        reward_net=reward_net,
+                        train_pref_buffer=train_pref_buffer,
+                        val_pref_buffer=val_pref_buffer,
+                        reward_net_val_split=args.reward_net_val_split,
+                        teacher_feedback_num_queries_per_session=args.teacher_feedback_num_queries_per_session,
+                        capture_video=args.capture_video,
+                        render_mode=args.render_mode,
+                        video_recorder=video_recorder,
+                        sim_teacher=sim_teacher,
+                    )
 
                     next_session_idx += 1
 
@@ -513,9 +525,7 @@ def train(args: Any):
                     )
 
                 if global_step % args.evaluation_frequency == 0 and (
-                    global_step != 0
-                    or args.exploration_load
-                    or args.unsupervised_exploration
+                    global_step != 0 or args.exploration_load
                 ):
                     render = global_step % 100000 == 0 and global_step != 0
                     track = (
@@ -585,4 +595,4 @@ def train(args: Any):
 
 if __name__ == "__main__":
     cli_args = tyro.cli(Args)
-    train(cli_args)
+    run(cli_args)
