@@ -2,32 +2,8 @@
 <html>
 <head>
     <title>Feedback Server</title>
+    <link rel="stylesheet" href="../static/pico.css">
     <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-
-        video + video {
-            margin-left: 20px;
-        }
-
-        video {
-            width: 45vw;
-            height: auto;
-            max-height: 80vh;
-            margin: 0 10px;
-        }
-
-        div {
-            text-align: center;
-            margin-top: 20px;
-        }
-
         #toastContainer {
             position: fixed;
             bottom: 20px;
@@ -37,8 +13,6 @@
         }
 
         .toast {
-            background-color: #333;
-            color: #fff;
             padding: 12px 20px;
             margin-top: 10px;
             border-radius: 4px;
@@ -157,19 +131,30 @@
     </script>
 </head>
 <body>
-<h1>Choose the Better Trajectory</h1>
-<div>
-    <video id="video1" width="400" muted controls></video>
-    <video id="video2" width="400" muted controls></video>
+<header></header>
+
+<main class="container">
+<hgroup>
+    <h1>Choose the Better Trajectory</h1>
+    <p>CleanRLHF</p>
+</hgroup>
+
+<div class="grid center">
+    <article><video id="video1" width="100%" muted controls></video></article>
+    <article><video id="video2" width="100%" muted controls></video></article>
 </div>
-<div>
+<div class="grid center">
+    <button onclick="submitFeedback(-1)">Neither</button>
     <button onclick="submitFeedback(1)">Video 1</button>
     <button onclick="submitFeedback(0)">Video 2</button>
-    <button onclick="submitFeedback(-1)">Neither</button>
     <button onclick="submitFeedback(0.5)">Both</button>
 </div>
 
 <div id="toastContainer"></div>
+
+<footer></footer>
+
+</main>
 
 <script>
     async function loadVideos() {
@@ -184,8 +169,10 @@
                 playVideos(video1Src, video2Src);
             } else if (response.status === 204) {
                 document.body.innerHTML = `
+                    <main class="container">
                     <h1>Currently no videos available</h1>
                     <p>The model is training 🤖💭</p>
+                    </main>
                 `;
                 setTimeout(() => {
                     location.reload();
