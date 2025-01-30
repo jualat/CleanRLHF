@@ -16,3 +16,8 @@ repos:
     hooks:
       - id: pycln
         args: [--config=pyproject.toml]
+-   repo: https://github.com/biomejs/pre-commit
+    rev: v0.6.1
+    hooks:
+    -   id: biome-format
+        additional_dependencies: ["@biomejs/biome@1.4.1"]
