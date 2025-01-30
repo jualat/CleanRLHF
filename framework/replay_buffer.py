@@ -21,6 +21,15 @@ class ReplayBufferSampleHF(NamedTuple):
     env_idx: int
 
 
+class RolloutBufferSampleHF(NamedTuple):
+    observations: torch.Tensor
+    actions: torch.Tensor
+    returns: torch.Tensor
+    advantages: torch.Tensor
+    values: torch.Tensor
+    log_probs: torch.Tensor
+
+
 class Trajectory(NamedTuple):
     replay_buffer_start_idx: int
     replay_buffer_end_idx: int
@@ -97,7 +106,8 @@ class ReplayBuffer(SB3ReplayBuffer):
             (self.buffer_size, self.n_envs, qvel_shape), dtype=np.float32
         )
         self.seed = seed
-
+        self.qpos_shape = qpos_shape
+        self.qvel_shape = qvel_shape
         if seed is not None:
             np.random.seed(seed)
             self.torch_generator = torch.Generator().manual_seed(seed)
@@ -225,6 +235,13 @@ class ReplayBuffer(SB3ReplayBuffer):
             env_idx=env_indices,
         )
 
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        if copy:
+            return torch.tensor(array, dtype=torch.float32, device=self.device)
+        return torch.as_tensor(
+            array, dtype=torch.float32, device=self.device
+        )  # test if still needed
+
     def get_trajectory(
         self, start_idx: int, end_idx: int, env: Optional[VecNormalize] = None
     ):
@@ -299,3 +316,170 @@ class ReplayBuffer(SB3ReplayBuffer):
         assert slice_start_idx < slice_end_idx, "Invalid slice"
         assert slice_end_idx <= end_idx, "Index out of range"
         return self.get_trajectory(slice_start_idx, slice_end_idx, env=env)
+
+
+class RolloutBuffer(ReplayBuffer):
+    def __init__(
+        self,
+        buffer_size: int,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[torch.device, str] = "auto",
+        n_envs: int = 1,
+        optimize_memory_usage: bool = False,
+        handle_timeout_termination: bool = True,
+        qpos_shape: int = 1,
+        qvel_shape: int = 1,
+        rune: bool = False,
+        rune_beta: float = 0,
+        rune_beta_decay: float = 0.999,
+        seed: int = None,
+        gae_lambda: float = 0.95,
+        gamma: float = 0.99,
+    ):
+        super().__init__(
+            buffer_size=buffer_size,
+            observation_space=observation_space,
+            action_space=action_space,
+            device=device,
+            n_envs=n_envs,
+            optimize_memory_usage=optimize_memory_usage,
+            handle_timeout_termination=handle_timeout_termination,
+            qpos_shape=qpos_shape,
+            qvel_shape=qvel_shape,
+            rune=rune,
+            rune_beta=rune_beta,
+            rune_beta_decay=rune_beta_decay,
+            seed=seed,
+        )
+
+        self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.gae_lambda = gae_lambda
+        self.gamma = gamma
+        self.current_size = 0
+
+    def add(
+        self,
+        obs: np.ndarray,
+        next_obs: np.ndarray,
+        action: np.ndarray,
+        extrinsic_reward: np.ndarray,
+        intrinsic_reward: np.ndarray,
+        ground_truth_reward: np.ndarray,
+        done: np.ndarray,
+        infos: list[dict[str, any]],
+        global_step: int,
+        qpos: np.ndarray,
+        qvel: np.ndarray,
+        logprobs: np.ndarray,
+        values: np.ndarray,
+    ):
+        super().add(
+            obs=obs,
+            next_obs=next_obs,
+            action=action,
+            extrinsic_reward=extrinsic_reward,
+            intrinsic_reward=intrinsic_reward,
+            ground_truth_reward=ground_truth_reward,
+            done=done,
+            infos=infos,
+            global_step=global_step,
+            qpos=qpos,
+            qvel=qvel,
+        )
+        self.log_probs[self.pos] = logprobs
+        self.values[self.pos] = values
+
+        if self.current_size < self.buffer_size:
+            self.current_size += 1
+
+    def compute_gae_and_returns(self, agent):
+        """Compute advantages and returns using GAE."""
+        with torch.no_grad():
+            next_observations = torch.Tensor(
+                self.observations[self.buffer_size - 1]
+            ).to(self.device)
+            next_value = agent.get_value(next_observations).cpu().numpy().reshape(1, -1)
+            lastgaelam = 0
+            for t in reversed(range(self.buffer_size)):
+                if t == self.buffer_size - 1:
+                    nextnonterminal = 1.0 - self.dones[self.buffer_size - 1]
+                    nextvalues = next_value
+                else:
+                    nextnonterminal = 1.0 - self.dones[t + 1]
+                    nextvalues = self.values[t + 1]
+                delta = (
+                    self.rewards[t]
+                    + self.gamma * nextvalues * nextnonterminal
+                    - self.values[t]
+                )
+                lastgaelam = (
+                    delta + self.gamma * self.gae_lambda * nextnonterminal * lastgaelam
+                )
+                self.advantages[t] = lastgaelam
+
+        self.returns = self.advantages + self.values
+
+    def get(
+        self,
+    ) -> RolloutBufferSampleHF:
+        return RolloutBufferSampleHF(
+            observations=torch.Tensor(self.observations)
+            .to(self.device)
+            .reshape((-1,) + self.obs_shape),
+            log_probs=torch.Tensor(self.log_probs).reshape(-1),
+            actions=torch.Tensor(self.actions)
+            .to(self.device)
+            .reshape((-1,) + self.action_space.shape),
+            advantages=torch.Tensor(self.advantages)
+            .to(self.device)
+            .reshape(
+                -1,
+            ),
+            returns=torch.Tensor(self.returns)
+            .to(self.device)
+            .reshape(
+                -1,
+            ),
+            values=torch.Tensor(self.values)
+            .to(self.device)
+            .reshape(
+                -1,
+            ),
+        )
+
+    def sample_trajectories(
+        self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
+    ) -> tuple[List[Trajectory], List[Trajectory]]:
+        """
+        Sample trajectories from the replay buffer.
+        :param env: associated gym VecEnv to normalize the observations/rewards when sampling
+        :param mb_size: amount of pairs of trajectories to be sampled
+        :param traj_len: length of trajectories
+        :return: two lists of mb_size many trajectories
+        """
+        max_valid_index = max(self.current_size, self.pos) - traj_len
+        if max_valid_index <= 0:
+            raise ValueError(
+                f"Not enough valid data in buffer to sample trajectories. "
+                f"self.pos={self.pos}, traj_len={traj_len}, capacity={self.buffer_size}"
+            )
+
+        if max_valid_index >= 2 * mb_size:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=False)
+        else:
+            indices = np.random.choice(max_valid_index, 2 * mb_size, replace=True)
+
+        trajectories = [
+            self.get_trajectory(
+                start,
+                (start + traj_len),
+                env,
+            )
+            for start in indices
+        ]
+        logging.debug(f"trajectory length: {traj_len}, ")
+        return trajectories[:mb_size], trajectories[mb_size:]

@@ -15,8 +15,9 @@ import tyro
 from actor import Actor, select_actions, update_actor, update_target_networks
 from critic import SoftQNetwork, train_q_network
 from env import (
+    get_qpos_qvel,
+    initialize_qpos_qvel,
     is_dm_control,
-    is_mujoco_env,
     load_model_all,
     load_replay_buffer,
     make_env,
@@ -284,7 +285,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             monitor_gym=True,
             save_code=True,
         )
-    # TRY NOT TO MODIFY: seeding
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -349,38 +350,11 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
     envs.single_observation_space.dtype = np.float32
 
-    if is_mujoco_env(envs.envs[0]):
-        try:
-            qpos = np.zeros(
-                (
-                    args.num_envs,
-                    envs.envs[0].unwrapped.observation_structure["qpos"]
-                    + envs.envs[0].unwrapped.observation_structure["skipped_qpos"],
-                ),
-                dtype=np.float32,
-            )
-            qvel = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.observation_structure["qvel"]),
-                dtype=np.float32,
-            )
-        except AttributeError:
-            qpos = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.model.key_qpos.shape[1]),
-                dtype=np.float32,
-            )
-            qvel = np.zeros(
-                (args.num_envs, envs.envs[0].unwrapped.model.key_qvel.shape[1]),
-                dtype=np.float32,
-            )
-    elif dm_control_bool:
-        qpos = np.zeros(
-            (args.num_envs, envs.envs[0].unwrapped.physics.get_state().shape[0]),
-            dtype=np.float32,
-        )
-        qvel = np.zeros((1, 2))
-    else:
-        qpos = np.zeros((1, 2))
-        qvel = np.zeros((1, 2))
+    obs, _ = envs.reset(seed=args.seed)
+
+    qpos, qvel = initialize_qpos_qvel(
+        envs=envs, num_envs=args.num_envs, dm_control_bool=dm_control_bool
+    )
 
     rb = ReplayBuffer(
         args.buffer_size,
@@ -461,14 +435,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             )
             real_next_obs = next_obs.copy()
 
-            if is_mujoco_env(envs.envs[0]):
-                for idx in range(args.num_envs):
-                    single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
-            if dm_control_bool:
-                for idx in range(args.num_envs):
-                    qpos[idx] = envs.envs[idx].unwrapped.physics.get_state()
+            get_qpos_qvel(envs, qpos, qvel, dm_control_bool)
 
             intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
             knn_estimator.update_states(next_obs)
@@ -667,14 +634,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             next_obs, groundTruthRewards, terminations, truncations, infos = envs.step(
                 actions
             )
-            if is_mujoco_env(envs.envs[0]):
-                for idx in range(args.num_envs):
-                    single_env = envs.envs[idx]
-                    qpos[idx] = single_env.unwrapped.data.qpos.copy()
-                    qvel[idx] = single_env.unwrapped.data.qvel.copy()
-            if dm_control_bool:
-                for idx in range(args.num_envs):
-                    qpos[idx] = envs.envs[idx].unwrapped.physics.get_state()
+
+            get_qpos_qvel(envs, qpos, qvel, dm_control_bool)
 
             if infos and "episode" in infos:
                 allocated, reserved = 0, 0
