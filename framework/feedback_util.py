@@ -2,8 +2,8 @@ import json
 import logging
 import os
 import socket
+import subprocess
 import sys
-from subprocess import Popen
 
 
 def start_feedback_server(port):
@@ -17,10 +17,13 @@ def start_feedback_server(port):
         logging.info(f"Starting feedback server on port {port}...")
     else:
         logging.error(f"Port {port} is already in use. Please choose a different port.")
-    feedback_server_path = os.path.abspath(
-        os.path.join("..", "humanFeedback", "feedback_server.py")
+    server_script = os.path.abspath("../humanFeedback/feedback_server.py")
+    server_process = subprocess.Popen(
+        [sys.executable, server_script, "--port", str(port)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    server_process = Popen([sys.executable, feedback_server_path, "--port", str(port)])
+    logging.info("Feedback server started.")
     return server_process
 
 
