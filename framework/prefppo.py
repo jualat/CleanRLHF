@@ -31,6 +31,7 @@ from replay_buffer import RolloutBuffer
 from reward_net import RewardNet, train_reward
 from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
 from tqdm import trange
+from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
 
 
@@ -175,12 +176,11 @@ class Args:
     teacher_sim_delta_equal: float = 0
     """the range of two trajectories being equal"""
 
-    # TODO PRE TRAINING
-    # Pre-Training
-    pre_training: bool = True
-    """toggle the pre training"""
-    total_pre_training_steps: int = 10000
-    """total number of pre training steps"""
+    # Unsupervised Exploration
+    unsupervised_exploration: bool = True
+    """toggle the unsupervised exploration"""
+    total_explore_steps: int = 10000
+    """total number of explore steps"""
 
     # SURF
     surf: bool = False
@@ -272,7 +272,10 @@ def run(args: Any):
 def train(args: Any, run_name: str):
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
+    args.num_iterations = (
+        args.total_timesteps - args.total_explore_steps
+    ) // args.batch_size
+    args.num_iterations_exploration = args.total_explore_steps // args.batch_size
     args.buffer_size = int(args.batch_size)
 
     if args.track:
@@ -381,7 +384,71 @@ def train(args: Any, run_name: str):
     surf_H_min = args.trajectory_length - args.max_augmentation_offset
 
     current_step = 0
-    # TODO CHANGE PRE TRAINING
+    if args.unsupervised_exploration and not args.exploration_load:
+        knn_estimator = ExplorationRewardKNN(k=3)
+        current_step += 1
+        obs, _ = envs.reset(seed=args.seed)
+        for iteration in trange(1, args.num_iterations_exploration + 1):
+            if args.anneal_lr:
+                frac = 1.0 - (iteration - 1.0) / args.num_iterations
+                lrnow = frac * args.learning_rate
+                optimizer.param_groups[0]["lr"] = lrnow
+
+            for explore_step in range(0, args.num_steps):
+                current_step += 1
+                global_step += args.num_envs
+
+                action, logprob, value = agent.select_action(obs, device)
+                (
+                    next_obs,
+                    groundTruthRewards,
+                    terminations,
+                    truncations,
+                    infos,
+                ) = envs.step(action)
+
+                get_qpos_qvel(envs, qpos, qvel, dm_control_bool)
+                intrinsic_reward = knn_estimator.compute_intrinsic_rewards(next_obs)
+                knn_estimator.update_states(next_obs)
+                done = np.logical_or(terminations, truncations)
+                rb.add(
+                    obs=obs,
+                    next_obs=next_obs,
+                    action=action,
+                    extrinsic_reward=intrinsic_reward,
+                    intrinsic_reward=np.zeros(
+                        args.num_envs
+                    ),  # There is no standard deviation during the exploration phase
+                    ground_truth_reward=groundTruthRewards,
+                    done=done,
+                    infos=infos,
+                    global_step=global_step,
+                    qpos=qpos,
+                    qvel=qvel,
+                    values=value,
+                    logprobs=logprob,
+                )
+                obs = next_obs
+
+                metrics.log_exploration_metrics(
+                    explore_step,
+                    intrinsic_reward,
+                    knn_estimator,
+                    terminations,
+                    truncations,
+                    start_time,
+                )
+
+            rb.compute_gae_and_returns(agent)
+
+            ppo_dict = agent.train_agent(rb, args, optimizer)
+
+            metrics.log_training_metrics_ppo(
+                global_step,
+                optimizer,
+                ppo_dict,
+                start_time,
+            )
 
     if args.exploration_load:
         load_replay_buffer(rb, path=args.path_to_replay_buffer)

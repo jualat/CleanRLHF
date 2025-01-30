@@ -393,31 +393,8 @@ class RolloutBuffer(ReplayBuffer):
         self.log_probs[self.pos] = logprobs
         self.values[self.pos] = values
 
-        self.pos = (self.pos + 1) % self.buffer_size
         if self.current_size < self.buffer_size:
             self.current_size += 1
-
-    def reset(self):
-        self.observations = np.zeros(
-            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32
-        )
-        self.actions = np.zeros(
-            (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32
-        )
-        self.extrinsic_rewards = np.zeros(
-            (self.buffer_size, self.n_envs), dtype=np.float32
-        )
-        self.intrinsic_rewards = np.zeros(
-            (self.buffer_size, self.n_envs), dtype=np.float32
-        )
-        self.ground_truth_rewards = np.zeros(
-            (self.buffer_size, self.n_envs), dtype=np.float32
-        )
-        self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.bool)
-        self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
     def compute_gae_and_returns(self, agent):
         """Compute advantages and returns using GAE."""
