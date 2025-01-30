@@ -170,8 +170,14 @@
             } else if (response.status === 204) {
                 document.body.innerHTML = `
                     <main class="container">
-                    <h1>Currently no videos available</h1>
-                    <p>The model is training 🤖💭</p>
+                        <header></header>
+                        <div class="grid center" style="height: 100vh;display: flex; align-items: center; justify-content: center; ">
+                             <hgroup>
+                                <h1>Currently no videos available</h1>
+                                <p>The model is training 🤖💭</p>
+                            </hgroup>
+                        </div>
+                        <footer></footer>
                     </main>
                 `;
                 setTimeout(() => {
