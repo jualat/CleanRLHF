@@ -338,19 +338,19 @@ class RolloutBuffer(ReplayBuffer):
         gamma: float = 0.99,
     ):
         super().__init__(
-            buffer_size,
-            observation_space,
-            action_space,
-            device,
-            n_envs,
-            optimize_memory_usage,
-            handle_timeout_termination,
-            qpos_shape,
-            qvel_shape,
-            rune,
-            rune_beta,
-            rune_beta_decay,
-            seed,
+            buffer_size=buffer_size,
+            observation_space=observation_space,
+            action_space=action_space,
+            device=device,
+            n_envs=n_envs,
+            optimize_memory_usage=optimize_memory_usage,
+            handle_timeout_termination=handle_timeout_termination,
+            qpos_shape=qpos_shape,
+            qvel_shape=qvel_shape,
+            rune=rune,
+            rune_beta=rune_beta,
+            rune_beta_decay=rune_beta_decay,
+            seed=seed,
         )
 
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)

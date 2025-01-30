@@ -330,7 +330,7 @@ def train(args: Any, run_name: str):
         envs.single_action_space,
         device,
         handle_timeout_termination=False,
-        n_envs=1,
+        n_envs=args.num_envs,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
         rune=args.rune,
@@ -493,10 +493,9 @@ def train(args: Any, run_name: str):
                     truncations,
                     infos,
                 ) = envs.step(action)
-                done = np.logical_or(terminations, truncations)
 
                 get_qpos_qvel(envs, qpos, qvel, dm_control_bool)
-
+                done = np.logical_or(terminations, truncations)
                 rb.add(
                     obs=obs,
                     next_obs=next_obs,
