@@ -6,6 +6,9 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
 
+from framework.sampling import sample_pairs
+from framework.teacher import give_pseudo_label_ensemble
+
 
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
     """
@@ -96,7 +99,7 @@ class RewardNet(nn.Module):
             + (1 - preferences) * torch.log(1 - predictions)
         )
 
-    def compute_batch_pref_loss_ensemble(self,
+    def _compute_batch_pref_loss_ensemble(self,
         obs: torch.Tensor,
         acts: torch.Tensor,
         prefs: torch.Tensor,
@@ -108,7 +111,7 @@ class RewardNet(nn.Module):
         Shapes:
         E = ensemble size
         B = batch size
-        T = trajectory length
+        L = trajectory length
         O = obs dim
         A = act dim
 
@@ -161,7 +164,196 @@ class RewardNet(nn.Module):
         else:
             raise ValueError(f"Invalid method: {loss_method}")
 
+    def _prepare_pref_pairs(self, ens_pref_batches, device, rb, env, surf, H_max, H_min):
+        """
+        Prepare the preference pairs for training and validation by transforming them into tensors and applying data augmentation.
 
+        :param ens_pref_batches: A list of preference batches for each ensemble member. Each batch is a list of tuples
+                                 of the form (t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, [pref]) where the last
+                                 element is optional and only present if the batch is labeled.
+        :param device: The device to run the model on (CPU or GPU)
+        :param rb: The replay buffer
+        :param env: An optional VecNormalize environment to normalize observations
+        :param surf: Whether to use SURF data augmentation
+        :return: A tuple of tensors (ens_obs, ens_act, ens_prefs) of shape (E, 2, B, L, O), (E, 2, B, L, A), (E, B).
+        The last tensor is meaningless if the pref_batch is not labeled.
+        """
+        ens_obs = []
+        ens_act = []
+        ens_prefs = []
+        for pref_batch in ens_pref_batches:
+            t1_obs_list, t1_act_list = [], []
+            t2_obs_list, t2_act_list = [], []
+            pref_list = []
+
+            for pref_pair in pref_batch:
+                is_labeled = len(pref_pair) == 5
+                if is_labeled:
+                    t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
+                    pref = torch.tensor(pref, dtype=torch.float32).to(device)
+                    pref_list.append(pref)
+                else:
+                    t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx = pref_pair
+
+                t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
+                t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
+
+                if surf or not is_labeled:
+                    t1 = rb.temporal_data_augmentation(
+                        t1, H_max=H_max, H_min=H_min, env=env
+                    )
+                    t2 = rb.temporal_data_augmentation(
+                        t2, H_max=H_max, H_min=H_min, env=env
+                    )
+
+                t1_obs_list.append(t1.samples.observations)
+                t1_act_list.append(t1.samples.actions)
+                t2_obs_list.append(t2.samples.observations)
+                t2_act_list.append(t2.samples.actions)
+
+            # shape: (B, L, 0)
+            t1_obs = torch.stack(t1_obs_list, dim=0).to(device)
+            t2_obs = torch.stack(t2_obs_list, dim=0).to(device)
+
+            # shape: (B, L, A)
+            t1_act = torch.stack(t1_act_list, dim=0).to(device)
+            t2_act = torch.stack(t2_act_list, dim=0).to(device)
+
+
+            prefs = torch.tensor(pref_list, dtype=torch.float32, device=device)  # shape: (B,)
+
+            obs_cat = torch.cat([t1_obs, t2_obs], dim=1).to(device)  # shape: (2, B, L, O)
+            act_cat = torch.cat([t1_act, t2_act], dim=1).to(device)  # shape: (2, B, L, A)
+
+            ens_obs.append(obs_cat)
+            ens_act.append(act_cat)
+            ens_prefs.append(prefs)
+
+        ens_obs = torch.stack(ens_obs, dim=0)  # shape: (E, 2, B, L, O)
+        ens_act = torch.stack(ens_act, dim=0)  # shape: (E, 2, B, L, A)
+        ens_prefs = torch.stack(ens_prefs, dim=0)  # shape: (E, B)
+
+        return ens_obs, ens_act, ens_prefs
+
+
+    def train_or_val_pref_batch_ensemble(
+        self,
+        optimizer: torch.optim.Optimizer,
+        buffer,
+        rb,
+        device: torch.device,
+        env: Optional[VecNormalize] = None,
+        do_train: bool = True,
+        surf: Optional[bool] = False,
+        sampling_strategy: Optional[str] = None,
+        trajectory_length: Optional[int] = 64,
+        unlabeled_batch_ratio: Optional[int] = 1,
+        tau: Optional[float] = 0.8,
+        lambda_ssl: Optional[float] = 0.1,
+        H_max: Optional[int] = 55,
+        H_min: Optional[int] = 45,
+        batch_sampling: Optional[str] = "full",
+        mini_batch_size: Optional[int] = 10,
+        batch_size: Optional[int] = 32,
+        loss_method: str = "avg_prob",  # or "avg_bce"
+    ):
+        """
+        Train or validate the reward network with a batch of preferences.
+
+        :param optimizer: The optimizer for the model
+        :param buffer: The preference buffer
+        :param rb: The replay buffer, used to get the trajectories
+        :param device: The device to run the model on (CPU or GPU)
+        :param env: Optional VecNormalize to normalise observations
+        :param do_train: If True, do a forward/backward pass. If False, only forward pass (e.g. for validation).
+        :param surf: Toggle surf
+        :param sampling_strategy:
+        :param trajectory_length: Trajectory length
+        :param unlabeled_batch_ratio: Ratio of unlabeled to labeled batch size
+        :param tau: Confidence threshold for pseudo-labeling
+        :param lambda_ssl: Weight for the unsupervised (pseudo-labeled) loss
+        :param H_max: Maximal length of the data augmented trajectory
+        :param H_min: Minimal length of the data augmented trajectory
+        :param batch_sampling: The batch sampling strategy
+        :param mini_batch_size: The mini batch size
+        :param batch_size: The batch size
+        :param loss_method: method to compute binary cross-entropy loss
+                            - avg_prob: average the probabilities across ensemble
+                            - avg_bce: compute BCE individually for each ensemble member, then average.
+        """
+
+        # If we are not training, disable grad
+        if not do_train:
+            torch.set_grad_enabled(False)
+
+        #############################
+        # Labelled preference pairs #
+        #############################
+
+        labeled_batches = [buffer.sample(
+            sample_strategy=batch_sampling,
+            batch_size=batch_size,
+            mini_batch_size=mini_batch_size,
+        ) for _ in range(len(self.ensemble))]
+
+        # Prepare the preference pairs for training and validation
+        labeled_ens_obs, labeled_ens_act, labeled_ens_prefs = self._prepare_pref_pairs(
+            labeled_batches, device, rb, env, surf, H_max=H_max, H_min=H_min
+        )
+
+        if do_train:
+            optimizer.zero_grad()
+
+        sup_loss = self._compute_batch_pref_loss_ensemble(labeled_ens_obs, labeled_ens_act, labeled_ens_prefs, loss_method=loss_method)
+
+        if do_train:
+            sup_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+            optimizer.step()
+
+        ##############################
+        # Unlabeled preference pairs #
+        ##############################
+
+        unlabeled_batch_size = unlabeled_batch_ratio * batch_size
+        unlabeled_pairs_batch = [sample_pairs(
+            size=unlabeled_batch_size,
+            rb=rb,
+            sampling_strategy=sampling_strategy,
+            reward_net=self,
+            traj_len=trajectory_length,
+            batch_sampling=batch_sampling,
+            mini_batch_size=mini_batch_size,
+        ) for _ in range(len(self.ensemble))]
+
+        # Prepare the preference pairs for training and validation
+        unlabeled_ens_obs, unlabeled_ens_act, _ = self._prepare_pref_pairs(
+            unlabeled_pairs_batch, device, rb, env, surf, H_max=H_max, H_min=H_min
+        )
+
+        if do_train:
+            optimizer.zero_grad()
+
+        unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self)
+        unsup_loss = self._compute_batch_pref_loss_ensemble(unlabeled_ens_obs, unlabeled_ens_act, unlabeled_ens_prefs, loss_method=loss_method)
+
+        if do_train:
+            (lambda_ssl * unsup_loss).backward()
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+            optimizer.step()
+
+        total_loss = sup_loss + lambda_ssl * unsup_loss
+
+        # Re-enable gradients if we are not in training mode
+        if not do_train:
+            torch.set_grad_enabled(True)
+
+        prefix = "train" if do_train else "val"
+        return {
+            f"{prefix}_total_loss": total_loss,
+            f"{prefix}_supervised_loss": sup_loss,
+            f"{prefix}_unsupervised_loss": unsup_loss,
+        }
 
     def predict_reward(self, observations: np.ndarray, actions: np.ndarray):
         """
@@ -263,207 +455,6 @@ class RewardNet(nn.Module):
         ent = -ent.sum(dim=-1)
         return ent
 
-
-def train_or_val_pref_batch(
-    model: RewardNet,
-    optimizer: torch.optim.Optimizer,
-    rb,
-    buffer,
-    device: torch.device,
-    single_model,
-    env: Optional[VecNormalize] = None,
-    do_train: bool = True,
-    surf: Optional[bool] = False,
-    sampling_strategy: Optional[str] = None,
-    trajectory_length: Optional[int] = 64,
-    unlabeled_batch_ratio: Optional[int] = 1,
-    tau: Optional[float] = 0.8,
-    lambda_ssl: Optional[float] = 0.1,
-    H_max: Optional[int] = 55,
-    H_min: Optional[int] = 45,
-    batch_sampling: Optional[str] = "full",
-    mini_batch_size: Optional[int] = 10,
-    batch_size: Optional[int] = 32,
-):
-    """
-    Runs over a set of preference samples, either in a training mode (with backward + optimizer step)
-    or validation mode (no backward).
-
-    :param model: The reward network model
-    :param optimizer: The optimizer for the model
-    :param buffer: The preference buffer
-    :param rb: The replay buffer, used to get the trajectories
-    :param device: The device to run the model on (CPU or GPU)
-    :param single_model: The reward network model
-    :param env: Optional VecNormalize to normalise observations
-    :param do_train: If True, do a forward/backward pass. If False, only forward pass (e.g. for validation).
-    :param surf: Toggle surf
-    :param sampling_strategy:
-    :param trajectory_length: Trajectory length
-    :param unlabeled_batch_ratio: Ratio of unlabeled to labeled batch size
-    :param tau: Confidence threshold for pseudo-labeling
-    :param lambda_ssl: Weight for the unsupervised (pseudo-labeled) loss
-    :param H_max: Maximal length of the data augmented trajectory
-    :param H_min: Minimal length of the data augmented trajectory
-    :param batch_sampling: The batch sampling strategy
-    :param mini_batch_size: The mini batch size
-    :param batch_size: The batch size
-    :return: total_avg_loss over this batch of preferences
-    """
-    from sampling import sample_pairs
-    from teacher import give_pseudo_label
-
-    train_prefs = buffer.sample(
-        sample_strategy=batch_sampling,
-        batch_size=batch_size,
-        mini_batch_size=mini_batch_size,
-    )
-
-    # If we are in validation mode, we don't need to compute gradients
-    if not do_train:
-        torch.set_grad_enabled(False)
-
-    sup_loss_accum = 0.0
-    sup_num_samples = 0
-    for prefs in train_prefs:
-        if do_train:
-            optimizer.zero_grad()
-            batch_loss = torch.tensor(
-                0.0, dtype=torch.float, device=device, requires_grad=True
-            )
-        else:
-            batch_loss = torch.tensor(
-                0.0, dtype=torch.float, device=device, requires_grad=False
-            )
-
-        for pref_pair in prefs:
-            t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
-            pref = torch.tensor(pref, dtype=torch.float32).to(device)
-
-            t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
-            t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
-            if surf:
-                t1 = rb.temporal_data_augmentation(
-                    t1, H_max=H_max, H_min=H_min, env=env
-                )
-                t2 = rb.temporal_data_augmentation(
-                    t2, H_max=H_max, H_min=H_min, env=env
-                )
-
-            r1 = single_model(
-                torch.cat([t1.samples.observations, t1.samples.actions], dim=1).to(
-                    device
-                )
-            )
-            r2 = single_model(
-                torch.cat([t2.samples.observations, t2.samples.actions], dim=1).to(
-                    device
-                )
-            )
-
-            prediction = model.preference_prob(r1, r2)
-            loss = model.preference_loss(prediction, pref)
-            assert loss != float("inf")
-            batch_loss = batch_loss + loss
-            sup_loss_accum += loss.item()
-            sup_num_samples += 1
-        if do_train:
-            # Backward pass in training mode
-            batch_loss = batch_loss / len(prefs)
-            batch_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-    sup_avg_loss = sup_loss_accum / sup_num_samples
-
-    unsup_avg_loss = 0.0
-    unsup_loss_accum = 0.0
-    unsup_num_samples = 0
-    if surf and unlabeled_batch_ratio > 0:
-        unsup_batch_size = unlabeled_batch_ratio * sup_num_samples
-        unlabeled_pairs_batch = sample_pairs(
-            size=unsup_batch_size,
-            rb=rb,
-            sampling_strategy=sampling_strategy,
-            reward_net=model,
-            traj_len=trajectory_length,
-            batch_sampling=batch_sampling,
-            mini_batch_size=mini_batch_size,
-        )
-        for unlabeled_pairs in unlabeled_pairs_batch:
-            if do_train:
-                optimizer.zero_grad()
-                batch_loss = torch.tensor(
-                    0.0, dtype=torch.float, device=device, requires_grad=True
-                )
-            else:
-                batch_loss = torch.tensor(
-                    0.0, dtype=torch.float, device=device, requires_grad=False
-                )
-
-            for (t1_start_idx, t1_end_idx), (
-                t2_start_idx,
-                t2_end_idx,
-            ) in unlabeled_pairs:
-                t1_u = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
-                t2_u = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
-
-                t1_u_aug = rb.temporal_data_augmentation(
-                    t1_u, H_max=H_max, H_min=H_min, env=env
-                )
-                t2_u_aug = rb.temporal_data_augmentation(
-                    t2_u, H_max=H_max, H_min=H_min, env=env
-                )
-
-                pseudo_label = give_pseudo_label(t1_u_aug, t2_u_aug, tau, model)
-                if pseudo_label is None:
-                    continue
-
-                r1_u = single_model(
-                    torch.cat(
-                        [t1_u_aug.samples.observations, t1_u_aug.samples.actions],
-                        dim=1,
-                    ).to(device)
-                )
-                r2_u = single_model(
-                    torch.cat(
-                        [t2_u_aug.samples.observations, t2_u_aug.samples.actions],
-                        dim=1,
-                    ).to(device)
-                )
-                pred_u = model.preference_prob(r1_u, r2_u)
-                loss_u = model.preference_loss(pred_u, pseudo_label)
-                assert loss_u != float("inf")
-
-                batch_loss = batch_loss + loss_u
-                unsup_loss_accum += loss_u.item()
-                unsup_num_samples += 1
-
-            if do_train:
-                batch_loss = batch_loss / len(unlabeled_pairs)
-                (lambda_ssl * batch_loss).backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-        if unsup_num_samples > 0:
-            unsup_avg_loss = unsup_loss_accum / unsup_num_samples
-
-    # Re-enable gradients if we are in training mode
-    if not do_train:
-        torch.set_grad_enabled(True)
-
-    total_avg_loss = sup_avg_loss + lambda_ssl * unsup_avg_loss
-    if do_train:
-        return {
-            "train_total_loss": total_avg_loss,
-            "train_supervised_loss": sup_avg_loss,
-            "train_unsupervised_loss": unsup_avg_loss,
-        }
-    return {
-        "val_total_loss": total_avg_loss,
-        "val_supervised_loss": sup_avg_loss,
-        "val_unsupervised_loss": unsup_avg_loss,
-    }
-
-
 def train_reward(
     model: RewardNet,
     optimizer: torch.optim.Optimizer,
@@ -515,53 +506,31 @@ def train_reward(
     for epoch in range(epochs):
         # ==== 1) TRAINING STEP ====
 
-        train_loss_dict = {
-            "train_total_loss": 0,
-            "train_supervised_loss": 0,
-            "train_unsupervised_loss": 0,
-        }
-
-        for single_model in model.ensemble:
-            train_loss_dict_model = train_or_val_pref_batch(
-                model=model,
-                optimizer=optimizer,
-                buffer=train_pref_buffer,
-                rb=rb,
-                single_model=single_model,
-                device=device,
-                env=env,
-                do_train=True,
-                surf=surf,
-                sampling_strategy=sampling_strategy,
-                trajectory_length=trajectory_length,
-                unlabeled_batch_ratio=unlabeled_batch_ratio,
-                tau=tau,
-                lambda_ssl=lambda_ssl,
-                H_max=H_max,
-                H_min=H_min,
-                batch_sampling=batch_sample_strategy,
-                batch_size=batch_size,
-                mini_batch_size=mini_batch_size,
-            )
-            train_loss_dict["train_total_loss"] += train_loss_dict_model[
-                "train_total_loss"
-            ]
-            train_loss_dict["train_supervised_loss"] += train_loss_dict_model[
-                "train_supervised_loss"
-            ]
-            train_loss_dict["train_unsupervised_loss"] += train_loss_dict_model[
-                "train_unsupervised_loss"
-            ]
-
-        train_loss_dict["train_total_loss"] = train_loss_dict["train_total_loss"] / len(
-            model.ensemble
+        train_loss_dict = model.train_or_val_pref_batch_ensemble(
+            optimizer=optimizer,
+            buffer=train_pref_buffer,
+            rb=rb,
+            device=device,
+            env=env,
+            do_train=True,
+            surf=surf,
+            sampling_strategy=sampling_strategy,
+            trajectory_length=trajectory_length,
+            unlabeled_batch_ratio=unlabeled_batch_ratio,
+            tau=tau,
+            lambda_ssl=lambda_ssl,
+            H_max=H_max,
+            H_min=H_min,
+            batch_sampling=batch_sample_strategy,
+            batch_size=batch_size,
+            mini_batch_size=mini_batch_size,
+            loss_method="avg_prob",
         )
-        train_loss_dict["train_supervised_loss"] = train_loss_dict[
-            "train_supervised_loss"
-        ] / len(model.ensemble)
-        train_loss_dict["train_unsupervised_loss"] = train_loss_dict[
-            "train_unsupervised_loss"
-        ] / len(model.ensemble)
+
+        metrics.log_losses(
+            loss_dict=train_loss_dict,
+            global_step=global_step,
+        )
 
         # ==== 2) VALIDATION STEP ====
         val_loss_dict = {
@@ -572,57 +541,30 @@ def train_reward(
         if val_pref_buffer is not None and val_pref_buffer.size > 0:
             # no need to compute gradients
             with torch.no_grad():
-                for single_model in model.ensemble:
-                    val_loss_dict_model = train_or_val_pref_batch(
-                        model=model,
-                        optimizer=optimizer,
-                        rb=rb,
-                        buffer=val_pref_buffer,
-                        single_model=single_model,
-                        device=device,
-                        env=env,
-                        do_train=False,
-                        surf=surf,
-                        sampling_strategy=sampling_strategy,
-                        trajectory_length=trajectory_length,
-                        unlabeled_batch_ratio=unlabeled_batch_ratio,
-                        tau=tau,
-                        lambda_ssl=lambda_ssl,
-                        H_max=H_max,
-                        H_min=H_min,
-                        batch_sampling="full",
-                        mini_batch_size=mini_batch_size,
-                        batch_size=batch_size,
-                    )
-                    val_loss_dict["val_total_loss"] += val_loss_dict_model[
-                        "val_total_loss"
-                    ]
-                    val_loss_dict["val_supervised_loss"] += val_loss_dict_model[
-                        "val_supervised_loss"
-                    ]
-                    val_loss_dict["val_unsupervised_loss"] += val_loss_dict_model[
-                        "val_unsupervised_loss"
-                    ]
-
-                val_loss_dict["val_total_loss"] = val_loss_dict["val_total_loss"] / len(
-                    model.ensemble
+                val_loss_dict_model = model.train_or_val_pref_batch_ensemble(
+                    optimizer=optimizer,
+                    rb=rb,
+                    buffer=val_pref_buffer,
+                    device=device,
+                    env=env,
+                    do_train=False,
+                    surf=surf,
+                    sampling_strategy=sampling_strategy,
+                    trajectory_length=trajectory_length,
+                    unlabeled_batch_ratio=unlabeled_batch_ratio,
+                    tau=tau,
+                    lambda_ssl=lambda_ssl,
+                    H_max=H_max,
+                    H_min=H_min,
+                    batch_sampling="full",
+                    mini_batch_size=mini_batch_size,
+                    batch_size=batch_size,
                 )
-                val_loss_dict["val_supervised_loss"] = val_loss_dict[
-                    "val_supervised_loss"
-                ] / len(model.ensemble)
-                val_loss_dict["val_unsupervised_loss"] = val_loss_dict[
-                    "val_unsupervised_loss"
-                ] / len(model.ensemble)
 
                 metrics.log_losses(
                     loss_dict=val_loss_dict,
                     global_step=global_step,
                 )
-
-        metrics.log_losses(
-            loss_dict=train_loss_dict,
-            global_step=global_step,
-        )
 
         if epoch % 10 == 0:
             if val_pref_buffer is not None and val_pref_buffer.size > 0:

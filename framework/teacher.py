@@ -147,6 +147,59 @@ class Teacher:
         return weights_first_trajectory
 
 
+def give_pseudo_label_ensemble(
+    obs: torch.Tensor,
+    acts: torch.Tensor,
+    tau: float,
+    model: RewardNet,
+):
+    """
+    Given an ensemble of observations and actions, computes the pseudo-label for the ensemble.
+
+    Shapes:
+        E = ensemble size
+        B = batch size
+        L = trajectory length
+        O = obs dim
+        A = act dim
+
+    :param obs: observations of shape (E, 2, B, L, O) of the first and second trajectory
+    :param acts: actions of shape (E, 2, B, L, A) of the first and second trajectory
+    :param tau:
+    :param model:
+    :return:
+    """
+
+    E = len(model.ensemble)
+    B, L, O = obs.shape
+    _, _, A = obs.shape
+
+    # Pseudo-labeling
+    with torch.no_grad():
+        obs_flat = obs.reshape(E, 2 * B * L, O)
+        acts_flat = acts.reshape(E, 2 * B * L, A)
+
+        # Forward pass through the ensemble
+        r_ens = model.forward_ensemble(obs_flat, acts_flat)  # shape: (E, 2 * B * L, 1)
+        r_ens = r_ens.reshape(E, 2, B, L)  # shape: (E, 2, B, L, 1)
+        r_ens = r_ens.transpose(0, 1)  # shape: (2, E, B, L, 1)
+
+        r_ens_cum = r_ens.sum(dim=3)  # shape: (2, E, B, 1)
+        r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
+
+        r_ens_cum_t1 = r_ens_cum[0]  # shape: (E, B)
+        r_ens_cum_t2 = r_ens_cum[1]  # shape: (E, B)
+
+        # Compute the preference probabilities
+        probs = model.preference_prob_ensemble(r_ens_cum_t1, r_ens_cum_t2) # shape: (E, B)
+
+        # Compute the pseudo-label
+        pseudo_labels = torch.where(probs > tau,
+                                   torch.tensor(Preference.FIRST.value),
+                                   torch.where(probs < (1.0 - tau), torch.tensor(Preference.SECOND.value), torch.tensor(Preference.SKIP.value)))
+
+        return pseudo_labels
+
 def give_pseudo_label(
     traj1: Trajectory, traj2: Trajectory, tau: float, model: RewardNet
 ):
