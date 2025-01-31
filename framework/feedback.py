@@ -167,14 +167,19 @@ def collect_feedback(
                                     replay_buffer, feedback["trajectory_2"]
                                 )
                                 preference = feedback["preference"]
-                                if preference == "-1":
+                                if preference == -1:
                                     preference = None
+                                    collected_feedback += 1
+                                    pbar.update(1)
 
-                                if not val_pref_buffer.contains(
-                                    first_trajectory, second_trajectory, preference
-                                ) | train_pref_buffer.contains(
-                                    first_trajectory, second_trajectory, preference
-                                ):
+                                if (
+                                    not val_pref_buffer.contains(
+                                        first_trajectory, second_trajectory, preference
+                                    )
+                                    | train_pref_buffer.contains(
+                                        first_trajectory, second_trajectory, preference
+                                    )
+                                ) and preference is not None:
                                     # Store preferences
                                     if np.random.rand() < (
                                         1 - reward_net_val_split
