@@ -249,3 +249,34 @@ class PerformanceMetrics:
 
     def close(self):
         self.writer.close()
+
+    def log_training_metrics_ppo(
+        self,
+        global_step,
+        optimizer,
+        loss_dict,
+        start_time,
+    ):
+        """
+        Log training metrics for PPO to TensorBoard.
+
+        :param global_step: Current global training step.
+        :param optimizer: Optimizer used for parameter updates.
+        :param loss_dict: The dictionary of the PPO losses
+        :param start_time: Start time for calculating steps per second (SPS).
+        :return: None
+        """
+        self.writer.add_scalar(
+            "charts/learning_rate", optimizer.param_groups[0]["lr"], global_step
+        )
+        for loss_name, loss_value in loss_dict.items():
+            if loss_value is not None:
+                if loss_name == "clipfracs":
+                    loss_value = np.mean(loss_value)
+                self.writer.add_scalar(
+                    f"losses/{loss_name}", float(loss_value), global_step
+                )
+        logging.debug(f"SPS: {int(global_step / (time.time() - start_time))}")
+        self.writer.add_scalar(
+            "charts/SPS", int(global_step / (time.time() - start_time)), global_step
+        )
