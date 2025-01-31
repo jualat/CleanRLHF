@@ -56,6 +56,17 @@ class RewardNet(nn.Module):
         y = torch.stack(y, dim=0)
         return torch.mean(y, dim=0)
 
+    def forward_ensemble(self, obs, acts):
+        """
+        Forward pass across *all* ensemble members simultaneously.
+        :param obs: shape [ensemble_size, batch_size, traj_length, obs_dim]
+        :param acts: shape [ensemble_size, batch_size, traj_length, act_dim]
+        :return: shape [ensemble_size, batch_size, 1]
+        """
+        x = torch.cat([obs, acts], dim=2)  # shape: [ensemble_size, batch_size, obs_dim + act_dim]
+        y = [model(x[i]) for i, model in enumerate(self.ensemble)]
+        return torch.stack(y, dim=0)
+
     def preference_prob(self, r1, r2):
         """
         Compute the probability based on the Bradley-Terry model.
@@ -84,6 +95,73 @@ class RewardNet(nn.Module):
             preferences * torch.log(predictions)
             + (1 - preferences) * torch.log(1 - predictions)
         )
+
+    def compute_batch_pref_loss_ensemble(self,
+        obs: torch.Tensor,
+        acts: torch.Tensor,
+        prefs: torch.Tensor,
+        loss_method: str = "avg_prob",
+    ):
+        """
+        Vectorized preference-loss computation across the entire ensemble in one shot.
+
+        Shapes:
+        E = ensemble size
+        B = batch size
+        T = trajectory length
+        O = obs dim
+        A = act dim
+
+        :param obs: observations of shape (E, 2, B, L, O) of the first and second trajectory
+        :param acts: actions of shape (E, 2, B, L, A) of the first and second trajectory
+        :param prefs: preferences of shape (E, 2, B,) of the first and second trajectory
+        :param loss_method: method to compute binary cross-entropy loss
+                            - avg_prob: average the probabilities across ensemble
+                            - avg_bce: compute BCE individually for each ensemble member, then average.
+        """
+
+        E = len(self.ensemble)
+        B, L, O = obs.shape
+        _, _, A = obs.shape
+
+        # Flatten dimensions
+        obs_flat = obs.reshape(E, 2 * B * L, O)
+        acts_flat = acts.reshape(E, 2 * B * L, A)
+
+        # Forward pass through the ensemble
+        r_ens = self.forward_ensemble(obs_flat, acts_flat)  # shape: (E, 2 * B * L, 1)
+        r_ens = r_ens.reshape(E, 2, B, L) # shape: (E, 2, B, L, 1)
+        r_ens = r_ens.transpose(0, 1) # shape: (2, E, B, L, 1)
+
+        r_ens_cum = r_ens.sum(dim=3)  # shape: (2, E, B, 1)
+        r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
+
+        r_ens_cum_t1 = r_ens_cum[0] # shape: (E, B)
+        r_ens_cum_t2 = r_ens_cum[1] # shape: (E, B)
+
+        epsilon = 1e-7
+
+        # Compute the preference probabilities using the Bradley-Terry model
+        exp1 = torch.exp(r_ens_cum_t1)
+        exp2 = torch.exp(r_ens_cum_t2)
+        prob_ens = exp1 / (exp1 + exp2 + 1e-7)  # shape (E, B)
+
+        # Compute the binary cross-entropy loss
+        if loss_method == "avg_prob":
+            # average the probabilities across ensemble
+            prob = prob_ens.mean(dim=0)
+            prob = torch.clamp(prob, epsilon, 1.0 - epsilon)
+            bce = -(prefs * torch.log(prob) + (1.0 - prefs) * torch.log(1.0 - prob))
+            return bce.mean()
+        elif loss_method == "avg_bce":
+            # compute BCE individually for each ensemble member, then average.
+            prob_ens = torch.clamp(prob_ens, epsilon, 1.0 - epsilon)
+            bce_ens = -(prefs * torch.log(prob_ens) + (1 - prefs) * torch.log(1 - prob_ens))
+            return bce_ens.mean(dim=1).mean(dim=0)
+        else:
+            raise ValueError(f"Invalid method: {loss_method}")
+
+
 
     def predict_reward(self, observations: np.ndarray, actions: np.ndarray):
         """
