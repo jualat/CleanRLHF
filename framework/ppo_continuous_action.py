@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import gymnasium as gym
 import numpy as np
+import shimmy  # noqa
 import torch
 import torch.optim as optim
 import tyro
@@ -50,7 +51,7 @@ class Args:
     """the threshold level for the logger to print a message"""
 
     # Algorithm specific arguments
-    env_id: str = "HalfCheetah-v5"
+    env_id: str = "Hopper-v5"
     """the id of the environment"""
     total_timesteps: int = 1000000
     """total timesteps of the experiments"""
@@ -107,8 +108,23 @@ def train(args: Args):
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_iterations = args.total_timesteps // args.batch_size
+
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
 
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%d/%m/%Y %H:%M:%S",
+        level=args.log_level.upper(),
+    )
+
+    if args.log_file:
+        os.makedirs(os.path.join("runs", run_name), exist_ok=True)
+        file_path = os.path.join("runs", run_name, "log.log")
+        logging.getLogger().addHandler(
+            logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
+        )
     if args.track:
         import wandb
 
@@ -190,7 +206,7 @@ def train(args: Args):
     current_step = 0
     try:
         for iteration in trange(
-            1, args.num_iterations + 1, desc="Iteration", unit="iteration"
+            1, args.num_iterations + 1, desc="Training", unit="iteration"
         ):
             # Annealing the rate if instructed to do so.
             if args.anneal_lr:
