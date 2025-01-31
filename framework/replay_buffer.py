@@ -175,7 +175,7 @@ class ReplayBuffer(SB3ReplayBuffer):
             )
             for start in indices
         ]
-        logging.debug(f"trajectory length: {traj_len}, ")
+
         return trajectories[:mb_size], trajectories[mb_size:]
 
     def _get_samples(

@@ -1,9 +1,12 @@
+import logging
 import random
 from enum import Enum
 
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+from sympy.codegen.ast import float32
+
 from replay_buffer import Trajectory
 from reward_net import RewardNet
 
@@ -167,12 +170,11 @@ def give_pseudo_label_ensemble(
     :param acts: actions of shape (E, 2, B, L, A) of the first and second trajectory
     :param tau:
     :param model:
-    :return:
+    :return: pseudo-labels of shape (E, B)
     """
 
-    E = len(model.ensemble)
-    B, L, O = obs.shape
-    _, _, A = obs.shape
+    E, _, B, L, O = obs.shape
+    _, _, _, _, A = acts.shape
 
     # Pseudo-labeling
     with torch.no_grad():
@@ -182,15 +184,18 @@ def give_pseudo_label_ensemble(
         # Forward pass through the ensemble
         r_ens = model.forward_ensemble(obs_flat, acts_flat)  # shape: (E, 2 * B * L, 1)
         r_ens = r_ens.reshape(E, 2, B, L)  # shape: (E, 2, B, L, 1)
-        r_ens = r_ens.transpose(0, 1)  # shape: (2, E, B, L, 1)
 
         # Compute the preference probabilities
         probs = model.preference_prob_ensemble(r_ens) # shape: (E, B)
 
+        logging.debug("probs.shape: %s", probs.shape)
+
         # Compute the pseudo-label
         pseudo_labels = torch.where(probs > tau,
-                                   torch.tensor(Preference.FIRST.value),
-                                   torch.where(probs < (1.0 - tau), torch.tensor(Preference.SECOND.value), torch.tensor(Preference.SKIP.value)))
+                                   torch.tensor(float(Preference.FIRST.value), dtype=torch.float32),
+                                   torch.where(probs < (1.0 - tau),
+                                               torch.tensor(float(Preference.SECOND.value), dtype=torch.float32),
+                                               torch.tensor(-1.0, dtype=torch.float32))) # -1.0 is the skip label
 
         return pseudo_labels
 

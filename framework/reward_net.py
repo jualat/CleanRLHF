@@ -5,9 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
-
-from framework.sampling import sample_pairs
-from framework.teacher import give_pseudo_label_ensemble
+from tqdm import trange
 
 
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
@@ -62,11 +60,13 @@ class RewardNet(nn.Module):
     def forward_ensemble(self, obs, acts):
         """
         Forward pass across *all* ensemble members simultaneously.
-        :param obs: shape [ensemble_size, batch_size, traj_length, obs_dim]
-        :param acts: shape [ensemble_size, batch_size, traj_length, act_dim]
+        :param obs: shape [ensemble_size, batch_size * traj_length, obs_dim]
+        :param acts: shape [ensemble_size, batch_size * traj_length, act_dim]
         :return: shape [ensemble_size, batch_size, 1]
         """
-        x = torch.cat([obs, acts], dim=2)  # shape: [ensemble_size, batch_size, obs_dim + act_dim]
+        logging.debug("obs.shape: %s", obs.shape)
+        logging.debug("acts.shape: %s", acts.shape)
+        x = torch.cat([obs, acts], dim=2)  # shape: [ensemble_size, batch_size * traj_length, obs_dim + act_dim]
         y = [model(x[i]) for i, model in enumerate(self.ensemble)]
         return torch.stack(y, dim=0)
 
@@ -89,19 +89,31 @@ class RewardNet(nn.Module):
         """
         Compute the preference probabilities using the Bradley-Terry model.
 
-        :param r_ens: The rewards as a tensor of shape (2, E, B, L)
+        :param r_ens: The rewards as a tensor of shape (E, 2, B, L)
         :return: The loss as a tensor of shape (E,B,)
         """
-        r_ens_cum = r_ens.sum(dim=3)  # shape: (2, E, B, 1)
+        logging.debug("r_ens.shape: %s", r_ens.shape)
+
+        r_ens_cum = r_ens.sum(dim=3)  # shape: (E, 2, B, 1)
         r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
+        r_ens_cum = r_ens_cum.transpose(0, 1)  # shape: (E, 2, B)
+
+        logging.debug("r_ens_cum.shape: %s", r_ens_cum.shape)
 
         r_ens_cum_t1 = r_ens_cum[0]  # shape: (E, B)
         r_ens_cum_t2 = r_ens_cum[1]  # shape: (E, B)
 
+        logging.debug("r_ens_cum_t1.shape: %s", r_ens_cum_t1.shape)
+        logging.debug("r_ens_cum_t2.shape: %s", r_ens_cum_t2.shape)
+
         # Compute the preference probabilities using the Bradley-Terry model
         exp1 = torch.exp(r_ens_cum_t1)
         exp2 = torch.exp(r_ens_cum_t2)
-        return exp1 / (exp1 + exp2 + 1e-7)  # shape (E, B)
+        probs = exp1 / (exp1 + exp2 + 1e-7)  # shape (E, B)
+
+        logging.debug("probs.shape: %s", probs.shape)
+
+        return probs
 
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
         """
@@ -141,9 +153,13 @@ class RewardNet(nn.Module):
                             - avg_bce: compute BCE individually for each ensemble member, then average.
         """
 
-        E = len(self.ensemble)
-        B, L, O = obs.shape
-        _, _, A = obs.shape
+        logging.debug("obs.shape: %s", obs.shape)
+        logging.debug("acts.shape: %s", acts.shape)
+
+        E, _, B, L, O = obs.shape
+        _, _, _, _, A = acts.shape
+
+        logging.debug("E: %d, B: %d, L: %d, O: %d, A: %d", E, B, L, O, A)
 
         # Flatten dimensions
         obs_flat = obs.reshape(E, 2 * B * L, O)
@@ -152,9 +168,11 @@ class RewardNet(nn.Module):
         # Forward pass through the ensemble
         r_ens = self.forward_ensemble(obs_flat, acts_flat)  # shape: (E, 2 * B * L, 1)
         r_ens = r_ens.reshape(E, 2, B, L) # shape: (E, 2, B, L, 1)
-        r_ens = r_ens.transpose(0, 1) # shape: (2, E, B, L, 1)
 
         epsilon = 1e-7
+
+        # Same topic: What about masking out the preferences that should be skipped?
+
         prob_ens = self.preference_prob_ensemble(r_ens)  # shape: (E, B)
 
         # Compute the binary cross-entropy loss
@@ -190,29 +208,35 @@ class RewardNet(nn.Module):
         ens_act = []
         ens_prefs = []
         for pref_batch in ens_pref_batches:
+            # TODO: We don't support mini-batches now: so pref_pair is again a list of tuples
+            pref_batch = pref_batch[0]
+
+            logging.debug("len(pref_batch): %d", len(pref_batch))
+
             t1_obs_list, t1_act_list = [], []
             t2_obs_list, t2_act_list = [], []
             pref_list = []
 
             for pref_pair in pref_batch:
-                is_labeled = len(pref_pair) == 5
+                is_labeled = (len(pref_pair) == 5)
+                logging.debug("is_labeled: %s, len(pref_pair)=%d", is_labeled, len(pref_pair))
                 if is_labeled:
                     t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
                     pref = torch.tensor(pref, dtype=torch.float32).to(device)
                     pref_list.append(pref)
                 else:
-                    t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx = pref_pair
+                    (t1_start_idx, t1_end_idx), (t2_start_idx, t2_end_idx) = pref_pair
 
                 t1 = rb.get_trajectory(int(t1_start_idx), int(t1_end_idx), env=env)
                 t2 = rb.get_trajectory(int(t2_start_idx), int(t2_end_idx), env=env)
 
-                if surf or not is_labeled:
-                    t1 = rb.temporal_data_augmentation(
-                        t1, H_max=H_max, H_min=H_min, env=env
-                    )
-                    t2 = rb.temporal_data_augmentation(
-                        t2, H_max=H_max, H_min=H_min, env=env
-                    )
+                # if surf or not is_labeled:
+                #     t1 = rb.temporal_data_augmentation(
+                #         t1, H_max=H_max, H_min=H_min, env=env
+                #     )
+                #     t2 = rb.temporal_data_augmentation(
+                #         t2, H_max=H_max, H_min=H_min, env=env
+                #     )
 
                 t1_obs_list.append(t1.samples.observations)
                 t1_act_list.append(t1.samples.actions)
@@ -230,8 +254,8 @@ class RewardNet(nn.Module):
 
             prefs = torch.tensor(pref_list, dtype=torch.float32, device=device)  # shape: (B,)
 
-            obs_cat = torch.cat([t1_obs, t2_obs], dim=1).to(device)  # shape: (2, B, L, O)
-            act_cat = torch.cat([t1_act, t2_act], dim=1).to(device)  # shape: (2, B, L, A)
+            obs_cat = torch.stack([t1_obs, t2_obs], dim=0).to(device)  # shape: (2, B, L, O)
+            act_cat = torch.stack([t1_act, t2_act], dim=0).to(device)  # shape: (2, B, L, A)
 
             ens_obs.append(obs_cat)
             ens_act.append(act_cat)
@@ -289,6 +313,8 @@ class RewardNet(nn.Module):
                             - avg_prob: average the probabilities across ensemble
                             - avg_bce: compute BCE individually for each ensemble member, then average.
         """
+        from framework.sampling import sample_pairs
+        from framework.teacher import give_pseudo_label_ensemble
 
         # If we are not training, disable grad
         if not do_train:
@@ -309,6 +335,10 @@ class RewardNet(nn.Module):
             labeled_batches, device, rb, env, surf, H_max=H_max, H_min=H_min
         )
 
+        logging.debug("labeled_ens_obs.shape: %s", labeled_ens_obs.shape)
+        logging.debug("labeled_ens_act.shape: %s", labeled_ens_act.shape)
+        logging.debug("labeled_ens_prefs.shape: %s", labeled_ens_prefs.shape)
+
         if do_train:
             optimizer.zero_grad()
 
@@ -324,7 +354,7 @@ class RewardNet(nn.Module):
         ##############################
 
         unlabeled_batch_size = unlabeled_batch_ratio * batch_size
-        unlabeled_pairs_batch = [sample_pairs(
+        unlabeled_batches = [sample_pairs(
             size=unlabeled_batch_size,
             rb=rb,
             sampling_strategy=sampling_strategy,
@@ -336,13 +366,22 @@ class RewardNet(nn.Module):
 
         # Prepare the preference pairs for training and validation
         unlabeled_ens_obs, unlabeled_ens_act, _ = self._prepare_pref_pairs(
-            unlabeled_pairs_batch, device, rb, env, surf, H_max=H_max, H_min=H_min
+            unlabeled_batches, device, rb, env, surf, H_max=H_max, H_min=H_min
         )
 
         if do_train:
             optimizer.zero_grad()
 
-        unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self)
+        unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self) # shape: (E, B)
+
+        # TODO: Mask out the preferences that should be skipped pseudo-label is -1.0 on dim 1
+        # Problem: We might have different batch sizes for ensemble members
+        # 1. Find the minimum batch size
+        # 2. Mask out the preferences that should be skipped
+        # 3. Compute the unsupervised loss
+        mask = unlabeled_ens_prefs != -1.0
+
+
         unsup_loss = self._compute_batch_pref_loss_ensemble(unlabeled_ens_obs, unlabeled_ens_act, unlabeled_ens_prefs, loss_method=loss_method)
 
         if do_train:
@@ -511,7 +550,7 @@ def train_reward(
     :param H_min: Minimal length of the data augmented trajectory
     :return:
     """
-    for epoch in range(epochs):
+    for epoch in trange(epochs, desc="Reward training", unit="epoch"):
         # ==== 1) TRAINING STEP ====
 
         train_loss_dict = model.train_or_val_pref_batch_ensemble(
