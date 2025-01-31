@@ -184,14 +184,8 @@ def give_pseudo_label_ensemble(
         r_ens = r_ens.reshape(E, 2, B, L)  # shape: (E, 2, B, L, 1)
         r_ens = r_ens.transpose(0, 1)  # shape: (2, E, B, L, 1)
 
-        r_ens_cum = r_ens.sum(dim=3)  # shape: (2, E, B, 1)
-        r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
-
-        r_ens_cum_t1 = r_ens_cum[0]  # shape: (E, B)
-        r_ens_cum_t2 = r_ens_cum[1]  # shape: (E, B)
-
         # Compute the preference probabilities
-        probs = model.preference_prob_ensemble(r_ens_cum_t1, r_ens_cum_t2) # shape: (E, B)
+        probs = model.preference_prob_ensemble(r_ens) # shape: (E, B)
 
         # Compute the pseudo-label
         pseudo_labels = torch.where(probs > tau,

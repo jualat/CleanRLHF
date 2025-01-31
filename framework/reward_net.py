@@ -85,6 +85,24 @@ class RewardNet(nn.Module):
         assert 0 <= prob[0] <= 1
         return prob[0]
 
+    def preference_prob_ensemble(self, r_ens):
+        """
+        Compute the preference probabilities using the Bradley-Terry model.
+
+        :param r_ens: The rewards as a tensor of shape (2, E, B, L)
+        :return: The loss as a tensor of shape (E,B,)
+        """
+        r_ens_cum = r_ens.sum(dim=3)  # shape: (2, E, B, 1)
+        r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
+
+        r_ens_cum_t1 = r_ens_cum[0]  # shape: (E, B)
+        r_ens_cum_t2 = r_ens_cum[1]  # shape: (E, B)
+
+        # Compute the preference probabilities using the Bradley-Terry model
+        exp1 = torch.exp(r_ens_cum_t1)
+        exp2 = torch.exp(r_ens_cum_t2)
+        return exp1 / (exp1 + exp2 + 1e-7)  # shape (E, B)
+
     def preference_loss(self, predictions, preferences, epsilon=1e-7):
         """
         Compute the binary cross entropy loss based on human feedback.
@@ -136,18 +154,8 @@ class RewardNet(nn.Module):
         r_ens = r_ens.reshape(E, 2, B, L) # shape: (E, 2, B, L, 1)
         r_ens = r_ens.transpose(0, 1) # shape: (2, E, B, L, 1)
 
-        r_ens_cum = r_ens.sum(dim=3)  # shape: (2, E, B, 1)
-        r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
-
-        r_ens_cum_t1 = r_ens_cum[0] # shape: (E, B)
-        r_ens_cum_t2 = r_ens_cum[1] # shape: (E, B)
-
         epsilon = 1e-7
-
-        # Compute the preference probabilities using the Bradley-Terry model
-        exp1 = torch.exp(r_ens_cum_t1)
-        exp2 = torch.exp(r_ens_cum_t2)
-        prob_ens = exp1 / (exp1 + exp2 + 1e-7)  # shape (E, B)
+        prob_ens = self.preference_prob_ensemble(r_ens)  # shape: (E, B)
 
         # Compute the binary cross-entropy loss
         if loss_method == "avg_prob":
