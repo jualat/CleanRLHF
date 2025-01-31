@@ -64,8 +64,8 @@ class RewardNet(nn.Module):
         :param acts: shape [ensemble_size, batch_size * traj_length, act_dim]
         :return: shape [ensemble_size, batch_size, 1]
         """
-        logging.debug("obs.shape: %s", obs.shape)
-        logging.debug("acts.shape: %s", acts.shape)
+        # logging.debug("obs.shape: %s", obs.shape)
+        # logging.debug("acts.shape: %s", acts.shape)
         x = torch.cat([obs, acts], dim=2)  # shape: [ensemble_size, batch_size * traj_length, obs_dim + act_dim]
         y = [model(x[i]) for i, model in enumerate(self.ensemble)]
         return torch.stack(y, dim=0)
@@ -92,26 +92,26 @@ class RewardNet(nn.Module):
         :param r_ens: The rewards as a tensor of shape (E, 2, B, L)
         :return: The loss as a tensor of shape (E,B,)
         """
-        logging.debug("r_ens.shape: %s", r_ens.shape)
+        # logging.debug("r_ens.shape: %s", r_ens.shape)
 
         r_ens_cum = r_ens.sum(dim=3)  # shape: (E, 2, B, 1)
         r_ens_cum = r_ens_cum.squeeze(-1)  # shape: (2, E, B)
         r_ens_cum = r_ens_cum.transpose(0, 1)  # shape: (E, 2, B)
 
-        logging.debug("r_ens_cum.shape: %s", r_ens_cum.shape)
+        # logging.debug("r_ens_cum.shape: %s", r_ens_cum.shape)
 
         r_ens_cum_t1 = r_ens_cum[0]  # shape: (E, B)
         r_ens_cum_t2 = r_ens_cum[1]  # shape: (E, B)
 
-        logging.debug("r_ens_cum_t1.shape: %s", r_ens_cum_t1.shape)
-        logging.debug("r_ens_cum_t2.shape: %s", r_ens_cum_t2.shape)
+        # logging.debug("r_ens_cum_t1.shape: %s", r_ens_cum_t1.shape)
+        # logging.debug("r_ens_cum_t2.shape: %s", r_ens_cum_t2.shape)
 
         # Compute the preference probabilities using the Bradley-Terry model
         exp1 = torch.exp(r_ens_cum_t1)
         exp2 = torch.exp(r_ens_cum_t2)
         probs = exp1 / (exp1 + exp2 + 1e-7)  # shape (E, B)
 
-        logging.debug("probs.shape: %s", probs.shape)
+        # logging.debug("probs.shape: %s", probs.shape)
 
         return probs
 
@@ -153,13 +153,13 @@ class RewardNet(nn.Module):
                             - avg_bce: compute BCE individually for each ensemble member, then average.
         """
 
-        logging.debug("obs.shape: %s", obs.shape)
-        logging.debug("acts.shape: %s", acts.shape)
+        # logging.debug("obs.shape: %s", obs.shape)
+        # logging.debug("acts.shape: %s", acts.shape)
 
         E, _, B, L, O = obs.shape
         _, _, _, _, A = acts.shape
 
-        logging.debug("E: %d, B: %d, L: %d, O: %d, A: %d", E, B, L, O, A)
+        # logging.debug("E: %d, B: %d, L: %d, O: %d, A: %d", E, B, L, O, A)
 
         # Flatten dimensions
         obs_flat = obs.reshape(E, 2 * B * L, O)
@@ -171,22 +171,49 @@ class RewardNet(nn.Module):
 
         epsilon = 1e-7
 
-        # Same topic: What about masking out the preferences that should be skipped?
-
         prob_ens = self.preference_prob_ensemble(r_ens)  # shape: (E, B)
+        valid_mask = prefs != -1.0
 
         # Compute the binary cross-entropy loss
         if loss_method == "avg_prob":
-            # average the probabilities across ensemble
-            prob = prob_ens.mean(dim=0)
-            prob = torch.clamp(prob, epsilon, 1.0 - epsilon)
-            bce = -(prefs * torch.log(prob) + (1.0 - prefs) * torch.log(1.0 - prob))
-            return bce.mean()
+            # For avg_prob, average the probabilities across ensemble
+
+            # expand valid_mask to (E, B) so it applies per ensemble member.
+            valid_mask_ens = valid_mask.expand_as(prob_ens)
+
+            # replace invalid (skipped) predictions with zero so they do not contribute.
+            masked_prob = torch.where(valid_mask_ens, prob_ens, torch.zeros_like(prob_ens))
+
+            valid_counts = valid_mask_ens.sum(dim=0).clamp(min=1) # shape: (B,)
+
+            # average the probability per query over only valid ensemble members.
+            avg_prob = masked_prob.sum(dim=0) / valid_counts
+            avg_prob = torch.clamp(avg_prob, epsilon, 1.0 - epsilon)
+
+            # compute the binary cross-entropy only for valid queries.
+            # note: We use the fact that for skipped queries, prefs == -1.0.
+            bce = -(prefs * torch.log(avg_prob) + (1.0 - prefs) * torch.log(1.0 - avg_prob))
+            loss = bce[valid_mask].mean()
+            return loss
+
         elif loss_method == "avg_bce":
-            # compute BCE individually for each ensemble member, then average.
+            # For avg_bce, compute BCE individually for each ensemble member.
             prob_ens = torch.clamp(prob_ens, epsilon, 1.0 - epsilon)
             bce_ens = -(prefs * torch.log(prob_ens) + (1 - prefs) * torch.log(1 - prob_ens))
-            return bce_ens.mean(dim=1).mean(dim=0)
+
+            # create the valid mask (broadcast if necessary to shape (E, B))
+            valid_mask_ens = valid_mask.expand_as(bce_ens)
+
+            # zero out skipped queries.
+            bce_ens_valid = torch.where(valid_mask_ens, bce_ens, torch.zeros_like(bce_ens))
+
+            # for each ensemble member, average only over the valid queries.
+            valid_counts = valid_mask.sum(dim=1).float().clamp(min=1.0) # shape: (E,)
+            bce_mean_per_ens = bce_ens_valid.sum(dim=1) / valid_counts
+
+            # finally, average the loss over all ensemble members.
+            loss = bce_mean_per_ens.mean()
+            return loss
         else:
             raise ValueError(f"Invalid method: {loss_method}")
 
@@ -211,7 +238,7 @@ class RewardNet(nn.Module):
             # TODO: We don't support mini-batches now: so pref_pair is again a list of tuples
             pref_batch = pref_batch[0]
 
-            logging.debug("len(pref_batch): %d", len(pref_batch))
+            # logging.debug("len(pref_batch): %d", len(pref_batch))
 
             t1_obs_list, t1_act_list = [], []
             t2_obs_list, t2_act_list = [], []
@@ -219,7 +246,7 @@ class RewardNet(nn.Module):
 
             for pref_pair in pref_batch:
                 is_labeled = (len(pref_pair) == 5)
-                logging.debug("is_labeled: %s, len(pref_pair)=%d", is_labeled, len(pref_pair))
+
                 if is_labeled:
                     t1_start_idx, t1_end_idx, t2_start_idx, t2_end_idx, pref = pref_pair
                     pref = torch.tensor(pref, dtype=torch.float32).to(device)
@@ -261,9 +288,9 @@ class RewardNet(nn.Module):
             ens_act.append(act_cat)
             ens_prefs.append(prefs)
 
-        ens_obs = torch.stack(ens_obs, dim=0)  # shape: (E, 2, B, L, O)
-        ens_act = torch.stack(ens_act, dim=0)  # shape: (E, 2, B, L, A)
-        ens_prefs = torch.stack(ens_prefs, dim=0)  # shape: (E, B)
+        ens_obs = torch.stack(ens_obs, dim=0).to(device)  # shape: (E, 2, B, L, O)
+        ens_act = torch.stack(ens_act, dim=0).to(device)  # shape: (E, 2, B, L, A)
+        ens_prefs = torch.stack(ens_prefs, dim=0).to(device)  # shape: (E, B)
 
         return ens_obs, ens_act, ens_prefs
 
@@ -335,9 +362,9 @@ class RewardNet(nn.Module):
             labeled_batches, device, rb, env, surf, H_max=H_max, H_min=H_min
         )
 
-        logging.debug("labeled_ens_obs.shape: %s", labeled_ens_obs.shape)
-        logging.debug("labeled_ens_act.shape: %s", labeled_ens_act.shape)
-        logging.debug("labeled_ens_prefs.shape: %s", labeled_ens_prefs.shape)
+        # logging.debug("labeled_ens_obs.shape: %s", labeled_ens_obs.shape)
+        # logging.debug("labeled_ens_act.shape: %s", labeled_ens_act.shape)
+        # logging.debug("labeled_ens_prefs.shape: %s", labeled_ens_prefs.shape)
 
         if do_train:
             optimizer.zero_grad()
@@ -353,41 +380,36 @@ class RewardNet(nn.Module):
         # Unlabeled preference pairs #
         ##############################
 
-        unlabeled_batch_size = unlabeled_batch_ratio * batch_size
-        unlabeled_batches = [sample_pairs(
-            size=unlabeled_batch_size,
-            rb=rb,
-            sampling_strategy=sampling_strategy,
-            reward_net=self,
-            traj_len=trajectory_length,
-            batch_sampling=batch_sampling,
-            mini_batch_size=mini_batch_size,
-        ) for _ in range(len(self.ensemble))]
+        unsup_loss = 0.0
+        if surf and unlabeled_batch_ratio > 0:
+            unlabeled_batch_size = unlabeled_batch_ratio * batch_size
+            unlabeled_batches = [sample_pairs(
+                size=unlabeled_batch_size,
+                rb=rb,
+                sampling_strategy=sampling_strategy,
+                reward_net=self,
+                traj_len=trajectory_length,
+                batch_sampling=batch_sampling,
+                mini_batch_size=mini_batch_size,
+            ) for _ in range(len(self.ensemble))]
 
-        # Prepare the preference pairs for training and validation
-        unlabeled_ens_obs, unlabeled_ens_act, _ = self._prepare_pref_pairs(
-            unlabeled_batches, device, rb, env, surf, H_max=H_max, H_min=H_min
-        )
+            # Prepare the preference pairs for training and validation
+            unlabeled_ens_obs, unlabeled_ens_act, _ = self._prepare_pref_pairs(
+                unlabeled_batches, device, rb, env, surf, H_max=H_max, H_min=H_min
+            )
 
-        if do_train:
-            optimizer.zero_grad()
+            if do_train:
+                optimizer.zero_grad()
 
-        unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self) # shape: (E, B)
+            with torch.no_grad():
+                unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self) # shape: (E, B)
 
-        # TODO: Mask out the preferences that should be skipped pseudo-label is -1.0 on dim 1
-        # Problem: We might have different batch sizes for ensemble members
-        # 1. Find the minimum batch size
-        # 2. Mask out the preferences that should be skipped
-        # 3. Compute the unsupervised loss
-        mask = unlabeled_ens_prefs != -1.0
+            unsup_loss = self._compute_batch_pref_loss_ensemble(unlabeled_ens_obs, unlabeled_ens_act, unlabeled_ens_prefs, loss_method=loss_method)
 
-
-        unsup_loss = self._compute_batch_pref_loss_ensemble(unlabeled_ens_obs, unlabeled_ens_act, unlabeled_ens_prefs, loss_method=loss_method)
-
-        if do_train:
-            (lambda_ssl * unsup_loss).backward()
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
-            optimizer.step()
+            if do_train:
+                (lambda_ssl * unsup_loss).backward()
+                torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
+                optimizer.step()
 
         total_loss = sup_loss + lambda_ssl * unsup_loss
 

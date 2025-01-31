@@ -188,14 +188,19 @@ def give_pseudo_label_ensemble(
         # Compute the preference probabilities
         probs = model.preference_prob_ensemble(r_ens) # shape: (E, B)
 
-        logging.debug("probs.shape: %s", probs.shape)
+        # logging.debug("probs.shape: %s", probs.shape)
 
         # Compute the pseudo-label
-        pseudo_labels = torch.where(probs > tau,
-                                   torch.tensor(float(Preference.FIRST.value), dtype=torch.float32),
-                                   torch.where(probs < (1.0 - tau),
-                                               torch.tensor(float(Preference.SECOND.value), dtype=torch.float32),
-                                               torch.tensor(-1.0, dtype=torch.float32))) # -1.0 is the skip label
+        # Create a tensor filled with the skip label (-1.0)
+        pseudo_labels = -1.0 * torch.ones_like(probs)
+
+        # Precomputed scalar values
+        first_val = float(Preference.FIRST.value)
+        second_val = float(Preference.SECOND.value)
+
+        # Assign values based on conditions
+        pseudo_labels[probs > tau] = first_val
+        pseudo_labels[probs < (1.0 - tau)] = second_val
 
         return pseudo_labels
 
