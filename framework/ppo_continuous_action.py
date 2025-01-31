@@ -17,7 +17,6 @@ from env import (
     is_dm_control,
     make_env_ppo,
     save_model_all,
-    save_replay_buffer,
 )
 from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
@@ -301,7 +300,6 @@ def train(args: Args):
             "optimizer": optimizer,
         }
         save_model_all(run_name, current_step, state_dict)
-        save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
 
