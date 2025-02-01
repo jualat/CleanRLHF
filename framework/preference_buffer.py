@@ -107,3 +107,23 @@ class PreferenceBuffer:
         """
         self.size = 0
         self.next_idx = 0
+
+    def contains(
+        self, trajectory_1: Trajectory, trajectory_2: Trajectory, preference: float
+    ):
+        """
+        Check if the preference buffer contains a given combination of trajectories and preference.
+        """
+        target = np.array(
+            [
+                trajectory_1.replay_buffer_start_idx,
+                trajectory_1.replay_buffer_end_idx,
+                trajectory_2.replay_buffer_start_idx,
+                trajectory_2.replay_buffer_end_idx,
+                preference,
+            ],
+            dtype=self.buffer.dtype,
+        )
+
+        matches = np.all(self.buffer[: self.size] == target, axis=1)
+        return np.any(matches)

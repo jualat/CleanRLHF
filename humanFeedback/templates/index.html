@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feedback Server</title>
+    <link rel="stylesheet" href="../static/pico.css">
+    <style>
+        #toastContainer {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            margin-top: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            transform: translateY(20px);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+    <script>
+        async function submitFeedback(preference) {
+            const video1 = document.getElementById("video1").dataset.filename;
+            const video2 = document.getElementById("video2").dataset.filename;
+            const run_name = document.getElementById("video1").src.split("/")[4];
+            console.log("run_name: " + run_name);
+
+            let preferenceText;
+            if (preference === 1) {
+                preferenceText = `Preference given: ${video1}`;
+            } else if (preference === 0) {
+                preferenceText = `Preference given: ${video2}`;
+            } else if (preference === 0.5) {
+                preferenceText = `Preference given: both`;
+            } else {
+                preferenceText = "Preference given: Neither";
+            }
+
+            try {
+                const response = await fetch(`/api/submit_feedback/${run_name}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        trajectory_1: video1,
+                        trajectory_2: video2,
+                        preference: preference  // 1 for video1, 2 for video2, 0 for neither
+                    })
+                });
+
+                const result = await response.json();
+                if (result.status === "success") {
+                    showToast(preferenceText);
+
+                    // Reload the page after a short delay after submitting feedback
+                    setTimeout(() => {
+                        location.reload();
+                    }, 100);
+                } else {
+                    showToast("Error submitting feedback: " + result.message);
+                }
+            } catch (error) {
+                showToast("Error submitting feedback: " + error.message);
+            }
+        }
+
+        function showToast(message) {
+            const toastContainer = document.getElementById("toastContainer");
+            const toast = document.createElement("div");
+            toast.classList.add("toast");
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.classList.add("show"), 50);
+            setTimeout(() => {
+                toast.classList.remove("show");
+                setTimeout(() => toast.remove(), 1000);
+            }, 3000);
+        }
+
+        function playVideos(video1Src, video2Src) {
+            const video1 = document.getElementById("video1");
+            const video2 = document.getElementById("video2");
+
+            video1.src = video1Src;
+            video2.src = video2Src;
+
+            video1.dataset.filename = video1Src;
+            video2.dataset.filename = video2Src;
+
+            // most browsers dont allow autoplaying videos unless they are muted
+            video1.muted = true;
+            video2.muted = true;
+            video1.autoplay = true;
+            video2.autoplay = true;
+
+            video1.play();
+            video2.play();
+
+            video1.onended = () => video1.play();
+            video2.onended = () => video2.play();
+        }
+
+        function setupKeyControls() {
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowLeft") {
+                    console.log("Arrow Left pressed: Option 1 selected");
+                    submitFeedback(1);
+                } else if (event.key === "ArrowRight") {
+                    console.log("Arrow Right pressed: Option 2 selected");
+                    submitFeedback(0);
+                } else if (event.key === "ArrowDown") {
+                    console.log("Arrow Down pressed: Neither selected");
+                    submitFeedback(-1);
+                } else if (event.key === "ArrowUp") {
+                    console.log("Arrow Up pressed: Both selected");
+                    submitFeedback(0.5);
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+<header></header>
+
+<main class="container">
+<hgroup>
+    <h1>Choose the Better Trajectory</h1>
+    <p>CleanRLHF</p>
+</hgroup>
+
+<div class="grid center">
+    <article><video id="video1" width="100%" muted controls></video></article>
+    <article><video id="video2" width="100%" muted controls></video></article>
+</div>
+<div class="grid center">
+    <button onclick="submitFeedback(-1)">Neither</button>
+    <button onclick="submitFeedback(1)">Video 1</button>
+    <button onclick="submitFeedback(0)">Video 2</button>
+    <button onclick="submitFeedback(0.5)">Both</button>
+</div>
+
+<div id="toastContainer"></div>
+
+<footer></footer>
+
+</main>
+
+<script>
+    async function loadVideos() {
+        try {
+            const response = await fetch("/api/get_videos");
+            if (response.status === 200) {
+                const data = await response.json();
+
+                const video1Src = data.video1;
+                const video2Src = data.video2;
+
+                playVideos(video1Src, video2Src);
+            } else if (response.status === 204) {
+                document.body.innerHTML = `
+                    <main class="container">
+                        <header></header>
+                        <div class="grid center" style="height: 100vh;display: flex; align-items: center; justify-content: center; ">
+                             <hgroup>
+                                <h1>Currently no videos available</h1>
+                                <p>The model is training 🤖💭</p>
+                            </hgroup>
+                        </div>
+                        <footer></footer>
+                    </main>
+                `;
+                setTimeout(() => {
+                    location.reload();
+                }, 2000); // Reload the page every 3 seconds to check if there are new videos to give preference to
+            } else {
+                console.error("Failed to load videos:", response.statusText);
+            }
+        } catch (error) {
+            console.error("Error loading videos:", error);
+        }
+    }
+
+    window.onload = () => {
+        loadVideos();
+        setupKeyControls();
+    };
+</script>
+</body>
+</html>
