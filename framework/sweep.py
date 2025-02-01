@@ -1,4 +1,5 @@
 from dataclasses import dataclass, fields, replace
+from typing import Any
 
 import tyro
 import wandb
@@ -54,51 +55,17 @@ def wrapped_train():
     args = tyro.cli(BaseArgs)
     try:
         config = wandb.config
-
         if args.algorithm == "pref-ppo":
-            cmd_args = replace(
-                prefppoArgs(),
-                **{
-                    field.name: config[field.name]
-                    for field in fields(prefppoArgs)
-                    if field.name in config
-                },
-            )
-        elif args.algorithm == "sac-rlhf":
-            cmd_args = replace(
-                sac_rlhfArgs(),
-                **{
-                    field.name: config[field.name]
-                    for field in fields(sac_rlhfArgs)
-                    if field.name in config
-                },
-            )
-        elif args.algorithm == "sac":
-            cmd_args = replace(
-                sacArgs(),
-                **{
-                    field.name: config[field.name]
-                    for field in fields(sacArgs)
-                    if field.name in config
-                },
-            )
-        elif args.algorithm == "ppo":
-            cmd_args = replace(
-                ppoArgs(),
-                **{
-                    field.name: config[field.name]
-                    for field in fields(ppoArgs)
-                    if field.name in config
-                },
-            )
-
-        if args.algorithm == "pref-ppo":
+            cmd_args = get_args(prefppoArgs, config)
             run_prefppo(cmd_args)
         elif args.algorithm == "sac-rlhf":
+            cmd_args = get_args(sac_rlhfArgs, config)
             run_sac_rlhf(cmd_args)
         elif args.algorithm == "sac":
+            cmd_args = get_args(sacArgs, config)
             run_sac(cmd_args)
         elif args.algorithm == "ppo":
+            cmd_args = get_args(ppoArgs, config)
             run_ppo(cmd_args)
         else:
             raise ValueError(f"Algorithm {args.algorithm} not supported")
@@ -107,6 +74,18 @@ def wrapped_train():
         raise e
     finally:
         run.finish()
+
+
+def get_args(args: Any, config: Any) -> Any:
+    cmd_args = replace(
+        args(),
+        **{
+            field.name: config[field.name]
+            for field in fields(args)
+            if field.name in config
+        },
+    )
+    return cmd_args
 
 
 if __name__ == "__main__":
