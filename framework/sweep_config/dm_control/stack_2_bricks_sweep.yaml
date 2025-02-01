@@ -1,6 +1,6 @@
 program: sac_rlhf.py
 entity: cleanRLHF
-project: Cartpole_3_pole_common_tuning
+project: Stack_2_bricks_common_tuning
 method: bayes
 metric:
   goal: maximize
