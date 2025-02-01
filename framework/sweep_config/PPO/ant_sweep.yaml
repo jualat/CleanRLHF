@@ -1,6 +1,6 @@
 program: prefppo.py
 entity: cleanRLHF
-project: Ant_ppo_common_tuning
+project: Ant_PPO_common_tuning
 method: bayes
 metric:
   goal: maximize
@@ -173,7 +173,7 @@ parameters:
     values: [true, false]
   rune_beta:
     min: 0.05
-    max: 0.01
+    max: 0.1
     distribution: uniform
   rune_beta_decay:
     values: [0.001, 0.0001, 0.00001]
