@@ -243,3 +243,12 @@ def get_qpos_qvel(
         for idx in range(qpos.shape[0]):
             single_env = envs.envs[idx]
             qpos[idx] = single_env.unwrapped.physics.get_state()
+
+
+def is_pusher_v5(env_id: str) -> bool:
+    """
+    Check if the environment is the Pusher-v5 environment
+    :param env_id: The environment id
+    :return:
+    """
+    return env_id == "Pusher-v5"
