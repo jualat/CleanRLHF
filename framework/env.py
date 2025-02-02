@@ -97,7 +97,10 @@ def load_replay_buffer(replay_buffer: ReplayBuffer, path: str) -> None:
 
 
 def make_single_env(
-    env_id: str, render: Optional[str] = None, camera_settings: Optional[Dict] = None
+    env_id: str,
+    render: Optional[str] = None,
+    camera_settings: Optional[Dict] = None,
+    video_recorder: Optional[bool] = False,
 ):
     if is_dm_control(env_id):
         name = env_id.split("/")[1]
@@ -114,8 +117,8 @@ def make_single_env(
                 )
         else:
             env = gym.make(env_id, render_mode=render)
-        env = FlattenObservation(env)
-
+        if not video_recorder:
+            env = FlattenObservation(env)
     else:
         env = gym.make(
             env_id, render_mode=render, default_camera_config=camera_settings

@@ -219,8 +219,11 @@ class Args:
 def run(args: Any):
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
-
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    if len(args.env_id.split("/")) > 1:
+        env_id = args.env_id.split("/")[1]
+    else:
+        env_id = args.env_id
+    run_name = f"{env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
