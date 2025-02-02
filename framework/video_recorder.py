@@ -40,7 +40,9 @@ class VideoRecorder:
         video_folder = f"./videos/{run_name}/trajectories/"
         os.makedirs(video_folder, exist_ok=True)
         name_prefix = f"trajectory_{start_idx}_{end_idx}_{env_idx}"
-        env = make_single_env(env_id=self.env_id, render="rgb_array")
+        env = make_single_env(
+            env_id=self.env_id, render="rgb_array", video_recorder=True
+        )
 
         try:
             self._initialize_env_state(env, trajectory)
@@ -83,7 +85,7 @@ class VideoRecorder:
                 else qvel_list[0]
             )
             if self.dm_control:
-                env.physics.set_state(qpos)
+                env.unwrapped.physics.set_state(qpos)
             else:
                 env.unwrapped.set_state(qpos, qvel)
         else:
@@ -109,7 +111,7 @@ class VideoRecorder:
                     else qvel_list[i]
                 )
                 if self.dm_control:
-                    env.physics.set_state(qpos)
+                    env.unwrapped.physics.set_state(qpos)
                     env.physics.forward()
                     frames.append(env.render())
                 else:
