@@ -57,7 +57,7 @@ class RewardNet(nn.Module):
         y = torch.stack(y, dim=0)
         return torch.mean(y, dim=0)
 
-    def forward_ensemble(self, obs, acts):
+    def forward_ensemble(self, obs, acts, device):
         """
         Forward pass across *all* ensemble members simultaneously.
         :param obs: shape [ensemble_size, batch_size * traj_length, obs_dim]
@@ -66,9 +66,9 @@ class RewardNet(nn.Module):
         """
         # logging.debug("obs.shape: %s", obs.shape)
         # logging.debug("acts.shape: %s", acts.shape)
-        x = torch.cat([obs, acts], dim=2)  # shape: [ensemble_size, batch_size * traj_length, obs_dim + act_dim]
+        x = torch.cat([obs, acts], dim=2).to(device)  # shape: [ensemble_size, batch_size * traj_length, obs_dim + act_dim]
         y = [model(x[i]) for i, model in enumerate(self.ensemble)]
-        return torch.stack(y, dim=0)
+        return torch.stack(y, dim=0).to(device)
 
     def preference_prob(self, r1, r2):
         """
@@ -133,6 +133,7 @@ class RewardNet(nn.Module):
         obs: torch.Tensor,
         acts: torch.Tensor,
         prefs: torch.Tensor,
+        device,
         loss_method: str = "avg_prob",
     ):
         """
@@ -166,7 +167,7 @@ class RewardNet(nn.Module):
         acts_flat = acts.reshape(E, 2 * B * L, A)
 
         # Forward pass through the ensemble
-        r_ens = self.forward_ensemble(obs_flat, acts_flat)  # shape: (E, 2 * B * L, 1)
+        r_ens = self.forward_ensemble(obs_flat, acts_flat, device)  # shape: (E, 2 * B * L, 1)
         r_ens = r_ens.reshape(E, 2, B, L) # shape: (E, 2, B, L, 1)
 
         epsilon = 1e-7
@@ -369,7 +370,7 @@ class RewardNet(nn.Module):
         if do_train:
             optimizer.zero_grad()
 
-        sup_loss = self._compute_batch_pref_loss_ensemble(labeled_ens_obs, labeled_ens_act, labeled_ens_prefs, loss_method=loss_method)
+        sup_loss = self._compute_batch_pref_loss_ensemble(labeled_ens_obs, labeled_ens_act, labeled_ens_prefs, loss_method=loss_method, device=device)
 
         if do_train:
             sup_loss.backward()
@@ -383,7 +384,8 @@ class RewardNet(nn.Module):
         unsup_loss = 0.0
         if surf and unlabeled_batch_ratio > 0:
             unlabeled_batch_size = unlabeled_batch_ratio * batch_size
-            unlabeled_batches = [sample_pairs(
+
+            pairs = sample_pairs(
                 size=unlabeled_batch_size,
                 rb=rb,
                 sampling_strategy=sampling_strategy,
@@ -391,7 +393,12 @@ class RewardNet(nn.Module):
                 traj_len=trajectory_length,
                 batch_sampling=batch_sampling,
                 mini_batch_size=mini_batch_size,
-            ) for _ in range(len(self.ensemble))]
+                device=device,
+            )
+            unlabeled_batches = [
+                pairs
+                for _ in range(len(self.ensemble))
+            ]
 
             # Prepare the preference pairs for training and validation
             unlabeled_ens_obs, unlabeled_ens_act, _ = self._prepare_pref_pairs(
@@ -402,9 +409,9 @@ class RewardNet(nn.Module):
                 optimizer.zero_grad()
 
             with torch.no_grad():
-                unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self) # shape: (E, B)
+                unlabeled_ens_prefs = give_pseudo_label_ensemble(unlabeled_ens_obs, unlabeled_ens_act, tau, self, device=device) # shape: (E, B)
 
-            unsup_loss = self._compute_batch_pref_loss_ensemble(unlabeled_ens_obs, unlabeled_ens_act, unlabeled_ens_prefs, loss_method=loss_method)
+            unsup_loss = self._compute_batch_pref_loss_ensemble(unlabeled_ens_obs, unlabeled_ens_act, unlabeled_ens_prefs, loss_method=loss_method, device=device)
 
             if do_train:
                 (lambda_ssl * unsup_loss).backward()

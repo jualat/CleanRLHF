@@ -628,6 +628,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render_mode=args.render_mode,
                     video_recorder=video_recorder,
                     sim_teacher=sim_teacher,
+                    device=device,
                 )
 
                 next_session_idx += 1

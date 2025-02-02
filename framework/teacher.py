@@ -155,6 +155,7 @@ def give_pseudo_label_ensemble(
     acts: torch.Tensor,
     tau: float,
     model: RewardNet,
+    device,
 ):
     """
     Given an ensemble of observations and actions, computes the pseudo-label for the ensemble.
@@ -182,7 +183,7 @@ def give_pseudo_label_ensemble(
         acts_flat = acts.reshape(E, 2 * B * L, A)
 
         # Forward pass through the ensemble
-        r_ens = model.forward_ensemble(obs_flat, acts_flat)  # shape: (E, 2 * B * L, 1)
+        r_ens = model.forward_ensemble(obs_flat, acts_flat, device=device)  # shape: (E, 2 * B * L, 1)
         r_ens = r_ens.reshape(E, 2, B, L)  # shape: (E, 2, B, L, 1)
 
         # Compute the preference probabilities

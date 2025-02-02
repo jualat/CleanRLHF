@@ -4,6 +4,8 @@ import time
 
 import numpy as np
 import requests
+import torch
+
 from sampling import sample_trajectories
 from tqdm import tqdm, trange
 from video_recorder import retrieve_trajectory_by_video_name
@@ -22,6 +24,7 @@ def collect_feedback(
     train_pref_buffer: PreferenceBuffer,
     val_pref_buffer: PreferenceBuffer,
     reward_net_val_split,
+    device: torch.device,
     preference_sampling="disagree",
     sim_teacher=None,
     reward_net=None,
@@ -70,6 +73,8 @@ def collect_feedback(
     :param reward_net_val_split: Fraction of collected preferences to dedicate for validation.
     :type reward_net_val_split: float
 
+    :param device: The device to use for training and evaluation.
+
     :param sim_teacher: A simulated teacher providing preferences based on trajectory pairs.
         Required if mode is set to "simulated".
     :type sim_teacher: object, optional
@@ -107,8 +112,8 @@ def collect_feedback(
         ):
             # Sample trajectories from replay buffer to query teacher
             first_trajectory, second_trajectory = sample_trajectories(
-                replay_buffer, preference_sampling, reward_net, trajectory_length
-            )
+                replay_buffer, preference_sampling, reward_net, trajectory_length, device, k=1
+            )[0]
 
             # Create video of the two trajectories. For now, we only render if capture_video is True.
             # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
@@ -142,6 +147,7 @@ def collect_feedback(
             run_name,
             trajectory_length,
             video_recorder,
+            device
         )
 
         try:
@@ -229,6 +235,7 @@ def human_feedback_preparation(
     run_name,
     trajectory_length,
     video_recorder,
+    device,
 ):
     """
     Prepares human feedback data by sampling trajectory pairs, recording their videos,
@@ -283,8 +290,8 @@ def human_feedback_preparation(
         desc="Feedback pairs prepared:",
     ):
         first_trajectory, second_trajectory = sample_trajectories(
-            replay_buffer, preference_sampling, reward_net, trajectory_length
-        )
+            replay_buffer, preference_sampling, reward_net, trajectory_length, device
+        )[0]
         first_trajectory_video = video_recorder.record_trajectory(
             first_trajectory, run_name
         )
