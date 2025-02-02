@@ -4,12 +4,11 @@ import time
 
 import numpy as np
 import requests
+from preference_buffer import PreferenceBuffer
+from replay_buffer import ReplayBuffer
 from sampling import sample_trajectories
 from tqdm import tqdm, trange
 from video_recorder import retrieve_trajectory_by_video_name
-
-from framework.preference_buffer import PreferenceBuffer
-from framework.replay_buffer import ReplayBuffer
 
 
 def collect_feedback(

@@ -430,7 +430,7 @@ class RolloutBuffer(ReplayBuffer):
             observations=torch.Tensor(self.observations)
             .to(self.device)
             .reshape((-1,) + self.obs_shape),
-            log_probs=torch.Tensor(self.log_probs).reshape(-1),
+            log_probs=torch.Tensor(self.log_probs).reshape(-1).to(self.device),
             actions=torch.Tensor(self.actions)
             .to(self.device)
             .reshape((-1,) + self.action_space.shape),

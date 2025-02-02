@@ -736,6 +736,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                         alpha,
                         alpha_loss,
                         start_time,
+                        pearson=True,
                     )
             if global_step % args.evaluation_frequency == 0 and (
                 global_step != 0

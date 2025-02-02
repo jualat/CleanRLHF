@@ -39,7 +39,7 @@ from video_recorder import VideoRecorder
 class Args:
     exp_name: str = os.path.basename(__file__)[: -len(".py")]
     """the name of this experiment"""
-    seed: int = 2
+    seed: int = 1
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
@@ -47,7 +47,7 @@ class Args:
     """if toggled, cuda will be enabled by default"""
     track: bool = False
     """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "HalfCheetah-PPO"
+    wandb_project_name: str = ""
     """the wandb's project name"""
     wandb_entity: str = "cleanRLHF"
     """the entity (team) of wandb's project"""
@@ -276,7 +276,7 @@ def train(args: Any, run_name: str):
         args.total_timesteps - args.total_explore_steps
     ) // args.batch_size
     args.num_iterations_exploration = args.total_explore_steps // args.batch_size
-    args.buffer_size = int(args.batch_size)
+    args.buffer_size = int(args.num_steps)
 
     if args.track:
         import wandb
