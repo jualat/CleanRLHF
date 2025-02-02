@@ -55,8 +55,6 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     render_mode: str = ""
     """set render_mode to 'human' to watch training (it is not possible to render human and capture videos with the flag '--capture-video')"""
-    num_envs: int = 1
-    """the number of parallel game environments"""
     log_file: bool = True
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
@@ -270,7 +268,9 @@ def run(args: Any):
 
 
 def train(args: Any, run_name: str):
-    args.batch_size = int(args.num_envs * args.num_steps)
+    args.batch_size = int(
+        1 * args.num_steps
+    )  # number of environments is fixed to one in this implementation
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_iterations = (
         args.total_timesteps - args.total_explore_steps
@@ -305,7 +305,9 @@ def train(args: Any, run_name: str):
             make_env_ppo(
                 args.env_id, args.gamma, args.seed, i, render_mode=args.render_mode
             )
-            for i in range(args.num_envs)
+            for i in range(
+                1
+            )  # number of environments is fixed to one in this implementation
         ]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), (
@@ -324,7 +326,7 @@ def train(args: Any, run_name: str):
     obs, _ = envs.reset(seed=args.seed)
 
     qpos, qvel = initialize_qpos_qvel(
-        envs=envs, num_envs=args.num_envs, dm_control_bool=dm_control_bool
+        envs=envs, num_envs=1, dm_control_bool=dm_control_bool
     )
 
     rb = RolloutBuffer(
@@ -333,7 +335,7 @@ def train(args: Any, run_name: str):
         envs.single_action_space,
         device,
         handle_timeout_termination=False,
-        n_envs=args.num_envs,
+        n_envs=1,
         qpos_shape=qpos.shape[1],
         qvel_shape=qvel.shape[1],
         rune=args.rune,
@@ -417,7 +419,7 @@ def train(args: Any, run_name: str):
                     action=action,
                     extrinsic_reward=intrinsic_reward,
                     intrinsic_reward=np.zeros(
-                        args.num_envs
+                        1
                     ),  # There is no standard deviation during the exploration phase
                     ground_truth_reward=groundTruthRewards,
                     done=done,
@@ -545,7 +547,9 @@ def train(args: Any, run_name: str):
                     )
 
                 current_step += 1
-                global_step += args.num_envs
+                global_step += (
+                    1  # number of environments is fixed to one in this implementation
+                )
 
                 ## Agent steps
                 action, logprob, value = agent.select_action(obs, device)
