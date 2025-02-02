@@ -1,7 +1,7 @@
 program: sac_rlhf.py
 entity: cleanRLHF
 project: Ant_common_tuning
-method: bayes
+method: grid
 metric:
   goal: maximize
   name: "evaluate/mean"
@@ -154,3 +154,10 @@ parameters:
     values: [""]
   path_to_model:
     values: [""]
+
+  feedback_server_url:
+    values: [ "http://localhost:5001" ]
+  feedback_server_autostart:
+    values: [ false ]
+  teacher_feedback_mode:
+    values: [ "simulated" ]

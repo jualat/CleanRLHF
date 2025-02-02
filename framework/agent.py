@@ -3,9 +3,8 @@ from typing import Dict
 import numpy as np
 import torch
 import torch.nn as nn
+from replay_buffer import RolloutBuffer
 from torch.distributions.normal import Normal
-
-from framework.replay_buffer import RolloutBuffer
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
