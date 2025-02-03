@@ -143,17 +143,26 @@ class ReplayBuffer(SB3ReplayBuffer):
         :param qvel: qvel
         :return:
         """
+        pos = self.pos
         super().add(obs, next_obs, action, extrinsic_reward, done, infos)
-        self.intrinsic_rewards[self.pos] = intrinsic_reward
-        self.ground_truth_rewards[self.pos] = ground_truth_reward
-        self.qpos[self.pos] = qpos
-        self.qvel[self.pos] = qvel
+        self.intrinsic_rewards[pos] = intrinsic_reward
+        self.ground_truth_rewards[pos] = ground_truth_reward
+        self.qpos[pos] = qpos
+        self.qvel[pos] = qvel
         self.rewards = (
-            self.extrinsic_rewards
+            self.rewards
             + self.rune_beta
             * ((1 - self.rune_beta_decay) ** global_step)
             * self.intrinsic_rewards
         )
+        if not self.rune:
+            extrinsic_reward = extrinsic_reward.astype(np.float32)
+            assert self.rewards[pos] == extrinsic_reward, (
+                f"Reward must match the extrinsic reward. {self.rewards[pos]}, {extrinsic_reward}"
+            )
+        self.pos = pos + 1
+        if self.pos == self.buffer_size:
+            self.pos = 0
 
     def sample_trajectories(
         self, env: Optional[VecNormalize] = None, mb_size: int = 20, traj_len: int = 32
@@ -377,6 +386,7 @@ class RolloutBuffer(ReplayBuffer):
         logprobs: np.ndarray,
         values: np.ndarray,
     ):
+        pos = self.pos
         super().add(
             obs=obs,
             next_obs=next_obs,
@@ -390,38 +400,69 @@ class RolloutBuffer(ReplayBuffer):
             qpos=qpos,
             qvel=qvel,
         )
-        self.log_probs[self.pos] = logprobs
-        self.values[self.pos] = values
+        self.log_probs[pos] = logprobs
+        self.values[pos] = values
 
+        self.pos = pos + 1
+        if self.pos == self.buffer_size:
+            self.pos = 0
         if self.current_size < self.buffer_size:
             self.current_size += 1
 
-    def compute_gae_and_returns(self, agent):
-        """Compute advantages and returns using GAE."""
+    def compute_gae_and_returns(self, agent, next_obs, next_done):
+        """
+        Computes GAE advantages and returns using the rollout buffer data.
+
+        Parameters:
+            agent: The agent providing a value function (via agent.get_value)
+            next_obs: The observation at the timestep after the rollout (as a torch tensor)
+            next_done: The done flag for the next observation (scalar or tensor)
+        """
         with torch.no_grad():
-            next_observations = torch.Tensor(
-                self.observations[self.buffer_size - 1]
-            ).to(self.device)
-            next_value = agent.get_value(next_observations).cpu().numpy().reshape(1, -1)
-            lastgaelam = 0
-            for t in reversed(range(self.buffer_size)):
-                if t == self.buffer_size - 1:
-                    nextnonterminal = 1.0 - self.dones[self.buffer_size - 1]
+            next_obs = torch.as_tensor(
+                next_obs, device=self.device, dtype=torch.float32
+            )
+            next_done = torch.as_tensor(
+                next_done, device=self.device, dtype=torch.float32
+            )
+            next_value = agent.get_value(next_obs).reshape(1, -1)
+
+            rewards = torch.tensor(
+                self.rewards[: self.current_size],
+                dtype=torch.float32,
+                device=self.device,
+            )
+            dones = torch.tensor(
+                self.dones[: self.current_size], dtype=torch.float32, device=self.device
+            )
+            values = torch.tensor(
+                self.values[: self.current_size],
+                dtype=torch.float32,
+                device=self.device,
+            )
+            advantages = torch.zeros_like(rewards, device=self.device)
+            lastgaelam = 0.0
+
+            for t in reversed(range(self.current_size)):
+                if t == self.current_size - 1:
+                    nextnonterminal = 1.0 - next_done
                     nextvalues = next_value
                 else:
-                    nextnonterminal = 1.0 - self.dones[t + 1]
-                    nextvalues = self.values[t + 1]
+                    nextnonterminal = 1.0 - dones[t + 1]
+                    nextvalues = values[t + 1]
                 delta = (
-                    self.rewards[t]
-                    + self.gamma * nextvalues * nextnonterminal
-                    - self.values[t]
+                    rewards[t] + self.gamma * nextvalues * nextnonterminal - values[t]
                 )
+
                 lastgaelam = (
                     delta + self.gamma * self.gae_lambda * nextnonterminal * lastgaelam
                 )
-                self.advantages[t] = lastgaelam
+                advantages[t] = lastgaelam
 
-        self.returns = self.advantages + self.values
+            returns = advantages + values
+
+        self.advantages[: self.current_size] = advantages.cpu().numpy()
+        self.returns[: self.current_size] = returns.cpu().numpy()
 
     def get(
         self,

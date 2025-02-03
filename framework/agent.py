@@ -76,7 +76,7 @@ class Agent(nn.Module):
             action, logprob, _, value = self.get_action_and_value(
                 torch.Tensor(obs).to(device)
             )
-            value = value.detach().cpu().numpy().flatten()
+            value = value.cpu().numpy().flatten()
         action = action.detach().cpu().numpy()
         logprob = logprob.detach().cpu().numpy()
         return action, logprob, value
