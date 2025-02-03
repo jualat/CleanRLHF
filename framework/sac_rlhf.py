@@ -655,21 +655,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             with torch.no_grad():
                 rewards, rewards_std = reward_net.predict_reward(obs, actions)
 
-            env_idx = 0
-            single_env_info = {}
-            for key, value in infos.items():
-                if key != "episode":
-                    single_env_info[key] = value[env_idx]
-
             rb.add(
-                obs[env_idx : env_idx + 1],
-                real_next_obs[env_idx : env_idx + 1],
-                actions[env_idx : env_idx + 1],
-                rewards[env_idx : env_idx + 1].squeeze(),
-                rewards_std[env_idx : env_idx + 1].squeeze(),
-                groundTruthRewards[env_idx : env_idx + 1],
-                dones[env_idx : env_idx + 1],
-                single_env_info,
+                obs,
+                real_next_obs,
+                actions,
+                rewards.squeeze(),
+                rewards_std.squeeze(),
+                groundTruthRewards,
+                dones,
+                infos,
                 global_step,
                 qpos,
                 qvel,
