@@ -1,0 +1,70 @@
+program: ppo_original.py
+entity: cleanRLHF
+project: HalfCheetah_PPO_common_tuning
+method: grid
+metric:
+  goal: maximize
+  name: "evaluate/mean"
+parameters:
+  seed:
+    values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  torch_deterministic:
+    values: [true]
+  cuda:
+    values: [true]
+  track:
+    values: [true]
+  wandb_project_name:
+    values: [""]
+  wandb_entity:
+    values: [""]
+  capture_video:
+    values: [false]
+  render_mode:
+    values: [""]
+  num_envs:
+    values: [1]
+  log_file:
+    values: [true]
+  log_level:
+    values: ["INFO"]
+
+  env_id:
+    values: ["HalfCheetah-v5"]
+  total_timesteps:
+    values: [1000000]
+  learning_rate:
+    values: [0.0003]
+  num_steps:
+    values: [2048]
+  gamma:
+    values: [0.99]
+  anneal_lr:
+    values: [true]
+  gae_lambda:
+    values: [0.95]
+  num_minibatches:
+    values: [32]
+  update_epochs:
+    values: [10]
+  norm_adv:
+    values: [true]
+  clip_coef:
+    values: [0.2]
+  clip_vloss:
+    values: [true]
+  vf_coef:
+    values: [0.5]
+  max_grad_norm:
+    values: [0.5]
+
+  evaluation_frequency:
+    values: [10000]
+  evaluation_episodes:
+    values: [10]
+
+  agent_net_hidden_dim:
+    values: [64]
+  agent_net_hidden_layers:
+    values: [1]
+
