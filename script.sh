@@ -9,7 +9,7 @@ poetry run python sac_rlhf.py --env-id=Ant-v5 \
   --preference_sampling=disagree \
   --teacher-sim-delta-skip=-1e7 \
   --total_explore_steps=10000 \
-  --no-unsupervised_exploration \
+  --unsupervised_exploration \
   --no-exploration-load \
   --path-to-replay-buffer=models/Ant-v5__Benjamin-Test__1__1737145974/10000/replay_buffer.pth \
   --path-to-model=models/Ant-v5__Benjamin-Test__1__1737145974/10000/checkpoint.pth

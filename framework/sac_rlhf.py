@@ -57,9 +57,6 @@ class Args:
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     render_mode: str = ""
     """set render_mode to 'human' to watch training (it is not possible to render human and capture videos with the flag '--capture-video')"""
-    num_envs: int = 1
-    """the number of parallel environments to accelerate training.
-    Set this to the number of available CPU threads for best performance."""
     log_file: bool = True
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
@@ -301,7 +298,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     envs = gym.vector.SyncVectorEnv(
         [
             make_env(args.env_id, args.seed, args.render_mode)
-            for i in range(args.num_envs)
+            for i in range(
+                1
+            )  # number of environments is fixed to one in this implementation
         ]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), (
@@ -356,7 +355,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     obs, _ = envs.reset(seed=args.seed)
 
     qpos, qvel = initialize_qpos_qvel(
-        envs=envs, num_envs=args.num_envs, dm_control_bool=dm_control_bool
+        envs=envs, num_envs=1, dm_control_bool=dm_control_bool
     )
 
     rb = ReplayBuffer(
@@ -449,8 +448,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                 actions,
                 intrinsic_reward,
                 np.zeros(
-                    args.num_envs
-                ),  # There is no standard deviation during the exploration phase
+                    1
+                ),  # number of environments is fixed to one in this implementation, there is no standard deviation during the exploration phase
                 ground_truth_reward,
                 dones,
                 infos,
@@ -656,21 +655,15 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             with torch.no_grad():
                 rewards, rewards_std = reward_net.predict_reward(obs, actions)
 
-            env_idx = 0
-            single_env_info = {}
-            for key, value in infos.items():
-                if key != "episode":
-                    single_env_info[key] = value[env_idx]
-
             rb.add(
-                obs[env_idx : env_idx + 1],
-                real_next_obs[env_idx : env_idx + 1],
-                actions[env_idx : env_idx + 1],
-                rewards[env_idx : env_idx + 1].squeeze(),
-                rewards_std[env_idx : env_idx + 1].squeeze(),
-                groundTruthRewards[env_idx : env_idx + 1],
-                dones[env_idx : env_idx + 1],
-                single_env_info,
+                obs,
+                real_next_obs,
+                actions,
+                rewards.squeeze(),
+                rewards_std.squeeze(),
+                groundTruthRewards,
+                dones,
+                infos,
                 global_step,
                 qpos,
                 qvel,
