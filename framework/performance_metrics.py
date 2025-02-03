@@ -144,6 +144,7 @@ class PerformanceMetrics:
         alpha,
         alpha_loss,
         start_time,
+        pearson=True,
     ):
         """
         Log training metrics to TensorBoard.
@@ -179,12 +180,13 @@ class PerformanceMetrics:
         )
         if args.autotune:
             self.writer.add_scalar("losses/alpha_loss", alpha_loss.item(), global_step)
-        self.writer.add_scalar(
-            "charts/pearson_correlation",
-            self.compute_pearson_correlation(),
-            global_step,
-        )
-        self.reset()
+        if pearson:
+            self.writer.add_scalar(
+                "charts/pearson_correlation",
+                self.compute_pearson_correlation(),
+                global_step,
+            )
+            self.reset()
 
     def log_info_metrics(self, info, global_step, allocated, reserved, cuda):
         """
