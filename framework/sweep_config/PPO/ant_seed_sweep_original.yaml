@@ -34,7 +34,7 @@ parameters:
   total_timesteps:
     values: [1000000]
   learning_rate:
-    vales: [0.0003]
+    values: [0.0003]
   num_steps:
     values: [2048]
   gamma:
