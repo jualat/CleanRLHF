@@ -439,7 +439,7 @@ def train(args: Any, run_name: str):
                     start_time,
                 )
 
-            rb.compute_gae_and_returns(agent)
+            rb.compute_gae_and_returns(agent, obs, done)
 
             ppo_dict = agent.train_agent(rb, args, optimizer)
 
@@ -624,7 +624,7 @@ def train(args: Any, run_name: str):
                 ):
                     break
 
-            rb.compute_gae_and_returns(agent)
+            rb.compute_gae_and_returns(agent, obs, done)
 
             ppo_dict = agent.train_agent(rb, args, optimizer)
 
