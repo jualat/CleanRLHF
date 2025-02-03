@@ -11,13 +11,7 @@ import torch
 import torch.optim as optim
 import tyro
 from agent import Agent
-from env import (
-    get_qpos_qvel,
-    initialize_qpos_qvel,
-    is_dm_control,
-    make_env_ppo,
-    save_model_all,
-)
+from env import initialize_qpos_qvel, is_dm_control, make_env_ppo, save_model_all
 from evaluation import Evaluation
 from performance_metrics import PerformanceMetrics
 from replay_buffer import RolloutBuffer
@@ -40,7 +34,7 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = "cleanRLHF"
     """the entity (team) of wandb's project"""
-    render_mode: str = "human"
+    render_mode: str = ""
     """set render_mode to 'human' to watch training (it is not possible to render human and capture videos with the flag '--capture-video')"""
     num_envs: int = 1
     """the number of parallel game environments"""
@@ -89,9 +83,9 @@ class Args:
     evaluation_episodes: int = 10
     """the number of evaluation episodes"""
 
-    agent_net_hidden_dim: int = 128
+    agent_net_hidden_dim: int = 64
     """the dimension of the hidden layers in the actor network"""
-    agent_net_hidden_layers: int = 4
+    agent_net_hidden_layers: int = 1
     """the number of hidden layers in the actor network"""
 
     # to be filled in runtime
@@ -163,6 +157,7 @@ def train(args: Args):
         "only continuous action space is supported"
     )
     envs.single_observation_space.dtype = np.float32
+    envs.action_space.dtype = np.float32
     dm_control_bool = is_dm_control(env_id=args.env_id)
 
     agent = Agent(
@@ -219,7 +214,6 @@ def train(args: Args):
 
                 ## Agent steps
                 action, logprob, value = agent.select_action(obs, device)
-
                 (
                     next_obs,
                     rewards,
@@ -228,7 +222,6 @@ def train(args: Args):
                     infos,
                 ) = envs.step(action)
 
-                get_qpos_qvel(envs, qpos, qvel, dm_control_bool)
                 done = np.logical_or(terminations, truncations)
                 rb.add(
                     obs=obs,
@@ -272,7 +265,7 @@ def train(args: Args):
                     evaluate.plot(eval_dict, global_step)
                     metrics.log_evaluate_metrics(global_step, eval_dict)
 
-            rb.compute_gae_and_returns(agent)
+            rb.compute_gae_and_returns(agent, obs, done)
 
             ppo_dict = agent.train_agent(rb, args, optimizer)
 
