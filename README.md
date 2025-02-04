@@ -145,7 +145,7 @@ Feature-specific optional arguments:
 | Argument | Description | Default | Type |
 | -------- | ----------- | ------- | ---- |
 | `--unlabeled-batch-ratio` | Ratio between the sizes of teacher-labeled and pseudo-labeled batches | `1` | `int` |
-| `--surf-sampling-strategy` | Trajectory sampling strategy for SURF's pseudo-labeling (cf. [#trajectory-sampling]) | `uniform` | `str` |
+| `--surf-sampling-strategy` | Trajectory sampling strategy for SURF's pseudo-labeling (cf. [Trajectory Sampling](#trajectory-sampling)) | `uniform` | `str` |
 | `--surf-tau` | Confidence threshold of the preference-predictor for pseudo-labeling | `0.999` | `float` |
 | `--lambda-ssl` | Weight of the pseudo-labeled loss in the reward-net optimization | `0.1` | `float` |
 | `--max-augmentation-offset` | Maximum length offset of pseudo-labeled pairs of cropped trajectories | `10` | `int` |
