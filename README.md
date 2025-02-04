@@ -145,9 +145,9 @@ Feature-specific optional arguments:
 | Argument | Description | Default | Type |
 | -------- | ----------- | ------- | ---- |
 | `--unlabeled-batch-ratio` | Ratio between the sizes of teacher-labeled and pseudo-labeled batches | `1` | `int` |
-| `--surf-sampling-strategy` | Trajectory sampling strategy for SURF's pseudo-labeling | `uniform` | `str` |
-| `--surf-tau` | Confidence threshold of the preference-predictor for pseudo-labeling | `.999` | `float` |
-| `--lambda-ssl` | Weight of the pseudo-labeled loss in the reward-net optimization | `.1` | `float` |
+| `--surf-sampling-strategy` | Trajectory sampling strategy for SURF's pseudo-labeling (cf. [#trajectory-sampling]) | `uniform` | `str` |
+| `--surf-tau` | Confidence threshold of the preference-predictor for pseudo-labeling | `0.999` | `float` |
+| `--lambda-ssl` | Weight of the pseudo-labeled loss in the reward-net optimization | `0.1` | `float` |
 | `--max-augmentation-offset` | Maximum length offset of pseudo-labeled pairs of cropped trajectories | `10` | `int` |
 | `--min-augmentation-offset` | Minimum length offset of pseudo-labeled pairs of cropped trajectories | `5` | `int` |
 
@@ -161,8 +161,8 @@ Feature-specific optional arguments:
 
 | Argument | Description | Default | Type |
 | -------- | ----------- | ------- | ---- |
-| `--rune-beta` | Weight of the intrinsic reward being added to the total reward | `.05` | `float` |
-| `--rune-beta-decay` | Decay of the above-mentioned value during the training | `.0001` | `float` |
+| `--rune-beta` | Weight of the intrinsic reward being added to the total reward | `0.05` | `float` |
+| `--rune-beta-decay` | Decay of the above-mentioned value during the training | `0.0001` | `float` |
 
 ### Video Recording
 
