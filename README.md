@@ -253,6 +253,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    Arguments:
 
    | Argument | Description |
+   | -------- | ----------- |
    | `--sweep_id` | You can find this ID on the W&B dashboard. |
    | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
 
