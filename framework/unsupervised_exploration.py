@@ -12,7 +12,7 @@ class ExplorationRewardKNN:
     def update_states(self, states):
         """
         Add a batch of states to the visited states.
-        :param states: Batch of states, shape (num_envs, obs_dim)
+        :param states: Batch of states, shape (num_envs=1, obs_dim)
         """
         if len(states.shape) != 2:
             raise ValueError(

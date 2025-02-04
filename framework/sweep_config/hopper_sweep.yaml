@@ -20,8 +20,6 @@ parameters:
     values: [""]
   capture_video:
     values: [false]
-  num_envs:
-    values: [1]
   log_file:
     values: [true]
   log_level:
