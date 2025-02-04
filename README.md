@@ -90,7 +90,18 @@ To enable human feedback instead of simulated feedback, use the `--teacher-feedb
 ```sh
 poetry run python3 sac_rlhf.py --teacher-feedback-mode human
 ```
-Use the `--feedback_server_autostart`
+
+Use the `--feedback-server-autostart` flag to automatically start the feedback server on http://localhost:5001/. You can additionally configure the address of the server as in
+
+```sh
+poetry run python3 sac_rlhf.py --feedback-server-url remoteurl:1234
+```
+
+You can also manually start the feedback server by running the following command from the top directory of this repo:
+
+```sh
+python3 humanFeedback/feedback_server.py
+```
 
 
 ## ✈️ Features
@@ -125,12 +136,20 @@ Scheduling must be either 'linear' or 'exponential' and is set to be the latter 
 
 ### SURF
 
-Collecting human feedback on a scale is pretty costly. An idea proposed by [Park et al.](https://arxiv.org/abs/2203.10050) is to use data augmentation to extract the highest possible amount of information from human labels.
+Collecting human feedback on a scale is pretty costly. An idea proposed by [Park et al.](https://arxiv.org/abs/2203.10050) is to use data augmentation to extract the highest possible amount of information from human labels. Specifically, SURF utilizes pseudo-labeling and temporal cropping for its purposes.
 
 SURF is enabled by default and can be disabled with the `--no-surf` flag.
 
-<!--TODO-->
-(WIP)
+Feature-specific optional arguments:
+
+| Argument | Description | Default | Type |
+| -------- | ----------- | ------- | ---- |
+| `--unlabeled-batch-ratio` | Ratio between the sizes of teacher-labeled and pseudo-labeled batches | `1` | `int` |
+| `--surf-sampling-strategy` | Trajectory sampling strategy for SURF's pseudo-labeling | `uniform` | `str` |
+| `--surf-tau` | Confidence threshold of the preference-predictor for pseudo-labeling | `.999` | `float` |
+| `--lambda-ssl` | Weight of the pseudo-labeled loss in the reward-net optimization | `.1` | `float` |
+| `--max-augmentation-offset` | Maximum length offset of pseudo-labeled pairs of cropped trajectories | `10` | `int` |
+| `--min-augmentation-offset` | Minimum length offset of pseudo-labeled pairs of cropped trajectories | `5` | `int` |
 
 ### RUNE
 
@@ -138,8 +157,12 @@ The exploration/exploitation trade-off is a problem central to RL. [Liang et al.
 
 RUNE is disabled by default and can be enabled with the `--rune` flag.
 
-<!--TODO-->
-(WIP)
+Feature-specific optional arguments:
+
+| Argument | Description | Default | Type |
+| -------- | ----------- | ------- | ---- |
+| `--rune-beta` | Weight of the intrinsic reward being added to the total reward | `.05` | `float` |
+| `--rune-beta-decay` | Decay of the above-mentioned value during the training | `.0001` | `float` |
 
 ### Video Recording
 
@@ -159,7 +182,7 @@ Once you have done unsupervised pre-exploration, the replay buffer and the model
 To save time, instead of exploring the same environment every time, you can now load both results, e.g.:
 
 ```sh
-poetry run python3 sac_rlhf.py --exploration-load --path-to-replay-buffer=models/myrun/10000/replay_buffer.pth --path-to-model=models/myrun/10000/checkpoint.pth
+poetry run python3 sac_rlhf.py --exploration-load --path-to-replay-buffer models/myrun/10000/replay_buffer.pth --path-to-model models/myrun/10000/checkpoint.pth
 ```
 
 Note that the states of both objects are also saved at the end of a run or on KeyBoardInterrupt.
