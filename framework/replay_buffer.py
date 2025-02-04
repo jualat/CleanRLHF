@@ -149,8 +149,9 @@ class ReplayBuffer(SB3ReplayBuffer):
         self.ground_truth_rewards[pos] = ground_truth_reward
         self.qpos[pos] = qpos
         self.qvel[pos] = qvel
+        self.extrinsic_rewards[pos] = extrinsic_reward
         self.rewards = (
-            self.rewards
+            self.extrinsic_rewards
             + self.rune_beta
             * ((1 - self.rune_beta_decay) ** global_step)
             * self.intrinsic_rewards
