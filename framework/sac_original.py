@@ -232,9 +232,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
             # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
             real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos["final_observation"][idx]
             rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
 
             # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
