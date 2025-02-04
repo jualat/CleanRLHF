@@ -72,7 +72,7 @@ poetry install
 To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (from either [Mujoco](https://gymnasium.farama.org/environments/mujoco/) or [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)):
 
 ```sh
-python3 sac_rlhf.py --env-id Hopper-v5
+poetry run python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
 Use the xvfb-run command to execute the script in a headless Linux environment:
@@ -84,15 +84,20 @@ xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `scripts/[ENV_ID].sh` with the hyperparameters that we found to work best for a specific environment.
 
 ### Human Feedback
-<!--TODO-->
-(WIP)
+
+To enable human feedback instead of simulated feedback, use the `--teacher-feedback-mode` flag as in
+
+```sh
+poetry run python3 sac_rlhf.py --teacher-feedback-mode human
+```
+Use the `--feedback_server_autostart`
 
 
 ## ✈️ Features
 
 For a full list of available command-line arguments, take a look at `sac_rlhf.py` or run:
 ```sh
-python3 sac_rlhf.py -h
+poetry run python3 sac_rlhf.py -h
 ```
 
 ### Unsupervised Exploration
@@ -142,7 +147,7 @@ Use the `--capture-video` flag to record a video of the agent's performance as w
 the selected trajectories for human preference:
 
 ```sh
-python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
+poetry run python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
 ```
 
 ### Model Saving/Loading
@@ -154,7 +159,7 @@ Once you have done unsupervised pre-exploration, the replay buffer and the model
 To save time, instead of exploring the same environment every time, you can now load both results, e.g.:
 
 ```sh
-python3 sac_rlhf.py --exploration-load --path-to-replay-buffer=models/myrun/10000/replay_buffer.pth --path-to-model=models/myrun/10000/checkpoint.pth
+poetry run python3 sac_rlhf.py --exploration-load --path-to-replay-buffer=models/myrun/10000/replay_buffer.pth --path-to-model=models/myrun/10000/checkpoint.pth
 ```
 
 Note that the states of both objects are also saved at the end of a run or on KeyBoardInterrupt.
@@ -168,7 +173,7 @@ Biases:
 
 ```bash
 wandb login
-python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-entity cleanRLHF
+poetry run python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-entity cleanRLHF
 ```
 
 #### [Tensorboard](https://www.tensorflow.org/tensorboard)
@@ -194,7 +199,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 2. Run the sweep with W&B:
 
    ```bash
-   python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
+   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
    ```
    `--sweep-count`:  Number of runs to launch in this session.
    `--project-name`: The name of your W&B project.
@@ -204,7 +209,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 3. Run the Sweep with Sweep ID
 
     ```bash
-   python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
+   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
    ```
 
     `--sweep_id`:  You can find this ID on the W&B dashboard.
