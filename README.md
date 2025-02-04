@@ -53,14 +53,14 @@ If you want to contribute, consider installing:
 
 1. Clone this repository and cd into it:
 
-```sh
+```bash
 git clone https://github.com/jualat/CleanRLHF.git
 cd CleanRLHF
 ```
 
 2. Execute this command to install all dependencies automatically:
 
-```sh
+```bash
 poetry install
 ```
 
@@ -71,13 +71,13 @@ poetry install
 
 To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (from either [Mujoco](https://gymnasium.farama.org/environments/mujoco/) or [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)):
 
-```sh
+```bash
 poetry run python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
 Use the xvfb-run command to execute the script in a headless Linux environment:
 
-```sh
+```bash
 xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
@@ -87,19 +87,19 @@ Setting the right hyperparameters is crucial for performance. Consider looking a
 
 To enable human feedback instead of simulated feedback, use the `--teacher-feedback-mode` flag as in
 
-```sh
+```bash
 poetry run python3 sac_rlhf.py --teacher-feedback-mode human
 ```
 
 Use the `--feedback-server-autostart` flag to automatically start the feedback server on http://localhost:5001/. You can additionally configure the address of the server as in
 
-```sh
+```bash
 poetry run python3 sac_rlhf.py --feedback-server-url remoteurl:1234
 ```
 
 You can also manually start the feedback server by running the following command from the top directory of this repo:
 
-```sh
+```bash
 python3 humanFeedback/feedback_server.py
 ```
 
@@ -107,7 +107,7 @@ python3 humanFeedback/feedback_server.py
 ## ✈️ Features
 
 For a full list of available command-line arguments, take a look at `sac_rlhf.py` or run:
-```sh
+```bash
 poetry run python3 sac_rlhf.py -h
 ```
 
@@ -169,7 +169,7 @@ Feature-specific optional arguments:
 Use the `--capture-video` flag to record a video of the agent's performance as well as rendering 
 the selected trajectories for human preference:
 
-```sh
+```bash
 poetry run python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
 ```
 
@@ -181,7 +181,7 @@ poetry run python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
 Once you have done unsupervised pre-exploration, the replay buffer and the model are automatically saved in `./models/[RUN]/[EXPLORATION_STEPS]/`.
 To save time, instead of exploring the same environment every time, you can now load both results, e.g.:
 
-```sh
+```bash
 poetry run python3 sac_rlhf.py --exploration-load --path-to-replay-buffer models/myrun/10000/replay_buffer.pth --path-to-model models/myrun/10000/checkpoint.pth
 ```
 
@@ -203,7 +203,7 @@ poetry run python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-
 
 Run the following command to start a local instance of TensorBoard:
 
-```sh
+```bash
 tensorboard --logdir=runs
 ```
 
@@ -214,19 +214,25 @@ You can access the TensorBoard at http://localhost:6006/
 The `sweep.py` script automates hyperparameter optimization using Weights & Biases (W&B) Sweeps. 
 
 #### How to Run a Sweep:
-1. Specify the hyperparameter config:
+1. Specify the Hyperparameter Config:
 
    Place your sweep configuration in `sweep_config/<SWEEP_NAME>.yaml`.
 
 
-2. Run the sweep with W&B:
+2. Run the Sweep with W&B:
 
    ```bash
    poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
    ```
-   `--sweep-count`:  Number of runs to launch in this session.
-   `--project-name`: The name of your W&B project.
-    `--entity`: Your W&B entity (team or username).
+
+   Arguments:
+
+   | Argument | Description |
+   | -------- | ----------- |
+   | `--sweep-count` | Number of runs to launch in this session. |
+   | `--project-name` | The name of your W&B project. |
+   | `--entity` | Your W&B entity (team or username). |
+   | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
 
 
 3. Run the Sweep with Sweep ID
@@ -235,7 +241,11 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
    ```
 
-    `--sweep_id`:  You can find this ID on the W&B dashboard.
+   Arguments:
+
+   | Argument | Description |
+   | `--sweep_id` | You can find this ID on the W&B dashboard. |
+   | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
 
 #### How to Run a Sweep on SLURM:
 
@@ -254,14 +264,17 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    absolute paths.
 
    ```
-   #SBATCH --mail-user=b.kuen@campus.lmu.de
+   #SBATCH --mail-user=yourname@campus.lmu.de
    #SBATCH --mail-type=ALL
-   #SBATCH --chdir=/home/k/kuen/workspace/cleanrlhf/framework
-   #SBATCH --output=/home/k/kuen/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.out
-   #SBATCH --error=/home/k/kuen/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.err
+   #SBATCH --chdir=/home/k/user/workspace/cleanrlhf/framework
+   #SBATCH --output=/home/k/user/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.out
+   #SBATCH --error=/home/k/user/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.err
    ```
    
-   Replace `python3.10 sweep.py --project_name Ant_common_tuning --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/ant_sweep.yaml`
+   Replace
+   ```bash
+   python3.10 sweep.py --project_name Ant_common_tuning --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/ant_sweep.yaml --algorithm sac-rlhf
+   ```
    with the startup command of your sweep.
 
 3. Submit the job to the SLURM cluster:
