@@ -18,6 +18,7 @@ This project is focussed on implementing a framework for Reinforcement Learning 
   * [RUNE](#rune)
   * [Video Recording & Rendering](#video-recording--rendering)
   * [Model Saving/Loading](#model-savingloading)
+  * [Evaluation](#evaluation)
   * [Tracking](#tracking)
   * [Hyperparameter Tuning](#hyperparameter-tuning)
   * [Environments](#environments)
@@ -195,6 +196,13 @@ poetry run python3 sac_rlhf.py --exploration-load --path-to-replay-buffer models
 ```
 
 Note that the states of both objects are also saved at the end of a run or on KeyBoardInterrupt.
+
+### Evaluation
+
+After training a model, you can evaluate it and generate videos of its behavior by running the following command:
+```bash
+poetry run python3 evaluation.py --path-to-model <PATH> --env-id <ENV_ID>
+```
 
 ### Tracking
 
