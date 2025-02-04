@@ -16,10 +16,11 @@ This project is focussed on implementing a framework for Reinforcement Learning 
     * [Trajectory Scheduling](#trajectory-scheduling)
     * [SURF](#surf)
     * [RUNE](#rune)
-    * [Video Recording](#video-recording)
+    * [Video Recording & Rendering](#video-recording-&-rendering)
     * [Model Saving/Loading](#model-savingloading)
     * [Tracking](#tracking)
     * [Hyperparameter Tuning](#hyperparameter-tuning)
+    * [Environments](#environments)
     * [Toolbox](#toolbox)
 
 
@@ -69,7 +70,7 @@ poetry install
 
 ### Basic Code Execution
 
-To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (from either [Mujoco](https://gymnasium.farama.org/environments/mujoco/) or [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)):
+To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (for a list of all available environments, see [Environments](#environments)):
 
 ```bash
 poetry run python3 sac_rlhf.py --env-id Hopper-v5
@@ -164,14 +165,22 @@ Feature-specific optional arguments:
 | `--rune-beta` | Weight of the intrinsic reward being added to the total reward | `0.05` | `float` |
 | `--rune-beta-decay` | Decay of the above-mentioned value during the training | `0.0001` | `float` |
 
-### Video Recording
+### Video Recording & Rendering
 
 Use the `--capture-video` flag to record a video of the agent's performance as well as rendering 
 the selected trajectories for human preference:
 
 ```bash
-poetry run python3 sac_rlhf.py --env-id Hopper-v5 --capture-video
+poetry run python3 sac_rlhf.py --capture-video
 ```
+
+To see the training's progress live, use the `--render-mode` flag with the `human` argument as follows:
+
+```bash
+poetry run python3 sac_rlhf.py --render-mode human
+```
+
+Note: Only either one of the above options can be used in a run.
 
 ### Model Saving/Loading
 
@@ -286,6 +295,16 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    ```
    
    The command returns a job ID. You can check the status of your job with `squeue -u <username>`.
+
+### Environments
+
+#### [Mujoco](https://gymnasium.farama.org/environments/mujoco/)
+
+All Mujoco environments are supported.
+
+#### [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)
+
+Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.txt](https://github.com/jualat/CleanRLHF/blob/main/framework/dm_control_working_envs.txt).
 
 ### Toolbox
 
