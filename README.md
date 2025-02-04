@@ -16,7 +16,7 @@ This project is focussed on implementing a framework for Reinforcement Learning 
     * [Trajectory Scheduling](#trajectory-scheduling)
     * [SURF](#surf)
     * [RUNE](#rune)
-    * [Video Recording & Rendering](#video-recording-&-rendering)
+    * [Video Recording & Rendering](#video-recording--rendering)
     * [Model Saving/Loading](#model-savingloading)
     * [Tracking](#tracking)
     * [Hyperparameter Tuning](#hyperparameter-tuning)
