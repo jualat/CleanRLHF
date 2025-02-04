@@ -11,17 +11,17 @@ This project is focussed on implementing a framework for Reinforcement Learning 
   * [Basic Code Execution](#basic-code-execution)
   * [Human Feedback](#human-feedback)
 * [Features](#-features)
-    * [Unsupervised Exploration](#unsupervised-exploration)
-    * [Trajectory Sampling](#trajectory-sampling)
-    * [Trajectory Scheduling](#trajectory-scheduling)
-    * [SURF](#surf)
-    * [RUNE](#rune)
-    * [Video Recording & Rendering](#video-recording--rendering)
-    * [Model Saving/Loading](#model-savingloading)
-    * [Tracking](#tracking)
-    * [Hyperparameter Tuning](#hyperparameter-tuning)
-    * [Environments](#environments)
-    * [Toolbox](#toolbox)
+  * [Unsupervised Exploration](#unsupervised-exploration)
+  * [Trajectory Sampling](#trajectory-sampling)
+  * [Trajectory Scheduling](#trajectory-scheduling)
+  * [SURF](#surf)
+  * [RUNE](#rune)
+  * [Video Recording & Rendering](#video-recording--rendering)
+  * [Model Saving/Loading](#model-savingloading)
+  * [Tracking](#tracking)
+  * [Hyperparameter Tuning](#hyperparameter-tuning)
+  * [Environments](#environments)
+  * [Toolbox](#toolbox)
 
 
 ## 👋 Introduction
@@ -231,7 +231,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 2. Run the Sweep with W&B:
 
    ```bash
-   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml
+   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml --algorithm sac-rlhf
    ```
 
    Arguments:
@@ -247,7 +247,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 3. Run the Sweep with Sweep ID
 
     ```bash
-   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 
+   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 --algorithm sac-rlhf
    ```
 
    Arguments:
