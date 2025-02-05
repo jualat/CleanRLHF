@@ -1,6 +1,6 @@
 # CleanRLHF
 
-This project is focussed on implementing a framework for Reinforcement Learning from Human Feedback.
+A framework for Reinforcement Learning from Human Feedback.
 
 * [Introduction](#-introduction)
 * [Performance](#-performance)
@@ -29,7 +29,7 @@ This project is focussed on implementing a framework for Reinforcement Learning 
 
 This framework implements RLHF and is oriented towards [PEBBLE](https://arxiv.org/abs/2106.05091). It is based on [SAC](https://arxiv.org/abs/1801.01290), an off-policy actor-critic algorithm for deep RL.
 
-There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discussed](#-performance) and [documented](#-features) below.
+There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discussed](#-performance) and [documented](#-features) below.
 
 
 ## 🚀 Performance
@@ -213,7 +213,7 @@ Biases:
 
 ```bash
 wandb login
-poetry run python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-entity cleanRLHF
+poetry run python3 sac_rlhf.py --track  --wandb-project-name <PROJECT_NAME> --wandb-entity <WANDB_ENTITY>
 ```
 
 #### [Tensorboard](https://www.tensorflow.org/tensorboard)
@@ -239,7 +239,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 2. Run the Sweep with W&B:
 
    ```bash
-   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml --algorithm sac-rlhf
+   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WANDB_ENTITY> --sweep-count <N_RUNS> --config-filename ./sweep_config/<SWEEP_NAME>.yaml --algorithm <ALGORITHM>
    ```
 
    Arguments:
@@ -255,7 +255,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
 3. Run the Sweep with Sweep ID
 
     ```bash
-   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 --algorithm sac-rlhf
+   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 --algorithm <ALGORITHM>
    ```
 
    Arguments:
