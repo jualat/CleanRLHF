@@ -71,7 +71,7 @@ poetry install
 
 ### Basic Code Execution
 
-To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (for a list of all available environments, see [Environments](#environments)):
+To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (for an overview of all available environments, see [Environments](#environments)):
 
 ```bash
 poetry run python3 sac_rlhf.py --env-id Hopper-v5
@@ -87,13 +87,13 @@ Setting the right hyperparameters is crucial for performance. Consider looking a
 
 ### Human Feedback
 
-To enable human feedback instead of simulated feedback, use the `--teacher-feedback-mode` flag as in
+To enable human feedback (instead of simulated feedback), use the `--teacher-feedback-mode` flag:
 
 ```bash
 poetry run python3 sac_rlhf.py --teacher-feedback-mode human
 ```
 
-Use the `--feedback-server-autostart` flag to automatically start the feedback server on http://localhost:5001/. You can additionally configure the address of the server as in
+Use the `--feedback-server-autostart` flag to automatically start the feedback server on http://localhost:5001/. You can additionally configure the address of the server:
 
 ```bash
 poetry run python3 sac_rlhf.py --feedback-server-url remoteurl:1234
@@ -123,12 +123,12 @@ It suffices to do pre-exploration only once per environment on your machine, for
 
 ### Trajectory Sampling
 
-Every trajectory, that the agent produces during the training, is saved in the replay buffer. Sampling random pairs of such trajectories for consultation of the human expert is inefficient. [Lee et al.](https://arxiv.org/abs/2106.05091) propose two methods for more profitable trajectory sampling. Note that the methods utilize ensemble reward models, a technique for improving training stability.
+Every trajectory that the agent produces during the training is saved in the replay buffer. Sampling random pairs of such trajectories for consultation of the human expert is inefficient. [Lee et al.](https://arxiv.org/abs/2106.05091) propose two methods for more profitable trajectory sampling. Note that the methods utilize ensemble reward models, a technique for improving training stability.
 
 * **Disagree**: If, given a pair of trajectories, the models are not sure which one to prefer (i.e. the standard deviation of the preferences given by the members of the ensemble is high), then it is efficient to ask the human expert.
 * **Entropy**: If a pair of trajectories is near the decision boundary (i.e. the entropy of the preferences given by the members of the ensemble is high), then we prefer to consult the human teacher for this pair.
 
-By default, disagreement sampling is used. It can be set using the `--preference-sampling` flag; must be 'uniform', 'disagree', or 'entropy'.
+By default, disagreement sampling is used. It can be set using the `--preference-sampling` flag, must be 'uniform', 'disagree', or 'entropy'.
 
 ### Trajectory Scheduling
 
@@ -208,7 +208,7 @@ poetry run python3 evaluation.py --path-to-model <PATH> --env-id <ENV_ID>
 
 #### [Weights & Biases](https://wandb.ai/)
 
-Use the `--track  --wandb-project-name HopperTest --wandb-entity cleanRLHF` flag to activate tracking via Weights &
+Use the `--track  --wandb-project-name <PROJECT_NAME> --wandb-entity <WANDB_ENTITY>` flag to activate tracking via Weights &
 Biases:
 
 ```bash
@@ -249,12 +249,12 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    | `--sweep-count` | Number of runs to launch in this session. |
    | `--project-name` | The name of your W&B project. |
    | `--entity` | Your W&B entity (team or username). |
-   | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
+   | `--algorithm` | Algorithm to run, must be 'sac-rlhf' (default), 'pref-ppo,' 'sac,' or 'ppo' |
 
 
-3. Run the Sweep with Sweep ID
+3. Run the Sweep with Sweep ID:
 
-    ```bash
+   ```bash
    poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 --algorithm <ALGORITHM>
    ```
 
@@ -263,7 +263,7 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    | Argument | Description |
    | -------- | ----------- |
    | `--sweep_id` | You can find this ID on the W&B dashboard. |
-   | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
+   | `--algorithm` | Algorithm to run, must be 'sac-rlhf' (default), 'pref-ppo,' 'sac,' or 'ppo' |
 
 #### How to Run a Sweep on SLURM:
 
@@ -278,8 +278,9 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    sh setup_venv.sh
    ```
 
-2. Adjust `slurm/wandb_sweep.sbatch` to your needs. Make sure to replace the email to receive notifications and update 
-   absolute paths.
+2. Adjust `slurm/wandb_sweep.sbatch` to your needs:
+
+   Make sure to replace the email to receive notifications and update absolute paths.
 
    ```
    #SBATCH --mail-user=yourname@campus.lmu.de
@@ -288,12 +289,8 @@ The `sweep.py` script automates hyperparameter optimization using Weights & Bias
    #SBATCH --output=/home/k/user/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.out
    #SBATCH --error=/home/k/user/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.err
    ```
-   
-   Replace
-   ```bash
-   python3.10 sweep.py --project_name Ant_common_tuning --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/ant_sweep.yaml --algorithm sac-rlhf
-   ```
-   with the startup command of your sweep.
+
+   Finally, replace the last line of the file with the startup command of your sweep.
 
 3. Submit the job to the SLURM cluster:
 
