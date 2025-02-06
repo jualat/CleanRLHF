@@ -1,0 +1,66 @@
+program: sac_rlhf.py
+entity: cleanRLHF
+project: Ant_common_tuning
+method: grid
+metric:
+  goal: maximize
+  name: "evaluate/mean"
+parameters:
+  seed:
+    distribution: int_uniform
+    max: 10
+    min: 0
+  torch_deterministic:
+    values: [true]
+  cuda:
+    values: [true]
+  track:
+    values: [true]
+  wandb_project_name:
+    values: [""]
+  wandb_entity:
+    values: [""]
+  capture_video:
+    values: [false]
+  num_envs:
+    values: [1]
+  log_file:
+    values: [true]
+  log_level:
+    values: ["INFO"]
+  env_id:
+    values: ["Ant-v5"]
+  total_timesteps:
+    values: [1000000]
+  buffer_size:
+    values: [1000000]
+  gamma:
+    values: [0.99]
+  tau:
+    values: [0.005]
+  batch_size:
+    values: [256]
+  learning_starts:
+    values: [5000]
+  policy_lr:
+    values: [0.0003]
+  q_lr:
+    values: [0.001]
+  policy_frequency:
+    values: [2]
+  target_network_frequency:
+    values: [1]
+  alpha:
+    values: [0.2]
+  autotune:
+    values: [true]
+
+  evaluation_frequency:
+    values: [10000]
+  evaluation_episodes:
+    values: [10]
+
+  actor_and_q_net_hidden_dim:
+    values: [256]
+  actor_and_q_net_hidden_layers:
+    values: [1]
