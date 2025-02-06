@@ -1,5 +1,7 @@
 # CleanRLHF
 
+![til](./images/windmill.gif)
+
 A framework for Reinforcement Learning from Human Feedback.
 
 * [Introduction](#-introduction)
