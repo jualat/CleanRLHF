@@ -7,6 +7,8 @@ import imageio
 import matplotlib
 
 matplotlib.use("AGG")
+import warnings
+
 import numpy as np
 import pandas as pd
 import torch
@@ -15,8 +17,11 @@ import wandb
 from actor import Actor
 from env import load_model_all, make_single_env
 from plotnine import aes, geom_line, geom_point, ggplot, labs
+from plotnine.exceptions import PlotnineWarning
 from scipy.stats import norm
 from tqdm import trange
+
+warnings.filterwarnings("ignore", category=PlotnineWarning)
 
 
 @dataclass
@@ -109,7 +114,12 @@ class Evaluation:
 
         episode_rewards = []
         video_paths = []
-        for episode in trange(episodes, unit="episodes", desc="Evaluating"):
+        for episode in trange(
+            episodes,
+            unit="episodes",
+            desc="Evaluating",
+            leave=False,
+        ):
             obs, _ = env.reset(seed=self.seed)
             done = False
             total_episode_reward = 0
