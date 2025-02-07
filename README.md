@@ -20,7 +20,7 @@ A framework for Reinforcement Learning from Human Feedback.
 | ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    | 
 | A card pole swinging like a windmill     | A card pole swinging like a windmill (but this time into the other direction) |
 
-## 📚Table of contents
+## 📚 Table of contents
 
 * [Introduction](#-introduction)
 * [Performance](#-performance)
