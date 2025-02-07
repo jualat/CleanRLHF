@@ -134,11 +134,11 @@ class Args:
     # Feedback server arguments
     feedback_server_url: str = "http://localhost:5001"
     """the url of the feedback server"""
-    feedback_server_autostart: bool = True
+    feedback_server_autostart: bool = False
     """toggle the autostart of a local feedback server"""
 
     # Teacher feedback mode
-    teacher_feedback_mode: str = "human"
+    teacher_feedback_mode: str = "simulated"
     """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
 
     # Human feedback arguments
