@@ -10,13 +10,13 @@ import shimmy  # noqa
 import torch
 import torch.optim as optim
 import tyro
-from actor import Actor, select_actions, update_actor, update_target_networks
-from critic import SoftQNetwork, train_q_network
-from env import make_env, save_model_all
-from evaluation import Evaluation
-from performance_metrics import PerformanceMetrics
+from agent.actor import Actor, select_actions, update_actor, update_target_networks
+from agent.critic import SoftQNetwork, train_q_network
+from environment.env import make_env, save_model_all
 from stable_baselines3.common.buffers import ReplayBuffer
 from tqdm import trange
+from utils.evaluation import Evaluation
+from utils.performance_metrics import PerformanceMetrics
 
 
 @dataclass

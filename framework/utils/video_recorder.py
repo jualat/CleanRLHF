@@ -4,9 +4,9 @@ import re
 from typing import Optional
 
 import torch
-from env import is_mujoco_env, make_single_env
+from environment.env import is_mujoco_env, make_single_env
 from gymnasium.utils.save_video import save_video
-from replay_buffer import ReplayBuffer, Trajectory
+from reward_training.replay_buffer import ReplayBuffer, Trajectory
 
 
 class VideoRecorder:

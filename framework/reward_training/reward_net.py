@@ -233,8 +233,8 @@ def train_or_val_pref_batch(
     :param batch_size: The batch size
     :return: total_avg_loss over this batch of preferences
     """
-    from sampling import sample_pairs
-    from teacher import give_pseudo_label
+    from feedback.teacher import give_pseudo_label
+    from reward_training.sampling import sample_pairs
 
     train_prefs = buffer.sample(
         sample_strategy=batch_sampling,

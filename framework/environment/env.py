@@ -14,7 +14,7 @@ from gymnasium import Env
 from gymnasium.envs.registration import registry
 from gymnasium.vector import SyncVectorEnv
 from gymnasium.wrappers import FlattenObservation
-from replay_buffer import ReplayBuffer
+from reward_training.replay_buffer import ReplayBuffer
 
 
 def save_model_all(run_name: str, step: int, state_dict: dict) -> None:

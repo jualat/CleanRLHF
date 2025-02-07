@@ -10,12 +10,17 @@ import shimmy  # noqa
 import torch
 import torch.optim as optim
 import tyro
-from agent import Agent
-from env import initialize_qpos_qvel, is_dm_control, make_env_ppo, save_model_all
-from evaluation import Evaluation
-from performance_metrics import PerformanceMetrics
-from replay_buffer import RolloutBuffer
+from agent.agent import Agent
+from environment.env import (
+    initialize_qpos_qvel,
+    is_dm_control,
+    make_env_ppo,
+    save_model_all,
+)
+from reward_training.replay_buffer import RolloutBuffer
 from tqdm import trange
+from utils.evaluation import Evaluation
+from utils.performance_metrics import PerformanceMetrics
 
 
 @dataclass
