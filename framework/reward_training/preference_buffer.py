@@ -1,5 +1,5 @@
 import numpy as np
-from replay_buffer import Trajectory
+from reward_training.replay_buffer import Trajectory
 
 
 class PreferenceBuffer:

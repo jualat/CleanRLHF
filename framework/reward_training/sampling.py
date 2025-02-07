@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from replay_buffer import ReplayBuffer
-from reward_net import RewardNet
+from reward_training.replay_buffer import ReplayBuffer
+from reward_training.reward_net import RewardNet
 
 
 def uniform_sampling(rb: ReplayBuffer, traj_len: int):

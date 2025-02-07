@@ -103,7 +103,7 @@ Use the xvfb-run command to execute the script in a headless Linux environment:
 xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
-Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `scripts/[ENV_ID].sh` with the hyperparameters that we found to work best for a specific environment.
+Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script [`scripts/<human|synthetic>_<sac|ppo>_<env_with_version>[_<task>].sh`](./scripts/) with the hyperparameters that we found to work best for a specific environment.
 
 ### Human Feedback
 
@@ -223,7 +223,7 @@ Note that the states of both objects are also saved at the end of a run or on Ke
 
 After training a model, you can evaluate it and generate videos of its behavior by running the following command:
 ```bash
-poetry run python3 evaluation.py --path-to-model <PATH> --env-id <ENV_ID>
+poetry run python3 ./utils/evaluation.py --path-to-model <PATH> --env-id <ENV_ID>
 ```
 
 ### Tracking
@@ -250,7 +250,7 @@ You can access the TensorBoard at http://localhost:6006/
 
 ### Hyperparameter Tuning
 
-The `sweep.py` script automates hyperparameter optimization using Weights & Biases (W&B) Sweeps. 
+The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimization using Weights & Biases (W&B) Sweeps. 
 
 #### How to Run a Sweep:
 1. Specify the Hyperparameter Config:
@@ -332,10 +332,10 @@ All Mujoco environments are supported.
 
 #### [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)
 
-Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.txt](https://github.com/jualat/CleanRLHF/blob/main/framework/dm_control_working_envs.txt).
+Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.md](./framework/environment/dm_control_working_envs.md).
 
 ### Toolbox
 
-In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [⁠ toolbox ⁠](https://github.com/jualat/CleanRLHF/tree/main/toolbox#readme) subdirectory.
+In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [⁠ toolbox ⁠](./toolbox#readme) subdirectory.
 
 ![Teaser](./media/toolbox_evaluation_teaser.png)

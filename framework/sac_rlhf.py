@@ -15,9 +15,9 @@ import shimmy  # noqa
 import torch
 import torch.optim as optim
 import tyro
-from actor import Actor, select_actions, update_actor, update_target_networks
-from critic import SoftQNetwork, train_q_network
-from env import (
+from agent.actor import Actor, select_actions, update_actor, update_target_networks
+from agent.critic import SoftQNetwork, train_q_network
+from environment.env import (
     get_qpos_qvel,
     initialize_qpos_qvel,
     is_dm_control,
@@ -27,17 +27,17 @@ from env import (
     save_model_all,
     save_replay_buffer,
 )
-from evaluation import Evaluation
-from feedback import collect_feedback
-from feedback_util import start_feedback_server, stop_feedback_server
-from performance_metrics import PerformanceMetrics
-from preference_buffer import PreferenceBuffer
-from replay_buffer import ReplayBuffer
-from reward_net import RewardNet, train_reward
-from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
+from feedback.feedback import collect_feedback
+from feedback.feedback_util import start_feedback_server, stop_feedback_server
+from feedback.teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
+from reward_training.preference_buffer import PreferenceBuffer
+from reward_training.replay_buffer import ReplayBuffer
+from reward_training.reward_net import RewardNet, train_reward
+from reward_training.unsupervised_exploration import ExplorationRewardKNN
 from tqdm import tqdm, trange
-from unsupervised_exploration import ExplorationRewardKNN
-from video_recorder import VideoRecorder
+from utils.evaluation import Evaluation
+from utils.performance_metrics import PerformanceMetrics
+from utils.video_recorder import VideoRecorder
 
 
 @dataclass
@@ -89,7 +89,7 @@ class Args:
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
     target_network_frequency: int = 1  # Denis Yarats' implementation delays this by 2.
-    """the frequency of updates for the target nerworks"""
+    """the frequency of updates for the target networks"""
     alpha: float = 0.2
     """Entropy regularization coefficient."""
     autotune: bool = True
@@ -135,7 +135,7 @@ class Args:
 
     # Teacher feedback mode
     teacher_feedback_mode: str = "simulated"
-    """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
+    """the mode of feedback, must be 'simulated' or 'human' """
 
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"
@@ -674,7 +674,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     H_min=surf_H_min,
                 )
                 rb.relabel_rewards(reward_net)
-                logging.info("Rewards relabeled")
+                logging.debug("Rewards relabeled")
 
             ### AGENT LEARNING ###
 

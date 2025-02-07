@@ -15,8 +15,8 @@ import pandas as pd
 import torch
 import tyro
 import wandb
-from actor import Actor
-from env import load_model_all, make_single_env
+from agent.actor import Actor
+from environment.env import load_model_all, make_single_env
 from plotnine import aes, geom_line, geom_point, ggplot, labs
 from plotnine.exceptions import PlotnineWarning
 from scipy.stats import norm

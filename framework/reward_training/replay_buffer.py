@@ -4,7 +4,7 @@ from typing import List, NamedTuple, Optional, Union
 import numpy as np
 import torch
 from gymnasium import spaces
-from reward_net import RewardNet
+from reward_training.reward_net import RewardNet
 from stable_baselines3.common.buffers import ReplayBuffer as SB3ReplayBuffer
 from stable_baselines3.common.vec_env import VecNormalize
 

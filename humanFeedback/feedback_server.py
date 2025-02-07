@@ -212,7 +212,7 @@ def get_feedback(run_name):
             return jsonify(
                 {
                     "status": "error",
-                    "message": "No feedback data provided. Resend feedback paris",
+                    "message": "No feedback data provided. Resend feedback pairs",
                 }
             ), 422
         if run_name in feedback_buffers:
