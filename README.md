@@ -9,7 +9,7 @@
 
 A framework for Reinforcement Learning from Human Feedback.
 
-#### 🟣 = Human Feedback  | 🔵 = Synthetic Feedback
+#### 🟣 Human Feedback  | 🔵 Synthetic Feedback
 
 | Swimmer 🟣                          | Raise one leg 🟣           | Hopper 🔵                 | Cheetah 🔵                            |
 |------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|
@@ -128,6 +128,8 @@ You can also manually start the feedback server by running the following command
 python3 humanFeedback/feedback_server.py
 ```
 
+Use the `--play-sounds` flag to enable an alert each time the human teacher is consulted.
+
 
 ## ✈️ Features
 
@@ -212,9 +214,6 @@ Note: Only either one of the above options can be used in a run.
 | 100000 steps | 200000 steps | 300000 steps | 400000 steps | 500000 steps |
 
 ### Model Saving/Loading
-
-<!--TODO-->
-(Remove if deprecated)
 
 Once you have done unsupervised pre-exploration, the replay buffer and the model are automatically saved in `./models/[RUN]/[EXPLORATION_STEPS]/`.
 To save time, instead of exploring the same environment every time, you can now load both results, e.g.:
