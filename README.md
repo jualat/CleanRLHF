@@ -1,6 +1,7 @@
 # CleanRLHF
 
-![til](./images/windmill.gif)
+![til](./media/windmill_clockwise.gif)
+![til](./media/windmill_counterclockwise.gif)
 
 A framework for Reinforcement Learning from Human Feedback.
 
