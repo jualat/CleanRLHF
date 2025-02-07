@@ -97,48 +97,9 @@ def collect_feedback(
     :type video_recorder: object, optional
 
     """
-    if mode == "simulated":
-        if not sim_teacher:
-            raise ValueError(
-                "sim_teacher must be provided for 'simulated_teacher' mode."
-            )
-        logging.info("Collecting feedback from simulated teacher")
 
-        for i in trange(
-            teacher_feedback_num_queries_per_session,
-            desc="Queries",
-            unit="queries",
-            position=2,
-            leave=False,
-        ):
-            # Sample trajectories from replay buffer to query teacher
-            first_trajectory, second_trajectory = sample_trajectories(
-                replay_buffer, preference_sampling, reward_net, trajectory_length
-            )
-
-            # Create video of the two trajectories. For now, we only render if capture_video is True.
-            # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
-            if capture_video and render_mode != "human":
-                video_recorder.record_trajectory(first_trajectory, run_name)
-                video_recorder.record_trajectory(second_trajectory, run_name)
-
-            # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
-            preference = sim_teacher.give_preference(
-                first_trajectory, second_trajectory
-            )
-            # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
-            if preference is None:
-                continue
-            # Store preferences
-            if np.random.rand() < (
-                1 - reward_net_val_split
-            ):  # 1 - (Val Split)% for training
-                train_pref_buffer.add(first_trajectory, second_trajectory, preference)
-            else:  # (Val Split)% for validation
-                val_pref_buffer.add(first_trajectory, second_trajectory, preference)
-
-    elif mode == "human":
-        logging.info("Collecting human feedback")
+    if mode == "human":
+        logging.debug("Collecting human feedback")
         human_feedback_preparation(
             feedback_server_url,
             teacher_feedback_num_queries_per_session,
@@ -231,26 +192,45 @@ def collect_feedback(
         except KeyboardInterrupt:
             logging.error("Human feedback process interrupted.")
 
-    elif mode == "file":
-        if not feedback_file:
-            raise ValueError("feedback_file must be provided for 'file' mode.")
-        logging.info(f"Loading feedback from file: {feedback_file}...")
-        with open(feedback_file, "r") as f:
-            feedback_data = json.load(f)
-        for feedback in feedback_data:
-            first_trajectory = feedback["trajectory_1"]
-            second_trajectory = feedback["trajectory_2"]
-            preference = feedback["preference"]
+    else:  # simulated feedback as default
+        if not sim_teacher:
+            raise ValueError(
+                "sim_teacher must be provided for 'simulated_teacher' mode."
+            )
+        logging.debug("Collecting feedback from simulated teacher")
+
+        for i in trange(
+            teacher_feedback_num_queries_per_session,
+            desc="Queries",
+            unit="queries",
+            position=2,
+            leave=False,
+        ):
+            # Sample trajectories from replay buffer to query teacher
+            first_trajectory, second_trajectory = sample_trajectories(
+                replay_buffer, preference_sampling, reward_net, trajectory_length
+            )
+
+            # Create video of the two trajectories. For now, we only render if capture_video is True.
+            # If we have a human teacher, we would render the video anyway and ask the teacher to compare the two trajectories.
+            if capture_video and render_mode != "human":
+                video_recorder.record_trajectory(first_trajectory, run_name)
+                video_recorder.record_trajectory(second_trajectory, run_name)
+
+            # Query instructor (normally a human who decides which trajectory is better, here we use ground truth)
+            preference = sim_teacher.give_preference(
+                first_trajectory, second_trajectory
+            )
+            # Trajectories are not added to the buffer if neither segment demonstrates the desired behavior
+            if preference is None:
+                continue
+            # Store preferences
             if np.random.rand() < (
                 1 - reward_net_val_split
             ):  # 1 - (Val Split)% for training
                 train_pref_buffer.add(first_trajectory, second_trajectory, preference)
             else:  # (Val Split)% for validation
                 val_pref_buffer.add(first_trajectory, second_trajectory, preference)
-
-    else:
-        raise ValueError(f"Unknown feedback mode: {mode}")
-    logging.debug(f"Collected feedback with mode: {mode}")
 
 
 def human_feedback_preparation(
