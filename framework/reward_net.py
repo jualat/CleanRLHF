@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
+from tqdm import trange
 
 
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
@@ -434,7 +435,9 @@ def train_reward(
     :param H_min: Minimal length of the data augmented trajectory
     :return:
     """
-    for epoch in range(epochs):
+    for epoch in trange(
+        epochs, desc="RewardNet Training", unit="epoch", position=2, leave=False
+    ):
         # ==== 1) TRAINING STEP ====
 
         train_loss_dict = {

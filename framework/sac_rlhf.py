@@ -425,7 +425,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         current_step += 1
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in trange(
-            args.total_explore_steps, desc="Exploration step", unit="steps"
+            args.total_explore_steps, desc="Exploration step", unit="steps", leave=False
         ):
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs

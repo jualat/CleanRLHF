@@ -302,8 +302,8 @@ def human_feedback_preparation(
     sampled_trajectory_videos = []
     for i in trange(
         teacher_feedback_num_queries_per_session,
-        desc="Feedback pairs prepared:",
-        position=3,
+        desc="Feedback pairs prepared",
+        position=2,
         leave=False,
     ):
         first_trajectory, second_trajectory = sample_trajectories(
