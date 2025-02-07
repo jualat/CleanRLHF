@@ -62,7 +62,7 @@ class Args:
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
-    play_sounds: bool = True
+    play_sounds: bool = False
     """whether to play a alert when feedback is requested"""
 
     # Algorithm specific arguments
