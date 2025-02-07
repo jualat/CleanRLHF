@@ -1,11 +1,11 @@
-![til](./media/windmill_clockwise.gif)
-![til](./media/windmill_counterclockwise.gif)
-
-Different behaviors trained with human feedback.
+![til](./media/windmill_clockwise.gif | width=50)
+![til](./media/windmill_counterclockwise.gif | width=50)
 
 # CleanRLHF
 
 A framework for Reinforcement Learning from Human Feedback.
+
+![](./media/feedback_server.png | width=100)
 
 * [Introduction](#-introduction)
 * [Performance](#-performance)
@@ -91,6 +91,8 @@ xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `scripts/[ENV_ID].sh` with the hyperparameters that we found to work best for a specific environment.
 
 ### Human Feedback
+
+
 
 To enable human feedback (instead of simulated feedback), use the `--teacher-feedback-mode` flag:
 
