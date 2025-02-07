@@ -202,6 +202,18 @@ def collect_feedback(
                                         )
                                     collected_feedback += 1
                                     pbar.update(1)
+
+                    elif response.status_code == 422:
+                        human_feedback_preparation(
+                            feedback_server_url,
+                            teacher_feedback_num_queries_per_session,
+                            preference_sampling,
+                            replay_buffer,
+                            reward_net,
+                            run_name,
+                            trajectory_length,
+                            video_recorder,
+                        )
                     else:
                         logging.debug("Could not fetch feedback; retrying...")
                     time.sleep(5)
