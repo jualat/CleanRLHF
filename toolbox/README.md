@@ -3,6 +3,8 @@
 A toolbox application for the CleanRLHF project to compare
 video files between runs
 
+![Teaser](../media/toolbox_evaluation_teaser.png)
+
 ## Getting Started
 
 ### Preparations
