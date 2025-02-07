@@ -90,7 +90,7 @@ Use the xvfb-run command to execute the script in a headless Linux environment:
 xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
-Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `[scripts](./scripts/)/<human|synthetic>_<sac|ppo>_<env_with_version>[_<task>].sh` with the hyperparameters that we found to work best for a specific environment.
+Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script [`scripts/<human|synthetic>_<sac|ppo>_<env_with_version>[_<task>].sh`](./scripts/) with the hyperparameters that we found to work best for a specific environment.
 
 ### Human Feedback
 
