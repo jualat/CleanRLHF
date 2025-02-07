@@ -9,13 +9,14 @@
 
 A framework for Reinforcement Learning from Human Feedback.
 
+#### 🟣 = Human Feedback  | 🔵 = Synthetic Feedback
 
-| Swimmer (🟣 Human Feedback)                          | Raise one leg (🟣 Human Feedback)             | Hopper (🔵 Synthetic Feedback)                     | Cheetah (🔵 Synthetic Feedback)                             |
+| Swimmer 🟣                          | Raise one leg 🟣           | Hopper 🔵                 | Cheetah 🔵                            |
 |------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|
 | ![](./media/swimmer_human_feedback.gif)              | ![](./media/ant_raise_leg_human_feedback.gif) | ![](./media/hopper_synthetic_feedback.gif)         | ![](./media/cheetah_synthetic_feedback.gif)                 |
 | A flexible agent optimized for a swimming-like motion. | A quadruped agent trained to balance on three legs. | A single-legged agent learning to hop efficiently. | A fast quadrupedal agent mimicking a cheetah’s gait. |
 
-| Windmill (Clockwise) (🟣 Human Feedback) | Windmill (Counterclockwise) (🟣 Human Feedback)                               |
+| Windmill (Clockwise) 🟣  | Windmill (Counterclockwise) 🟣                            |
 |------------------------------------------|-------------------------------------------------------------------------------|
 | ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    |
 | A cart pole swinging like a windmill.    | A cart pole swinging in the other direction.                                  |
