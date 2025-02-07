@@ -14,8 +14,8 @@ import pygame
 import torch
 import torch.optim as optim
 import tyro
-from agent import Agent
-from env import (
+from agent.agent import Agent
+from environment.env import (
     get_qpos_qvel,
     initialize_qpos_qvel,
     is_dm_control,
@@ -25,17 +25,17 @@ from env import (
     save_model_all,
     save_replay_buffer,
 )
-from evaluation import Evaluation
-from feedback import collect_feedback
-from feedback_util import start_feedback_server, stop_feedback_server
-from performance_metrics import PerformanceMetrics
-from preference_buffer import PreferenceBuffer
-from replay_buffer import RolloutBuffer
-from reward_net import RewardNet, train_reward
-from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
+from feedback.feedback import collect_feedback
+from feedback.feedback_util import start_feedback_server, stop_feedback_server
+from feedback.teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
+from reward_training.preference_buffer import PreferenceBuffer
+from reward_training.replay_buffer import RolloutBuffer
+from reward_training.reward_net import RewardNet, train_reward
+from reward_training.unsupervised_exploration import ExplorationRewardKNN
 from tqdm import trange
-from unsupervised_exploration import ExplorationRewardKNN
-from video_recorder import VideoRecorder
+from utils.evaluation import Evaluation
+from utils.performance_metrics import PerformanceMetrics
+from utils.video_recorder import VideoRecorder
 
 
 @dataclass

@@ -208,7 +208,7 @@ Note that the states of both objects are also saved at the end of a run or on Ke
 
 After training a model, you can evaluate it and generate videos of its behavior by running the following command:
 ```bash
-poetry run python3 evaluation.py --path-to-model <PATH> --env-id <ENV_ID>
+poetry run python3 ./utils/evaluation.py --path-to-model <PATH> --env-id <ENV_ID>
 ```
 
 ### Tracking
@@ -235,7 +235,7 @@ You can access the TensorBoard at http://localhost:6006/
 
 ### Hyperparameter Tuning
 
-The `sweep.py` script automates hyperparameter optimization using Weights & Biases (W&B) Sweeps. 
+The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimization using Weights & Biases (W&B) Sweeps. 
 
 #### How to Run a Sweep:
 1. Specify the Hyperparameter Config:
@@ -320,7 +320,7 @@ All Mujoco environments are supported.
 
 #### [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)
 
-Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.md](./framework/dm_control_working_envs.md).
+Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.md](./framework/environment/dm_control_working_envs.md).
 
 ### Toolbox
 

@@ -3,7 +3,7 @@ from typing import Dict
 import numpy as np
 import torch
 import torch.nn as nn
-from replay_buffer import RolloutBuffer
+from reward_training.replay_buffer import RolloutBuffer
 from torch.distributions.normal import Normal
 
 

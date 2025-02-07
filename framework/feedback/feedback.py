@@ -5,11 +5,11 @@ import time
 import numpy as np
 import pygame
 import requests
-from preference_buffer import PreferenceBuffer
-from replay_buffer import ReplayBuffer
-from sampling import sample_trajectories
+from reward_training.preference_buffer import PreferenceBuffer
+from reward_training.replay_buffer import ReplayBuffer
+from reward_training.sampling import sample_trajectories
 from tqdm import tqdm, trange
-from video_recorder import retrieve_trajectory_by_video_name
+from utils.video_recorder import retrieve_trajectory_by_video_name
 
 
 def collect_feedback(
@@ -111,7 +111,7 @@ def collect_feedback(
             video_recorder,
         )
         if play_sounds:
-            pygame.mixer.music.load("sound.wav")
+            pygame.mixer.music.load("./feedback/media/sound.wav")
             pygame.mixer.music.play()
         try:
             collected_feedback = 0
