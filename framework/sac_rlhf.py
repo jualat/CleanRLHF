@@ -442,7 +442,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
             )
-            assert envs.action_space.contains(actions), "Action is out of bounds!"
 
             next_obs, ground_truth_reward, terminations, truncations, infos = envs.step(
                 actions

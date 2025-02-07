@@ -1,13 +1,27 @@
 # CleanRLHF
 
-[![python](https://img.shields.io/badge/Python-^3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
-![ci workflow](https://github.com/jualat/CleanRLHF/actions/workflows/pre-commit.yml/badge.svg)
-[![pytorch](https://img.shields.io/badge/PyTorch-^2.5-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
+[![python](https://img.shields.io/badge/Python-~3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![ci workflow](https://github.com/jualat/CleanRLHF/actions/workflows/pre-commit.yml/badge.svg)](https://pre-commit.com/)
+[![pytorch](https://img.shields.io/badge/PyTorch-~2.5-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-![GitHub last commit (branch)](https://img.shields.io/github/last-commit/jualat/CleanRLHF/main)
-![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-closed/jualat/CleanRLHF)
+[![GitHub last commit (branch)](https://img.shields.io/github/last-commit/jualat/CleanRLHF/main)](https://github.com/jualat/CleanRLHF/pulse)
+[![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-closed/jualat/CleanRLHF)](https://github.com/jualat/CleanRLHF/pulls)
 
-This project is focussed on implementing a framework for Reinforcement Learning from Human Feedback.
+A framework for Reinforcement Learning from Human Feedback.
+
+#### 🟣 Human Feedback  | 🔵 Synthetic Feedback
+
+| Swimmer 🟣                          | Raise one leg 🟣           | Hopper 🔵                 | Cheetah 🔵                            |
+|------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|
+| ![](./media/swimmer_human_feedback.gif)              | ![](./media/ant_raise_leg_human_feedback.gif) | ![](./media/hopper_synthetic_feedback.gif)         | ![](./media/cheetah_synthetic_feedback.gif)                 |
+| A flexible agent optimized for a swimming-like motion. | A quadruped agent trained to balance on three legs. | A single-legged agent learning to hop efficiently. | A fast quadrupedal agent mimicking a cheetah’s gait. |
+
+| Windmill (Clockwise) 🟣  | Windmill (Counterclockwise) 🟣                            |
+|------------------------------------------|-------------------------------------------------------------------------------|
+| ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    |
+| A cart pole swinging like a windmill.    | A cart pole swinging in the other direction.                                  |
+
+## 📚 Table of contents
 
 * [Introduction](#-introduction)
 * [Performance](#-performance)
@@ -36,12 +50,12 @@ This project is focussed on implementing a framework for Reinforcement Learning 
 
 This framework implements RLHF and is oriented towards [PEBBLE](https://arxiv.org/abs/2106.05091). It is based on [SAC](https://arxiv.org/abs/1801.01290), an off-policy actor-critic algorithm for deep RL.
 
-There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741) (WIP), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discussed](#-performance) and [documented](#-features) below.
+There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.03741), which is a faster but less efficient approach to RLHF. Additionally to the implementations of these two papers, several features have been added, which are aimed at improving the performance as well as the user experience of our program. The features are [discussed](#-performance) and [documented](#-features) below.
 
 
 ## 🚀 Performance
-<!--TODO-->
-(WIP)
+
+We logged all our runs on [Weights & Biases](https://wandb.ai/) and created a report showcasing the performance of our framework. The report can be found [here](https://api.wandb.ai/links/cleanRLHF/21ohn4os).
 
 
 ## 💡 Getting Started
@@ -78,7 +92,7 @@ poetry install
 
 ### Basic Code Execution
 
-To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (for a list of all available environments, see [Environments](#environments)):
+To run the code, execute the following command from the `framework` directory, replacing Hopper-v5 with the desired environment ID (for an overview of all available environments, see [Environments](#environments)):
 
 ```bash
 poetry run python3 sac_rlhf.py --env-id Hopper-v5
@@ -94,13 +108,15 @@ Setting the right hyperparameters is crucial for performance. Consider looking a
 
 ### Human Feedback
 
-To enable human feedback instead of simulated feedback, use the `--teacher-feedback-mode` flag as in
+![](./media/feedback_server.png)
+
+To enable human feedback (instead of simulated feedback), use the `--teacher-feedback-mode` flag:
 
 ```bash
 poetry run python3 sac_rlhf.py --teacher-feedback-mode human
 ```
 
-Use the `--feedback-server-autostart` flag to automatically start the feedback server on http://localhost:5001/. You can additionally configure the address of the server as in
+Use the `--feedback-server-autostart` flag to automatically start the feedback server on http://localhost:5001/. You can additionally configure the address of the server:
 
 ```bash
 poetry run python3 sac_rlhf.py --feedback-server-url remoteurl:1234
@@ -111,6 +127,8 @@ You can also manually start the feedback server by running the following command
 ```bash
 python3 humanFeedback/feedback_server.py
 ```
+
+Use the `--play-sounds` flag to enable an alert each time the human teacher is consulted.
 
 
 ## ✈️ Features
@@ -130,12 +148,12 @@ It suffices to do pre-exploration only once per environment on your machine, for
 
 ### Trajectory Sampling
 
-Every trajectory, that the agent produces during the training, is saved in the replay buffer. Sampling random pairs of such trajectories for consultation of the human expert is inefficient. [Lee et al.](https://arxiv.org/abs/2106.05091) propose two methods for more profitable trajectory sampling. Note that the methods utilize ensemble reward models, a technique for improving training stability.
+Every trajectory that the agent produces during the training is saved in the replay buffer. Sampling random pairs of such trajectories for consultation of the human expert is inefficient. [Lee et al.](https://arxiv.org/abs/2106.05091) propose two methods for more profitable trajectory sampling. Note that the methods utilize ensemble reward models, a technique for improving training stability.
 
 * **Disagree**: If, given a pair of trajectories, the models are not sure which one to prefer (i.e. the standard deviation of the preferences given by the members of the ensemble is high), then it is efficient to ask the human expert.
 * **Entropy**: If a pair of trajectories is near the decision boundary (i.e. the entropy of the preferences given by the members of the ensemble is high), then we prefer to consult the human teacher for this pair.
 
-By default, disagreement sampling is used. It can be set using the `--preference-sampling` flag; must be 'uniform', 'disagree', or 'entropy'.
+By default, disagreement sampling is used. It can be set using the `--preference-sampling` flag, must be 'uniform', 'disagree', or 'entropy'.
 
 ### Trajectory Scheduling
 
@@ -190,10 +208,12 @@ poetry run python3 sac_rlhf.py --render-mode human
 
 Note: Only either one of the above options can be used in a run.
 
-### Model Saving/Loading
+#### Example: Walker2D synthetic feedback videos
+| ![](./media/walker2d_synthetic_feedback_100000steps.gif) |![](./media/walker2d_synthetic_feedback_200000steps.gif) | ![](./media/walker2d_synthetic_feedback_300000steps.gif) | ![](./media/walker2d_synthetic_feedback_400000steps.gif)  | ![](./media/walker2d_synthetic_feedback_500000steps.gif)  |
+|------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|-------------------------------------------------------------|
+| 100000 steps | 200000 steps | 300000 steps | 400000 steps | 500000 steps |
 
-<!--TODO-->
-(Remove if deprecated)
+### Model Saving/Loading
 
 Once you have done unsupervised pre-exploration, the replay buffer and the model are automatically saved in `./models/[RUN]/[EXPLORATION_STEPS]/`.
 To save time, instead of exploring the same environment every time, you can now load both results, e.g.:
@@ -215,12 +235,12 @@ poetry run python3 ./utils/evaluation.py --path-to-model <PATH> --env-id <ENV_ID
 
 #### [Weights & Biases](https://wandb.ai/)
 
-Use the `--track  --wandb-project-name HopperTest --wandb-entity cleanRLHF` flag to activate tracking via Weights &
+Use the `--track  --wandb-project-name <PROJECT_NAME> --wandb-entity <WANDB_ENTITY>` flag to activate tracking via Weights &
 Biases:
 
 ```bash
 wandb login
-poetry run python3 sac_rlhf.py --track  --wandb-project-name HopperTest --wandb-entity cleanRLHF
+poetry run python3 sac_rlhf.py --track  --wandb-project-name <PROJECT_NAME> --wandb-entity <WANDB_ENTITY>
 ```
 
 #### [Tensorboard](https://www.tensorflow.org/tensorboard)
@@ -246,7 +266,7 @@ The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimizat
 2. Run the Sweep with W&B:
 
    ```bash
-   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WAND_ENTITY> --sweep-count 3 --config-filename ./sweep_config/<SWEEP_NAME>.yaml --algorithm sac-rlhf
+   poetry run python3 sweep.py --project-name <PROJECT_NAME> --entity <WANDB_ENTITY> --sweep-count <N_RUNS> --config-filename ./sweep_config/<SWEEP_NAME>.yaml --algorithm <ALGORITHM>
    ```
 
    Arguments:
@@ -256,13 +276,13 @@ The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimizat
    | `--sweep-count` | Number of runs to launch in this session. |
    | `--project-name` | The name of your W&B project. |
    | `--entity` | Your W&B entity (team or username). |
-   | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
+   | `--algorithm` | Algorithm to run, must be 'sac-rlhf' (default), 'pref-ppo,' 'sac,' or 'ppo' |
 
 
-3. Run the Sweep with Sweep ID
+3. Run the Sweep with Sweep ID:
 
-    ```bash
-   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 --algorithm sac-rlhf
+   ```bash
+   poetry run python3 sweep.py --project-name --sweep_id <SWEEP_ID> --sweep_count 3 --algorithm <ALGORITHM>
    ```
 
    Arguments:
@@ -270,7 +290,7 @@ The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimizat
    | Argument | Description |
    | -------- | ----------- |
    | `--sweep_id` | You can find this ID on the W&B dashboard. |
-   | `--algorithm` | Algorithm to run, must be sac-rlhf (default), pref-ppo, sac, or ppo |
+   | `--algorithm` | Algorithm to run, must be 'sac-rlhf' (default), 'pref-ppo,' 'sac,' or 'ppo' |
 
 #### How to Run a Sweep on SLURM:
 
@@ -285,8 +305,9 @@ The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimizat
    sh setup_venv.sh
    ```
 
-2. Adjust `slurm/wandb_sweep.sbatch` to your needs. Make sure to replace the email to receive notifications and update 
-   absolute paths.
+2. Adjust `slurm/wandb_sweep.sbatch` to your needs:
+
+   Make sure to replace the email to receive notifications and update absolute paths.
 
    ```
    #SBATCH --mail-user=yourname@campus.lmu.de
@@ -295,12 +316,8 @@ The [`sweep.py`](./framework/sweep.py) script automates hyperparameter optimizat
    #SBATCH --output=/home/k/user/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.out
    #SBATCH --error=/home/k/user/workspace/cleanrlhf/framework/slurm/slurm.%j.%N.err
    ```
-   
-   Replace
-   ```bash
-   python3.10 sweep.py --project_name Ant_common_tuning --entity cleanRLHF --sweep_count 3 --config_filename ./sweep_config/ant_sweep.yaml --algorithm sac-rlhf
-   ```
-   with the startup command of your sweep.
+
+   Finally, replace the last line of the file with the startup command of your sweep.
 
 3. Submit the job to the SLURM cluster:
 
@@ -324,5 +341,6 @@ Almost all environments from the Deepmind Control Suite are supported. For a ful
 
 ### Toolbox
 
-In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [`toolbox`](./toolbox#readme) subdirectory.
+In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [⁠ toolbox ⁠](./toolbox#readme) subdirectory.
 
+![Teaser](./media/toolbox_evaluation_teaser.png)
