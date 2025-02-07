@@ -53,7 +53,7 @@ def collect_feedback(
     :type run_name: str
 
     :param preference_sampling: A strategy to select trajectory pairs for sampling and feedback.
-    :type preference_sampling: object
+    :type preference_sampling: str
 
     :param teacher_feedback_num_queries_per_session: Total number of feedback queries to perform
         during one collection session.
@@ -181,11 +181,17 @@ def collect_feedback(
                                     pbar.update(1)
 
                                 if (
-                                    not val_pref_buffer.contains(
-                                        first_trajectory, second_trajectory, preference
-                                    )
-                                    | train_pref_buffer.contains(
-                                        first_trajectory, second_trajectory, preference
+                                    not (
+                                        val_pref_buffer.contains(
+                                            first_trajectory,
+                                            second_trajectory,
+                                            preference,
+                                        )
+                                        or train_pref_buffer.contains(
+                                            first_trajectory,
+                                            second_trajectory,
+                                            preference,
+                                        )
                                     )
                                 ) and preference is not None:
                                     # Store preferences
