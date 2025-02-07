@@ -64,6 +64,8 @@ class Args:
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
+    play_sounds: bool = True
+    """whether to play a alert when feedback is requested"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v5"
@@ -236,7 +238,8 @@ def run(args: Any):
         logging.getLogger().addHandler(
             logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
-    pygame.mixer.init()
+    if args.play_sounds:
+        pygame.mixer.init()
     try:
         if args.feedback_server_autostart:
             if (
@@ -636,6 +639,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render_mode=args.render_mode,
                     video_recorder=video_recorder,
                     sim_teacher=sim_teacher,
+                    play_sounds=args.play_sounds,
                 )
 
                 logging.debug(f"next_session_idx {next_session_idx}")
@@ -841,7 +845,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
-        pygame.mixer.quit()
+        if args.play_sounds:
+            pygame.mixer.quit()
 
 
 if __name__ == "__main__":

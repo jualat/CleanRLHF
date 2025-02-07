@@ -29,6 +29,7 @@ def collect_feedback(
     capture_video=True,
     render_mode="simulated",
     video_recorder=None,
+    play_sounds=False,
 ):
     """
     Collects feedback for trajectories from either a simulated teacher, human interaction or a file.
@@ -90,6 +91,7 @@ def collect_feedback(
 
     :param video_recorder: Object responsible for recording videos of sampled trajectories.
         Used only if `capture_video` or mode `human` is enabled.
+    :param play_sounds: If True, plays sound when feedback is required.
     :type video_recorder: object, optional
 
     """
@@ -145,8 +147,9 @@ def collect_feedback(
             trajectory_length,
             video_recorder,
         )
-        pygame.mixer.music.load("sound.wav")
-        pygame.mixer.music.play()
+        if play_sounds:
+            pygame.mixer.music.load("sound.wav")
+            pygame.mixer.music.play()
         try:
             collected_feedback = 0
             with tqdm(

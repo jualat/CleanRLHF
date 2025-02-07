@@ -62,6 +62,8 @@ class Args:
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
+    play_sounds: bool = True
+    """whether to play a alert when feedback is requested"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v5"
@@ -132,11 +134,11 @@ class Args:
     # Feedback server arguments
     feedback_server_url: str = "http://localhost:5001"
     """the url of the feedback server"""
-    feedback_server_autostart: bool = False
+    feedback_server_autostart: bool = True
     """toggle the autostart of a local feedback server"""
 
     # Teacher feedback mode
-    teacher_feedback_mode: str = "simulated"
+    teacher_feedback_mode: str = "human"
     """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
 
     # Human feedback arguments
@@ -245,7 +247,8 @@ def run(args: Any):
         logging.getLogger().addHandler(
             logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
-
+    if args.play_sounds:
+        pygame.mixer.init()
     try:
         if args.feedback_server_autostart:
             if (
@@ -301,7 +304,6 @@ def train(args: Any, run_name: str):
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     logging.info(f"Using device: {device}")
-    pygame.mixer.init()
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [
@@ -522,6 +524,7 @@ def train(args: Any, run_name: str):
                         render_mode=args.render_mode,
                         video_recorder=video_recorder,
                         sim_teacher=sim_teacher,
+                        play_sounds=args.play_sounds,
                     )
 
                     next_session_idx += 1
@@ -664,7 +667,8 @@ def train(args: Any, run_name: str):
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
-        pygame.mixer.quit()
+        if args.play_sounds:
+            pygame.mixer.quit()
 
 
 if __name__ == "__main__":
