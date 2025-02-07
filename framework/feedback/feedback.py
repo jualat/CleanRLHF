@@ -111,7 +111,7 @@ def collect_feedback(
             video_recorder,
         )
         if play_sounds:
-            pygame.mixer.music.load("./media/sound.wav")
+            pygame.mixer.music.load("./feedback/media/sound.wav")
             pygame.mixer.music.play()
         try:
             collected_feedback = 0
