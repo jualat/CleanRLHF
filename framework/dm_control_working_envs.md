@@ -1,63 +1,187 @@
 # The following environments are tested to be working with ```sac_rlhf.py```
-```dm_control/acrobot-swingup-v``` <br>
-```dm_control/acrobot-swingup_sparse-v``` <br>
-```dm_control/ball_in_cup-catch-v``` <br>
-```dm_control/cartpole-balance-v``` <br>
-```dm_control/cartpole-balance_sparse-v``` <br>
-```dm_control/cartpole-swingup-v``` <br>
-```dm_control/cartpole-swingup_sparse-v``` <br>
-```dm_control/cartpole-two_poles-v``` <br>
-```dm_control/cartpole-three_poles-v``` <br>
-```dm_control/cheetah-run-v``` <br>
-```dm_control/dog-stand-v``` <br>
-```dm_control/dog-walk-v``` <br>
-```dm_control/dog-trot-v``` <br>
-```dm_control/dog-run-v``` <br>
-```dm_control/dog-fetch-v``` <br>
-```dm_control/finger-spin-v``` <br>
-```dm_control/finger-turn_easy-v``` <br>
-```dm_control/finger-turn_hard-v``` <br>
-```dm_control/fish-upright-v``` <br>
-```dm_control/fish-swim-v``` <br>
-```dm_control/hopper-stand-v``` <br>
-```dm_control/hopper-hop-v``` <br>
-```dm_control/humanoid-stand-v``` <br>
-```dm_control/humanoid-walk-v``` <br>
-```dm_control/humanoid-run-v``` <br>
-```dm_control/humanoid-run_pure_state-v``` <br>
-```dm_control/humanoid_CMU-stand-v``` <br>
-```dm_control/humanoid_CMU-walk-v``` <br>
-```dm_control/humanoid_CMU-run-v``` <br>
-```dm_control/manipulator-bring_ball-v``` <br>
-```dm_control/manipulator-bring_peg-v``` <br>
-```dm_control/manipulator-insert_ball-v``` <br>
-```dm_control/manipulator-insert_peg-v``` <br>
-```dm_control/pendulum-swingup-v``` <br>
-```dm_control/point_mass-easy-v``` <br>
-```dm_control/point_mass-hard-v``` <br>
-```dm_control/quadruped-walk-v``` <br>
-```dm_control/quadruped-run-v``` <br>
-```dm_control/quadruped-escape-v``` <br>
-```dm_control/quadruped-fetch-v``` <br>
-```dm_control/reacher-easy-v``` <br>
-```dm_control/reacher-hard-v``` <br>
-```dm_control/stacker-stack_2-v``` <br>
-```dm_control/stacker-stack_4-v``` <br>
-```dm_control/swimmer-swimmer6-v``` <br>
-```dm_control/swimmer-swimmer15-v``` <br>
-```dm_control/walker-stand-v``` <br>
-```dm_control/walker-walk-v``` <br>
-```dm_control/walker-run-v``` <br>
-```dm_control/stack_2_bricks_features-v``` <br>
-```dm_control/stack_2_bricks_moveable_base_features-v``` <br>
-```dm_control/stack_3_bricks_features-v``` <br>
-```dm_control/stack_3_bricks_random_order_features-v``` <br>
-```dm_control/stack_2_of_3_bricks_random_order_features-v``` <br>
-```dm_control/reassemble_3_bricks_fixed_order_features-v``` <br>
-```dm_control/reassemble_5_bricks_random_order_features-v``` <br>
-```dm_control/lift_brick_features-v``` <br>
-```dm_control/lift_large_box_features-v``` <br>
-```dm_control/place_brick_features-v``` <br>
-```dm_control/place_cradle_features-v``` <br>
-```dm_control/reach_duplo_features-v``` <br>
-```dm_control/reach_site_features-v``` <br>
+```
+dm_control/acrobot-swingup-0
+```
+```
+dm_control/acrobot-swingup_sparse-v0
+```
+```
+dm_control/ball_in_cup-catch-v0
+```
+```
+dm_control/cartpole-balance-v0
+```
+```
+dm_control/cartpole-balance_sparse-v0
+```
+```
+dm_control/cartpole-swingup-v0
+```
+```
+dm_control/cartpole-swingup_sparse-v0
+```
+```
+dm_control/cartpole-two_poles-v0
+```
+```
+dm_control/cartpole-three_poles-v0
+```
+```
+dm_control/cheetah-run-v0
+```
+```
+dm_control/dog-stand-v0
+```
+```
+dm_control/dog-walk-v0
+```
+```
+dm_control/dog-trot-v0
+```
+```
+dm_control/dog-run-v0
+```
+```
+dm_control/dog-fetch-v0
+```
+```
+dm_control/finger-spin-v0
+```
+```
+dm_control/finger-turn_easy-v0
+```
+```
+dm_control/finger-turn_hard-v0
+```
+```
+dm_control/fish-upright-v0
+```
+```
+dm_control/fish-swim-v0
+```
+```
+dm_control/hopper-stand-v0
+```
+```
+dm_control/hopper-hop-v0
+```
+```
+dm_control/humanoid-stand-v0
+```
+```
+dm_control/humanoid-walk-v0
+```
+```
+dm_control/humanoid-run-v0
+```
+```
+dm_control/humanoid-run_pure_state-v0
+```
+```
+dm_control/humanoid_CMU-stand-v0
+```
+```
+dm_control/humanoid_CMU-walk-v0
+```
+```
+dm_control/humanoid_CMU-run-v0
+```
+```
+dm_control/manipulator-bring_ball-v0
+```
+```
+dm_control/manipulator-bring_peg-v0
+```
+```
+dm_control/manipulator-insert_ball-v0
+```
+```
+dm_control/manipulator-insert_peg-v0
+```
+```
+dm_control/pendulum-swingup-v0
+```
+```
+dm_control/point_mass-easy-v0
+```
+```
+dm_control/point_mass-hard-v0
+```
+```
+dm_control/quadruped-walk-v0
+```
+```
+dm_control/quadruped-run-v0
+```
+```
+dm_control/quadruped-escape-v0
+```
+```
+dm_control/quadruped-fetch-v0
+```
+```
+dm_control/reacher-easy-v0
+```
+```
+dm_control/reacher-hard-v0
+```
+```
+dm_control/stacker-stack_2-v0
+```
+```
+dm_control/stacker-stack_4-v0
+```
+```
+dm_control/swimmer-swimmer6-v0
+```
+```
+dm_control/swimmer-swimmer15-v0
+```
+```
+dm_control/walker-stand-v0
+```
+```
+dm_control/walker-walk-v0
+```
+```
+dm_control/walker-run-v0
+```
+```
+dm_control/stack_2_bricks_features-v0
+```
+```
+dm_control/stack_2_bricks_moveable_base_features-v0
+```
+```
+dm_control/stack_3_bricks_features-v0
+```
+```
+dm_control/stack_3_bricks_random_order_features-v0
+```
+```
+dm_control/stack_2_of_3_bricks_random_order_features-v0
+```
+```
+dm_control/reassemble_3_bricks_fixed_order_features-v0
+```
+```
+dm_control/reassemble_5_bricks_random_order_features-v0
+```
+```
+dm_control/lift_brick_features-v0
+```
+```
+dm_control/lift_large_box_features-v0
+```
+```
+dm_control/place_brick_features-v0
+```
+```
+dm_control/place_cradle_features-v0
+```
+```
+dm_control/reach_duplo_features-v0
+```
+```
+dm_control/reach_site_features-v0
+```
