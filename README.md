@@ -1,5 +1,5 @@
-<img src="./media/windmill_clockwise.gif" width="49%">
-<img src="./media/windmill_counterclockwise.gif" width="49%">
+<img src="./media/windmill_clockwise.gif" width="50%" align="middle">
+<img src="./media/windmill_counterclockwise.gif" width="50%" align="middle">
 
 # CleanRLHF
 
