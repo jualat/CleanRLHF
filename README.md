@@ -205,6 +205,11 @@ poetry run python3 sac_rlhf.py --render-mode human
 
 Note: Only either one of the above options can be used in a run.
 
+#### Example: Walker2D synthetic feedback videos
+| ![](./media/walker2d_synthetic_feedback_100000steps.gif) |![](./media/walker2d_synthetic_feedback_200000steps.gif) | ![](./media/walker2d_synthetic_feedback_300000steps.gif) | ![](./media/walker2d_synthetic_feedback_400000steps.gif)  | ![](./media/walker2d_synthetic_feedback_500000steps.gif)  |
+|------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|-------------------------------------------------------------|
+| 100000 steps | 200000 steps | 300000 steps | 400000 steps | 500000 steps |
+
 ### Model Saving/Loading
 
 <!--TODO-->
