@@ -1,40 +1,3 @@
-<br/>
-<span style="display: flex; justify-content: center; align-items: center;">
-  <span style="text-align: center; width: 25%">
-    Swimmer<br/>
-    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
-    <img src="./media/swimmer_human_feedback.gif" alt="">
-  </span>
-  <span style="text-align: center; width: 25%">
-    Raise one leg<br>
-    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
-    <img src="./media/ant_raise_leg_human_feedback.gif"><br>
-  </span>
-  <span style="text-align: center; width: 25%">
-   Hopper<br>
-    <img alt="SF" src="https://img.shields.io/badge/Synthetic%20feedback-8A2BE2"><br>
-    <img src="./media/hopper_synthetic_feedback.gif"><br>
-  </span>
-  <span style="text-align: center; width: 25%">
-   Cheetah<br>
-    <img alt="SF" src="https://img.shields.io/badge/Synthetic%20feedback-8A2BE2"><br>
-    <img src="./media/cheetah_synthetic_feedback.gif"><br>
-  </span>
-</span>
-
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; width: 50%">
-    <img src="./media/windmill_clockwise.gif" alt=""><br>
-    Windmill (Clockwise)<br/>
-    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
-  </div>
-  <div style="text-align: center; width: 50%">
-    <img src="./media/windmill_counterclockwise.gif"><br>
-    Ant (Raise one leg)<br/>
-    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
-  </div>
-</div>
-
 # CleanRLHF
 
 [![python](https://img.shields.io/badge/Python-~3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
@@ -46,7 +9,18 @@
 
 A framework for Reinforcement Learning from Human Feedback.
 
-<img src="./media/feedback_server.png" width="50%">
+
+| Swimmer (🟣 Human Feedback)                          | Raise one leg (🟣 Human Feedback)             | Hopper (🔵 Synthetic Feedback)                     | Cheetah (🔵 Synthetic Feedback)                             |
+|------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|
+| ![](./media/swimmer_human_feedback.gif)              | ![](./media/ant_raise_leg_human_feedback.gif) | ![](./media/hopper_synthetic_feedback.gif)         | ![](./media/cheetah_synthetic_feedback.gif)                 |
+| A flexible agent optimized for swimming-like motion. | A quadruped trained to balance on three legs. | A single-legged agent learning to hop efficiently. | A fast-moving quadrupedal agent mimicking a cheetah’s gait. |
+
+| Windmill (Clockwise) (🟣 Human Feedback) | Windmill Counter clockwise (🟣 Human Feedback)                                |
+|------------------------------------------|-------------------------------------------------------------------------------|
+| ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    | 
+| A card pole swinging like a windmill     | A card pole swinging like a windmill (but this time into the other direction) |
+
+## 📚Table of contents
 
 * [Introduction](#-introduction)
 * [Performance](#-performance)
@@ -133,7 +107,7 @@ Setting the right hyperparameters is crucial for performance. Consider looking a
 
 ### Human Feedback
 
-
+![](./media/feedback_server.png)
 
 To enable human feedback (instead of simulated feedback), use the `--teacher-feedback-mode` flag:
 
