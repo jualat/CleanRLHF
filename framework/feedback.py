@@ -3,6 +3,7 @@ import logging
 import time
 
 import numpy as np
+import pygame
 import requests
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
@@ -28,6 +29,7 @@ def collect_feedback(
     capture_video=True,
     render_mode="simulated",
     video_recorder=None,
+    play_sounds=False,
 ):
     """
     Collects feedback for trajectories from either a simulated teacher, human interaction or a file.
@@ -51,7 +53,7 @@ def collect_feedback(
     :type run_name: str
 
     :param preference_sampling: A strategy to select trajectory pairs for sampling and feedback.
-    :type preference_sampling: object
+    :type preference_sampling: str
 
     :param teacher_feedback_num_queries_per_session: Total number of feedback queries to perform
         during one collection session.
@@ -89,6 +91,7 @@ def collect_feedback(
 
     :param video_recorder: Object responsible for recording videos of sampled trajectories.
         Used only if `capture_video` or mode `human` is enabled.
+    :param play_sounds: If True, plays sound when feedback is required.
     :type video_recorder: object, optional
 
     """
@@ -103,6 +106,8 @@ def collect_feedback(
             teacher_feedback_num_queries_per_session,
             desc="Queries",
             unit="queries",
+            position=2,
+            leave=False,
         ):
             # Sample trajectories from replay buffer to query teacher
             first_trajectory, second_trajectory = sample_trajectories(
@@ -142,7 +147,9 @@ def collect_feedback(
             trajectory_length,
             video_recorder,
         )
-
+        if play_sounds:
+            pygame.mixer.music.load("sound.wav")
+            pygame.mixer.music.play()
         try:
             collected_feedback = 0
             with tqdm(
@@ -150,6 +157,8 @@ def collect_feedback(
                 initial=collected_feedback,
                 desc="Collecting Feedback",
                 unit="feedback",
+                position=2,
+                leave=False,
             ) as pbar:
                 while collected_feedback < teacher_feedback_num_queries_per_session:
                     response = requests.get(
@@ -172,11 +181,17 @@ def collect_feedback(
                                     pbar.update(1)
 
                                 if (
-                                    not val_pref_buffer.contains(
-                                        first_trajectory, second_trajectory, preference
-                                    )
-                                    | train_pref_buffer.contains(
-                                        first_trajectory, second_trajectory, preference
+                                    not (
+                                        val_pref_buffer.contains(
+                                            first_trajectory,
+                                            second_trajectory,
+                                            preference,
+                                        )
+                                        or train_pref_buffer.contains(
+                                            first_trajectory,
+                                            second_trajectory,
+                                            preference,
+                                        )
                                     )
                                 ) and preference is not None:
                                     # Store preferences
@@ -196,6 +211,18 @@ def collect_feedback(
                                         )
                                     collected_feedback += 1
                                     pbar.update(1)
+
+                    elif response.status_code == 422:
+                        human_feedback_preparation(
+                            feedback_server_url,
+                            teacher_feedback_num_queries_per_session,
+                            preference_sampling,
+                            replay_buffer,
+                            reward_net,
+                            run_name,
+                            trajectory_length,
+                            video_recorder,
+                        )
                     else:
                         logging.debug("Could not fetch feedback; retrying...")
                     time.sleep(5)
@@ -284,7 +311,9 @@ def human_feedback_preparation(
     sampled_trajectory_videos = []
     for i in trange(
         teacher_feedback_num_queries_per_session,
-        desc="Feedback pairs prepared:",
+        desc="Feedback pairs prepared",
+        position=2,
+        leave=False,
     ):
         first_trajectory, second_trajectory = sample_trajectories(
             replay_buffer, preference_sampling, reward_net, trajectory_length

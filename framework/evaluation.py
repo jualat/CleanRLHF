@@ -1,12 +1,15 @@
 import os
 import random
 from dataclasses import dataclass
+from typing import Optional
 
 import gymnasium as gym
 import imageio
 import matplotlib
 
 matplotlib.use("AGG")
+import warnings
+
 import numpy as np
 import pandas as pd
 import torch
@@ -15,8 +18,11 @@ import wandb
 from actor import Actor
 from env import load_model_all, make_single_env
 from plotnine import aes, geom_line, geom_point, ggplot, labs
+from plotnine.exceptions import PlotnineWarning
 from scipy.stats import norm
 from tqdm import trange
+
+warnings.filterwarnings("ignore", category=PlotnineWarning)
 
 
 @dataclass
@@ -43,6 +49,8 @@ class Args:
     """the dimension of the hidden layers in the actor network"""
     actor_net_hidden_layers: int = 4
     """the number of hidden layers in the actor network"""
+    teacher_feedback_mode: Optional[str] = None
+    """the mode of feedback, must be 'simulated', 'human' or 'file'"""
 
 
 class Evaluation:
@@ -56,12 +64,14 @@ class Evaluation:
         run_name=None,
         hidden_dim=256,
         hidden_layers=4,
+        teacher_feedback_mode: Optional[str] = None,
     ):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.seed = seed
         self.run_name = run_name
         self.env_id = env_id
-        env = make_single_env(env_id)
+        self.teacher_feedback_mode = teacher_feedback_mode
+        env = make_single_env(env_id, teacher_feedback_mode=teacher_feedback_mode)
         env = gym.vector.SyncVectorEnv([lambda: env])
         if path_to_model:
             self.actor = Actor(env, hidden_dim, hidden_layers)
@@ -101,7 +111,9 @@ class Evaluation:
         :return:
         """
         actor = actor.eval() if actor is not None else self.actor
-        env = self.make_env(render=render)
+        env = self.make_env(
+            render=render, teacher_feedback_mode=self.teacher_feedback_mode
+        )
         run_name = self.run_name
         if render:
             video_folder = f"./videos/{run_name}/evaluation"
@@ -109,7 +121,12 @@ class Evaluation:
 
         episode_rewards = []
         video_paths = []
-        for episode in trange(episodes, unit="episodes", desc="Evaluating"):
+        for episode in trange(
+            episodes,
+            unit="episodes",
+            desc="Evaluating",
+            leave=False,
+        ):
             obs, _ = env.reset(seed=self.seed)
             done = False
             total_episode_reward = 0
@@ -198,16 +215,23 @@ class Evaluation:
             + labs(title="Evaluation", x="Episode", y="Episode Reward", color="Legend")
         ).save(out_path, width=10, height=6, dpi=300)
 
-    def make_env(self, render):
+    def make_env(self, render, teacher_feedback_mode):
         """
         Create the environment
         :param render: If videos should be rendered
+        :param teacher_feedback_mode: The mode of teacher feedback
         :return:
         """
         if render:
-            env = make_single_env(self.env_id, render="rgb_array")
+            env = make_single_env(
+                self.env_id,
+                render="rgb_array",
+                teacher_feedback_mode=teacher_feedback_mode,
+            )
         else:
-            env = make_single_env(self.env_id)
+            env = make_single_env(
+                self.env_id, teacher_feedback_mode=teacher_feedback_mode
+            )
         env.action_space.seed(self.seed)
         env = gym.vector.SyncVectorEnv([lambda: env])
         return env
@@ -224,6 +248,7 @@ if __name__ == "__main__":
         run_name=args.run_name,
         hidden_layers=args.actor_net_hidden_layers,
         hidden_dim=args.actor_net_hidden_dim,
+        teacher_feedback_mode=args.teacher_feedback_mode,
     )
 
     eval_dict = evaluation.evaluate_policy(

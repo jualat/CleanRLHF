@@ -6,8 +6,11 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+
 import gymnasium as gym
 import numpy as np
+import pygame
 import torch
 import torch.optim as optim
 import tyro
@@ -59,6 +62,8 @@ class Args:
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
+    play_sounds: bool = False
+    """whether to play a alert when feedback is requested"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v5"
@@ -242,7 +247,8 @@ def run(args: Any):
         logging.getLogger().addHandler(
             logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
-
+    if args.play_sounds:
+        pygame.mixer.init()
     try:
         if args.feedback_server_autostart:
             if (
@@ -277,7 +283,7 @@ def train(args: Any, run_name: str):
     ) // args.batch_size
     args.num_iterations_exploration = args.total_explore_steps // args.batch_size
     args.buffer_size = int(args.num_steps)
-
+    num_envs = 1
     if args.track:
         import wandb
 
@@ -298,12 +304,16 @@ def train(args: Any, run_name: str):
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     logging.info(f"Using device: {device}")
-
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [
             make_env_ppo(
-                args.env_id, args.gamma, args.seed, i, render_mode=args.render_mode
+                args.env_id,
+                args.gamma,
+                args.seed,
+                i,
+                render_mode=args.render_mode,
+                teacher_feedback_mode=args.teacher_feedback_mode,
             )
             for i in range(
                 1
@@ -363,7 +373,9 @@ def train(args: Any, run_name: str):
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
+    video_recorder = VideoRecorder(
+        rb, args.seed, args.env_id, dm_control_bool, args.teacher_feedback_mode
+    )
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -380,6 +392,7 @@ def train(args: Any, run_name: str):
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
+        teacher_feedback_mode=args.teacher_feedback_mode,
     )
     metrics = PerformanceMetrics(run_name, args, evaluate)
     surf_H_max = args.trajectory_length - args.min_augmentation_offset
@@ -398,7 +411,7 @@ def train(args: Any, run_name: str):
 
             for explore_step in range(0, args.num_steps):
                 current_step += 1
-                global_step += args.num_envs
+                global_step += num_envs
 
                 action, logprob, value = agent.select_action(obs, device)
                 (
@@ -519,6 +532,7 @@ def train(args: Any, run_name: str):
                         render_mode=args.render_mode,
                         video_recorder=video_recorder,
                         sim_teacher=sim_teacher,
+                        play_sounds=args.play_sounds,
                     )
 
                     next_session_idx += 1
@@ -661,6 +675,8 @@ def train(args: Any, run_name: str):
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
+        if args.play_sounds:
+            pygame.mixer.quit()
 
 
 if __name__ == "__main__":

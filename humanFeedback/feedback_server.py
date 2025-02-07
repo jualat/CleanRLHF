@@ -206,6 +206,15 @@ def get_feedback(run_name):
     Endpoint to fetch accumulated feedback data for a given environment ID (env_id).
     """
     with lock:
+        if (run_name not in feedback_buffers and run_name not in sampled_videos) or (
+            feedback_buffers[run_name] == [] and sampled_videos[run_name] == []
+        ):
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "No feedback data provided. Resend feedback paris",
+                }
+            ), 422
         if run_name in feedback_buffers:
             try:
                 buffer_copy = feedback_buffers[run_name][:]

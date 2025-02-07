@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from stable_baselines3.common.vec_env import VecNormalize
+from tqdm import trange
 
 
 def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
@@ -434,7 +435,9 @@ def train_reward(
     :param H_min: Minimal length of the data augmented trajectory
     :return:
     """
-    for epoch in range(epochs):
+    for epoch in trange(
+        epochs, desc="RewardNet Training", unit="epoch", position=2, leave=False
+    ):
         # ==== 1) TRAINING STEP ====
 
         train_loss_dict = {
@@ -549,7 +552,7 @@ def train_reward(
         if epoch % 10 == 0:
             if val_pref_buffer is not None and val_pref_buffer.size > 0:
                 if surf:
-                    logging.info(
+                    logging.debug(
                         f"Reward epoch {epoch}, "
                         f"Train Loss {train_loss_dict['train_total_loss']:.4f}, "
                         f"Val Loss {val_loss_dict['val_total_loss']:.4f}, "
@@ -559,21 +562,21 @@ def train_reward(
                         f"Val Unsupervised Loss {val_loss_dict['val_unsupervised_loss']:.4f}, "
                     )
                 else:
-                    logging.info(
+                    logging.debug(
                         f"Reward epoch {epoch}, "
                         f"Train Loss {train_loss_dict['train_total_loss']:.4f}, "
                         f"Val Loss {val_loss_dict['val_total_loss']:.4f}"
                     )
             else:
                 if surf:
-                    logging.info(
+                    logging.debug(
                         f"Reward epoch {epoch}, "
                         f"Train Loss {train_loss_dict['train_total_loss']:.4f}, "
                         f"Supervised Loss {train_loss_dict['train_supervised_loss']:.4f}, "
                         f"Unsupervised Loss {train_loss_dict['train_unsupervised_loss']:.4f}"
                     )
                 else:
-                    logging.info(
+                    logging.debug(
                         f"Reward epoch {epoch}, "
                         f"Train Loss {train_loss_dict['train_total_loss']:.4f}"
                     )

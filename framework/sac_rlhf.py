@@ -6,8 +6,11 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+
 import gymnasium as gym
 import numpy as np
+import pygame
 import shimmy  # noqa
 import torch
 import torch.optim as optim
@@ -32,7 +35,7 @@ from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
-from tqdm import trange
+from tqdm import tqdm, trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
 
@@ -61,6 +64,8 @@ class Args:
     """if toggled, logger will write to a file"""
     log_level: str = "INFO"
     """the threshold level for the logger to print a message"""
+    play_sounds: bool = False
+    """whether to play a alert when feedback is requested"""
 
     # Algorithm specific arguments
     env_id: str = "Hopper-v5"
@@ -233,7 +238,8 @@ def run(args: Any):
         logging.getLogger().addHandler(
             logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
-
+    if args.play_sounds:
+        pygame.mixer.init()
     try:
         if args.feedback_server_autostart:
             if (
@@ -297,7 +303,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [
-            make_env(args.env_id, args.seed, args.render_mode)
+            make_env(
+                args.env_id, args.seed, args.render_mode, args.teacher_feedback_mode
+            )
             for i in range(
                 1
             )  # number of environments is fixed to one in this implementation
@@ -393,7 +401,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
+    video_recorder = VideoRecorder(
+        rb,
+        args.seed,
+        args.env_id,
+        dm_control_bool,
+        teacher_feedback_mode=args.teacher_feedback_mode,
+    )
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -410,6 +424,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
+        teacher_feedback_mode=args.teacher_feedback_mode,
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
@@ -422,7 +437,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         current_step += 1
         obs, _ = envs.reset(seed=args.seed)
         for explore_step in trange(
-            args.total_explore_steps, desc="Exploration step", unit="steps"
+            args.total_explore_steps, desc="Exploration step", unit="steps", leave=False
         ):
             actions = select_actions(
                 obs, actor, device, explore_step, args.explore_learning_starts, envs
@@ -572,15 +587,51 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         next_session_idx = 0
 
-        for global_step in trange(total_steps, desc="Training steps", unit="steps"):
+        # Initialize the sub progress bar for the first teacher session, if any.
+        if teacher_session_steps.any():
+            sub_total = int(teacher_session_steps[next_session_idx])
+            sub_bar = tqdm(
+                total=sub_total,
+                desc="Next Feedback Session",
+                unit="steps",
+                position=1,
+                leave=False,
+            )
+        else:
+            sub_bar = None
+
+        for global_step in trange(
+            total_steps, desc="Training steps", unit="steps", position=0
+        ):
             ### REWARD LEARNING ###
             current_step += 1
+            if sub_bar is not None:
+                sub_bar.update(1)
             # If we pre-train we can start at step 0 with training our rewards
             if global_step >= teacher_session_steps[next_session_idx] and (
                 global_step != 0
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
+                if sub_bar is not None:
+                    sub_bar.close()
+                next_session_idx += 1
+
+                if next_session_idx < len(teacher_session_steps):
+                    new_total = int(
+                        teacher_session_steps[next_session_idx]
+                        - teacher_session_steps[next_session_idx - 1]
+                    )
+                    sub_bar = tqdm(
+                        total=new_total,
+                        desc="Next Feedback Session",
+                        unit="steps",
+                        position=1,
+                        leave=False,
+                    )
+                else:
+                    sub_bar = None  # No further teacher sessions.
+
                 collect_feedback(
                     mode=args.teacher_feedback_mode,
                     feedback_server_url=args.feedback_server_url,
@@ -597,9 +648,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     render_mode=args.render_mode,
                     video_recorder=video_recorder,
                     sim_teacher=sim_teacher,
+                    play_sounds=args.play_sounds,
                 )
 
-                next_session_idx += 1
                 logging.debug(f"next_session_idx {next_session_idx}")
                 train_reward(
                     model=reward_net,
@@ -803,6 +854,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
+        if args.play_sounds:
+            pygame.mixer.quit()
 
 
 if __name__ == "__main__":
