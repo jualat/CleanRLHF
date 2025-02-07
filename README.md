@@ -13,12 +13,12 @@ A framework for Reinforcement Learning from Human Feedback.
 | Swimmer (🟣 Human Feedback)                          | Raise one leg (🟣 Human Feedback)             | Hopper (🔵 Synthetic Feedback)                     | Cheetah (🔵 Synthetic Feedback)                             |
 |------------------------------------------------------|-----------------------------------------------|----------------------------------------------------|-------------------------------------------------------------|
 | ![](./media/swimmer_human_feedback.gif)              | ![](./media/ant_raise_leg_human_feedback.gif) | ![](./media/hopper_synthetic_feedback.gif)         | ![](./media/cheetah_synthetic_feedback.gif)                 |
-| A flexible agent optimized for swimming-like motion. | A quadruped trained to balance on three legs. | A single-legged agent learning to hop efficiently. | A fast-moving quadrupedal agent mimicking a cheetah’s gait. |
+| A flexible agent optimized for a swimming-like motion. | A quadruped agent trained to balance on three legs. | A single-legged agent learning to hop efficiently. | A fast quadrupedal agent mimicking a cheetah’s gait. |
 
-| Windmill (Clockwise) (🟣 Human Feedback) | Windmill Counter clockwise (🟣 Human Feedback)                                |
+| Windmill (Clockwise) (🟣 Human Feedback) | Windmill (Counterclockwise) (🟣 Human Feedback)                               |
 |------------------------------------------|-------------------------------------------------------------------------------|
-| ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    | 
-| A card pole swinging like a windmill     | A card pole swinging like a windmill (but this time into the other direction) |
+| ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    |
+| A card pole swinging like a windmill.    | A card pole swinging like a windmill (but in the other direction).            |
 
 ## 📚 Table of contents
 
