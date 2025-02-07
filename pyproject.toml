@@ -2,7 +2,11 @@
 name = "framework"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Paskal Thomas <Paskal.Thomas@campus.lmu.de>",
+    "Adrian Weghorst <Adrian.Weghorst@campus.lmu.de>",
+    "Tobias Anzinger <T.Anzinger@campus.lmu.de>",
+    "Benjamin Kuen <B.Kuen@campus.lmu.de>",
+    "Junis Al Attar <Junis.Attar@campus.lmu.de>"]
 readme = "README.md"
 
 [tool.flake8]
@@ -33,6 +37,7 @@ gym = "^0.26.2"
 glfw = "^2.8.0"
 flask = "^3.1.0"
 flask-cors = "^5.0.0"
+poetry = "^2.0.1"
 pygame = "^2.6.1"
 pandas = "^2.2.3"
 
