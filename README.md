@@ -18,7 +18,7 @@ A framework for Reinforcement Learning from Human Feedback.
 | Windmill (Clockwise) (🟣 Human Feedback) | Windmill (Counterclockwise) (🟣 Human Feedback)                               |
 |------------------------------------------|-------------------------------------------------------------------------------|
 | ![](./media/windmill_clockwise.gif)      | ![](./media/windmill_counterclockwise.gif)                                    |
-| A card pole swinging like a windmill.    | A card pole swinging like a windmill (but in the other direction).            |
+| A cart pole swinging like a windmill.    | A cart pole swinging in the other direction.                                  |
 
 ## 📚 Table of contents
 
