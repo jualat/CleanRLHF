@@ -2,7 +2,11 @@
 name = "framework"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Paskal Thomas <Paskal.Thomas@campus.lmu.de>",
+    "Adrian Weghorst <Adrian.Weghorst@campus.lmu.de>",
+    "Tobias Anzinger <T.Anzinger@campus.lmu.de>",
+    "Benjamin Kuen <B.Kuen@campus.lmu.de>",
+    "Junis Al Attar <Junis.Attar@campus.lmu.de>"]
 readme = "README.md"
 
 [tool.flake8]

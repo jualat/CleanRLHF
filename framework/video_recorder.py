@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from typing import Optional
 
 import torch
 from env import is_mujoco_env, make_single_env
@@ -24,11 +25,13 @@ class VideoRecorder:
         seed: int,
         env_id: str,
         dm_control: bool,
+        teacher_feedback_mode: Optional[str] = None,
     ):
         self.rb = rb
         self.seed = seed
         self.env_id = env_id
         self.dm_control = dm_control
+        self.teacher_feedback_mode = teacher_feedback_mode
 
     def record_trajectory(self, trajectory: Trajectory, run_name: str, fps=30):
         start_idx = trajectory.replay_buffer_start_idx
@@ -41,7 +44,10 @@ class VideoRecorder:
         os.makedirs(video_folder, exist_ok=True)
         name_prefix = f"trajectory_{start_idx}_{end_idx}_{env_idx}"
         env = make_single_env(
-            env_id=self.env_id, render="rgb_array", video_recorder=True
+            env_id=self.env_id,
+            render="rgb_array",
+            video_recorder=True,
+            teacher_feedback_mode=self.teacher_feedback_mode,
         )
 
         try:

@@ -1,5 +1,12 @@
 # CleanRLHF
 
+[![python](https://img.shields.io/badge/Python-^3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+![ci workflow](https://github.com/jualat/CleanRLHF/actions/workflows/pre-commit.yml/badge.svg)
+[![pytorch](https://img.shields.io/badge/PyTorch-^2.5-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+![GitHub last commit (branch)](https://img.shields.io/github/last-commit/jualat/CleanRLHF/main)
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-closed/jualat/CleanRLHF)
+
 This project is focussed on implementing a framework for Reinforcement Learning from Human Feedback.
 
 * [Introduction](#-introduction)
@@ -83,7 +90,7 @@ Use the xvfb-run command to execute the script in a headless Linux environment:
 xvfb-run -- python3 sac_rlhf.py --env-id Hopper-v5
 ```
 
-Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script `scripts/[ENV_ID].sh` with the hyperparameters that we found to work best for a specific environment.
+Setting the right hyperparameters is crucial for performance. Consider looking at our methods for [hyperparameter tuning](#hyperparameter-tuning) and/or check whether there exists a script [`scripts/<human|synthetic>_<sac|ppo>_<env_with_version>[_<task>].sh`](./scripts/) with the hyperparameters that we found to work best for a specific environment.
 
 ### Human Feedback
 
@@ -313,9 +320,9 @@ All Mujoco environments are supported.
 
 #### [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)
 
-Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.txt](https://github.com/jualat/CleanRLHF/blob/main/framework/dm_control_working_envs.txt).
+Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.md](./framework/dm_control_working_envs.md).
 
 ### Toolbox
 
-In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [`toolbox`](https://github.com/jualat/CleanRLHF/tree/main/toolbox#readme) subdirectory.
+In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [`toolbox`](./toolbox#readme) subdirectory.
 

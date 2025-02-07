@@ -1,0 +1,73 @@
+#!/bin/bash
+
+poetry run python sac_rlhf.py \
+    --tau 0.005 \
+    --cuda \
+    --q_lr 0.0007722867867172924 \
+    --no-rune \
+    --seed 6 \
+    --no-surf \
+    --alpha 0.2 \
+    --gamma 0.9921914450114264 \
+    --track \
+    --env_id Ant-v5 \
+    --autotune \
+    --log_file \
+    --num_envs 1 \
+    --surf_tau 0.999 \
+    --log_level INFO \
+    --policy_lr 0.0004475438110935111 \
+    --rune_beta 0.05 \
+    --batch_size 256 \
+    --lambda_ssl 0.1 \
+    --buffer_size 1000000 \
+    --wandb_entity "" \
+    --no-capture_video \
+    --path_to_model "" \
+    --no-early_stopping \
+    --learning_starts 5000 \
+    --rune_beta_decay 0.0001 \
+    --total_timesteps 1000000 \
+    --no-exploration_load \
+    --policy_frequency 2 \
+    --teacher_sim_beta -1 \
+    --teacher_sim_gamma 1 \
+    --trajectory_length 128 \
+    --explore_batch_size 256 \
+    --reward_net_dropout 0.2 \
+    --wandb_project_name "" \
+    --early_stop_patience 5 \
+    --early_stopping_mean 0 \
+    --early_stopping_step 500000 \
+    --evaluation_episodes 10 \
+    --preference_sampling disagree \
+    --teacher_sim_epsilon 0 \
+    --torch_deterministic \
+    --total_explore_steps 10000 \
+    --evaluation_frequency 10000 \
+    --reward_net_val_split 0.2 \
+    --path_to_replay_buffer "" \
+    --reward_net_hidden_dim 128 \
+    --teacher_learning_rate 0.0005170954586836862 \
+    --teacher_update_epochs 16 \
+    --unlabeled_batch_ratio 2 \
+    --surf_sampling_strategy uniform \
+    --teacher_batch_strategy minibatch \
+    --teacher_minibatch_size 5 \
+    --teacher_sim_delta_skip -10000000 \
+    --explore_learning_starts 512 \
+    --max_augmentation_offset 10 \
+    --min_augmentation_offset 5 \
+    --teacher_sim_delta_equal 0 \
+    --reward_net_hidden_layers 2 \
+    --target_network_frequency 1 \
+    --unsupervised_exploration \
+    --pref_buffer_size_sessions 1 \
+    --teacher_feedback_schedule linear \
+    --actor_and_q_net_hidden_dim 256 \
+    --teacher_feedback_batch_size 32 \
+    --actor_and_q_net_hidden_layers 3 \
+    --teacher_feedback_total_queries 3000 \
+    --no-enable_greater_or_smaller_check \
+    --teacher_feedback_exponential_lambda 0.1 \
+    --teacher_feedback_num_queries_per_session 40

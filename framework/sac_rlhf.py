@@ -303,7 +303,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [
-            make_env(args.env_id, args.seed, args.render_mode)
+            make_env(
+                args.env_id, args.seed, args.render_mode, args.teacher_feedback_mode
+            )
             for i in range(
                 1
             )  # number of environments is fixed to one in this implementation
@@ -399,7 +401,13 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
+    video_recorder = VideoRecorder(
+        rb,
+        args.seed,
+        args.env_id,
+        dm_control_bool,
+        teacher_feedback_mode=args.teacher_feedback_mode,
+    )
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -416,6 +424,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
+        teacher_feedback_mode=args.teacher_feedback_mode,
     )
 
     metrics = PerformanceMetrics(run_name, args, evaluate)
