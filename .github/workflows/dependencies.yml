@@ -1,0 +1,25 @@
+jobs:
+  license_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - name: Get explicit and transitive dependencies
+        run: |
+          poetry install
+      - name: Check python
+        id: license_check_report
+        uses: pilosus/action-pip-license-checker@v2
+        with:
+          requirements: 'poetry.lock'
+          fail: 'Copyleft'
+          exclude: '(?i)^(pylint|aio[-_]*).*'
+      - name: Print report
+        if: ${{ always() }}
+        run: echo "${{ steps.license_check_report.outputs.report }}"
