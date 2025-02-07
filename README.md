@@ -37,9 +37,9 @@
 
 # CleanRLHF
 
-[![python](https://img.shields.io/badge/Python-^3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![python](https://img.shields.io/badge/Python-~3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![ci workflow](https://github.com/jualat/CleanRLHF/actions/workflows/pre-commit.yml/badge.svg)](https://pre-commit.com/)
-[![pytorch](https://img.shields.io/badge/PyTorch-^2.5-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
+[![pytorch](https://img.shields.io/badge/PyTorch-~2.5-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![GitHub last commit (branch)](https://img.shields.io/github/last-commit/jualat/CleanRLHF/main)](https://github.com/jualat/CleanRLHF/pulse)
 [![GitHub Issues or Pull Requests](https://img.shields.io/github/issues-closed/jualat/CleanRLHF)](https://github.com/jualat/CleanRLHF/pulls)
