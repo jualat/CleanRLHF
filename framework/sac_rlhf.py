@@ -89,7 +89,7 @@ class Args:
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
     target_network_frequency: int = 1  # Denis Yarats' implementation delays this by 2.
-    """the frequency of updates for the target nerworks"""
+    """the frequency of updates for the target networks"""
     alpha: float = 0.2
     """Entropy regularization coefficient."""
     autotune: bool = True
@@ -135,7 +135,7 @@ class Args:
 
     # Teacher feedback mode
     teacher_feedback_mode: str = "simulated"
-    """the mode of feedback, must be 'simulated', 'human' or 'file'"""  # file is currently not supported
+    """the mode of feedback, must be 'simulated' or 'human' """
 
     # Human feedback arguments
     teacher_feedback_schedule: str = "exponential"

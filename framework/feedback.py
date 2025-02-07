@@ -91,6 +91,8 @@ def collect_feedback(
 
     :param video_recorder: Object responsible for recording videos of sampled trajectories.
         Used only if `capture_video` or mode `human` is enabled.
+    :type video_recorder: object, optional
+
     :param play_sounds: If True, plays sound when feedback is required.
     :type video_recorder: object, optional
 
@@ -267,14 +269,17 @@ def human_feedback_preparation(
 
     Parameters:
     ----------
-    num_queries : int
+    feedback_server_url: str
+        The url of the feedback server.
+
+    teacher_feedback_num_queries_per_session : int
         The number of trajectory queries to prepare for human feedback.
 
     preference_sampling : str
         The sampling strategy to use for selecting trajectory pairs. Options:
         - "disagree": Use trajectories where the reward network has high disagreement.
         - "entropy": Use trajectories with high entropy in the reward distribution.
-        - Any other value: Defaults to uniform sampling from the replay buffer.
+        - "uniform: Use random trajectories. This is the default strategy.
 
     replay_buffer : ReplayBuffer
         The replay buffer containing experience data to sample trajectories from.
