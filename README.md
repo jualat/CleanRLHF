@@ -1,5 +1,39 @@
-<img src="./media/windmill_clockwise.gif" width="50%" align="middle">
-<img src="./media/windmill_counterclockwise.gif" width="50%" align="middle">
+<br/>
+<div style="display: flex; justify-content: center; align-items: center;">
+  <div style="text-align: center; width: 25%">
+    Swimmer<br/>
+    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
+    <img src="./media/swimmer_human_feedback.gif" alt="">
+  </div>
+  <div style="text-align: center; width: 25%">
+    Raise one leg<br>
+    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
+    <img src="./media/ant_raise_leg_human_feedback.gif"><br>
+  </div>
+  <div style="text-align: center; width: 25%">
+   Hopper<br>
+    <img alt="SF" src="https://img.shields.io/badge/Synthetic%20feedback-8A2BE2"><br>
+    <img src="./media/hopper_synthetic_feedback.gif"><br>
+  </div>
+  <div style="text-align: center; width: 25%">
+   Cheetah<br>
+    <img alt="SF" src="https://img.shields.io/badge/Synthetic%20feedback-8A2BE2"><br>
+    <img src="./media/cheetah_synthetic_feedback.gif"><br>
+  </div>
+</div>
+
+<div style="display: flex; justify-content: center; align-items: center;">
+  <div style="text-align: center; width: 50%">
+    <img src="./media/windmill_clockwise.gif" alt=""><br>
+    Windmill (Clockwise)<br/>
+    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
+  </div>
+  <div style="text-align: center; width: 50%">
+    <img src="./media/windmill_counterclockwise.gif"><br>
+    Ant (Raise one leg)<br/>
+    <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
+  </div>
+</div>
 
 # CleanRLHF
 
@@ -328,5 +362,6 @@ Almost all environments from the Deepmind Control Suite are supported. For a ful
 
 ### Toolbox
 
-In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [`toolbox`](https://github.com/jualat/CleanRLHF/tree/main/toolbox#readme) subdirectory.
+In addition to the framework, we have created a toolbox to compare runs of the framework. The tool as well as its documentation can be found in the [⁠ toolbox ⁠](https://github.com/jualat/CleanRLHF/tree/main/toolbox#readme) subdirectory.
 
+![Teaser](./media/toolbox_evaluation_teaser.png)
