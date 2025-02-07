@@ -6,8 +6,11 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+
 import gymnasium as gym
 import numpy as np
+import pygame
 import torch
 import torch.optim as optim
 import tyro
@@ -277,7 +280,7 @@ def train(args: Any, run_name: str):
     ) // args.batch_size
     args.num_iterations_exploration = args.total_explore_steps // args.batch_size
     args.buffer_size = int(args.num_steps)
-
+    num_envs = 1
     if args.track:
         import wandb
 
@@ -298,7 +301,7 @@ def train(args: Any, run_name: str):
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     logging.info(f"Using device: {device}")
-
+    pygame.mixer.init()
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [
@@ -398,7 +401,7 @@ def train(args: Any, run_name: str):
 
             for explore_step in range(0, args.num_steps):
                 current_step += 1
-                global_step += args.num_envs
+                global_step += num_envs
 
                 action, logprob, value = agent.select_action(obs, device)
                 (
@@ -661,6 +664,7 @@ def train(args: Any, run_name: str):
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
+        pygame.mixer.quit()
 
 
 if __name__ == "__main__":

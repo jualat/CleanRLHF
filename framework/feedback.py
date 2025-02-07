@@ -3,6 +3,7 @@ import logging
 import time
 
 import numpy as np
+import pygame
 import requests
 from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
@@ -103,6 +104,8 @@ def collect_feedback(
             teacher_feedback_num_queries_per_session,
             desc="Queries",
             unit="queries",
+            position=2,
+            leave=False,
         ):
             # Sample trajectories from replay buffer to query teacher
             first_trajectory, second_trajectory = sample_trajectories(
@@ -142,7 +145,8 @@ def collect_feedback(
             trajectory_length,
             video_recorder,
         )
-
+        pygame.mixer.music.load("sound.wav")
+        pygame.mixer.music.play()
         try:
             collected_feedback = 0
             with tqdm(
@@ -150,6 +154,8 @@ def collect_feedback(
                 initial=collected_feedback,
                 desc="Collecting Feedback",
                 unit="feedback",
+                position=2,
+                leave=False,
             ) as pbar:
                 while collected_feedback < teacher_feedback_num_queries_per_session:
                     response = requests.get(
@@ -297,6 +303,8 @@ def human_feedback_preparation(
     for i in trange(
         teacher_feedback_num_queries_per_session,
         desc="Feedback pairs prepared:",
+        position=3,
+        leave=False,
     ):
         first_trajectory, second_trajectory = sample_trajectories(
             replay_buffer, preference_sampling, reward_net, trajectory_length

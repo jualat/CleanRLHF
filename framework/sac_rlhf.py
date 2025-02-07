@@ -6,8 +6,11 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+
 import gymnasium as gym
 import numpy as np
+import pygame
 import shimmy  # noqa
 import torch
 import torch.optim as optim
@@ -32,7 +35,7 @@ from preference_buffer import PreferenceBuffer
 from replay_buffer import ReplayBuffer
 from reward_net import RewardNet, train_reward
 from teacher import Teacher, plot_feedback_schedule, teacher_feedback_schedule
-from tqdm import trange
+from tqdm import tqdm, trange
 from unsupervised_exploration import ExplorationRewardKNN
 from video_recorder import VideoRecorder
 
@@ -233,7 +236,7 @@ def run(args: Any):
         logging.getLogger().addHandler(
             logging.FileHandler(filename=file_path, encoding="utf-8", mode="a"),
         )
-
+    pygame.mixer.init()
     try:
         if args.feedback_server_autostart:
             if (
@@ -572,15 +575,51 @@ poetry run pip install "stable_baselines3==2.0.0a1"
 
         next_session_idx = 0
 
-        for global_step in trange(total_steps, desc="Training steps", unit="steps"):
+        # Initialize the sub progress bar for the first teacher session, if any.
+        if teacher_session_steps.any():
+            sub_total = int(teacher_session_steps[next_session_idx])
+            sub_bar = tqdm(
+                total=sub_total,
+                desc="Next Feedback Session",
+                unit="steps",
+                position=1,
+                leave=False,
+            )
+        else:
+            sub_bar = None
+
+        for global_step in trange(
+            total_steps, desc="Training steps", unit="steps", position=0
+        ):
             ### REWARD LEARNING ###
             current_step += 1
+            if sub_bar is not None:
+                sub_bar.update(1)
             # If we pre-train we can start at step 0 with training our rewards
             if global_step >= teacher_session_steps[next_session_idx] and (
                 global_step != 0
                 or args.exploration_load
                 or args.unsupervised_exploration
             ):
+                if sub_bar is not None:
+                    sub_bar.close()
+                next_session_idx += 1
+
+                if next_session_idx < len(teacher_session_steps):
+                    new_total = int(
+                        teacher_session_steps[next_session_idx]
+                        - teacher_session_steps[next_session_idx - 1]
+                    )
+                    sub_bar = tqdm(
+                        total=new_total,
+                        desc="Next Feedback Session",
+                        unit="steps",
+                        position=1,
+                        leave=False,
+                    )
+                else:
+                    sub_bar = None  # No further teacher sessions.
+
                 collect_feedback(
                     mode=args.teacher_feedback_mode,
                     feedback_server_url=args.feedback_server_url,
@@ -599,7 +638,6 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     sim_teacher=sim_teacher,
                 )
 
-                next_session_idx += 1
                 logging.debug(f"next_session_idx {next_session_idx}")
                 train_reward(
                     model=reward_net,
@@ -803,6 +841,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         save_replay_buffer(run_name, current_step, rb)
         envs.close()
         metrics.close()
+        pygame.mixer.quit()
 
 
 if __name__ == "__main__":
