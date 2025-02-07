@@ -198,7 +198,7 @@ class PerformanceMetrics:
         :param cuda: If a cuda GPU is being used
         :return:
         """
-        logging.info(
+        logging.debug(
             f"global_step={global_step}, episodic_return={info['episode']['r']}"
         )
         self.writer.add_scalar(
