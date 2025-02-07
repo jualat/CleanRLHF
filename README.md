@@ -1,11 +1,11 @@
-![til](./media/windmill_clockwise.gif | width=50)
-![til](./media/windmill_counterclockwise.gif | width=50)
+![til](./media/windmill_clockwise.gif)
+![til](./media/windmill_counterclockwise.gif)
 
 # CleanRLHF
 
 A framework for Reinforcement Learning from Human Feedback.
 
-![](./media/feedback_server.png | width=100)
+<img src="./media/feedback_server.png" width="48">
 
 * [Introduction](#-introduction)
 * [Performance](#-performance)
