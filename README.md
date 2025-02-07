@@ -1,7 +1,9 @@
-# CleanRLHF
-
 ![til](./media/windmill_clockwise.gif)
 ![til](./media/windmill_counterclockwise.gif)
+
+Different behaviors trained with human feedback.
+
+# CleanRLHF
 
 A framework for Reinforcement Learning from Human Feedback.
 
