@@ -53,8 +53,8 @@ There also exists an implementation of [PrefPPO](https://arxiv.org/abs/1706.0374
 
 
 ## 🚀 Performance
-<!--TODO-->
-(WIP)
+
+We logged all our runs on [Weights & Biases](https://wandb.ai/) and created a report showcasing the performance of our framework. The report can be found [here](https://api.wandb.ai/links/cleanRLHF/21ohn4os).
 
 
 ## 💡 Getting Started
