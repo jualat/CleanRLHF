@@ -34,7 +34,7 @@ export function RunSelector({ runs, index }: RunSelectorProps) {
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
-				<DropdownMenu>
+				<DropdownMenu modal={false}>
 					<DropdownMenuTrigger asChild>
 						{activeRun && (
 							<SidebarMenuButton
@@ -53,7 +53,7 @@ export function RunSelector({ runs, index }: RunSelectorProps) {
 							</SidebarMenuButton>
 						)}
 					</DropdownMenuTrigger>
-					<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
+					<DropdownMenuContent className="w-[--radix-popper-anchor-width] bg-white overflow-y-scroll h-96">
 						{runs.map((run) => (
 							<DropdownMenuItem
 								key={run.name}
