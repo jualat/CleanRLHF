@@ -666,7 +666,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
                     H_min=surf_H_min,
                 )
                 rb.relabel_rewards(reward_net)
-                logging.info("Rewards relabeled")
+                logging.debug("Rewards relabeled")
 
             ### AGENT LEARNING ###
 
