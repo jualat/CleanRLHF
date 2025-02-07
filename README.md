@@ -313,7 +313,7 @@ All Mujoco environments are supported.
 
 #### [Deepmind Control Suite](https://github.com/google-deepmind/dm_control/blob/main/dm_control/suite/README.md)
 
-Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.txt](https://github.com/jualat/CleanRLHF/blob/main/framework/dm_control_working_envs.txt).
+Almost all environments from the Deepmind Control Suite are supported. For a full list, check out [dm_control_working_envs.txt](./framework/dm_control_working_envs.md).
 
 ### Toolbox
 
