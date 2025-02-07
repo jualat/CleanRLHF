@@ -101,6 +101,7 @@ def make_single_env(
     render: Optional[str] = None,
     camera_settings: Optional[Dict] = None,
     video_recorder: Optional[bool] = False,
+    teacher_feedback_mode: Optional[str] = None,
 ):
     if is_dm_control(env_id):
         name = env_id.split("/")[1]
@@ -120,25 +121,55 @@ def make_single_env(
         if not video_recorder:
             env = FlattenObservation(env)
     else:
-        env = gym.make(
-            env_id, render_mode=render, default_camera_config=camera_settings
+        is_env_with_unhealthy_termination = (
+            env_id.startswith("Ant")
+            or env_id.startswith("Hopper")
+            or env_id.startswith("Walker2D")
+            or env_id.startswith("Humanoid")
+            or env_id.startswith("InvertedDoublePendulum")
+            or env_id.startswith("InvertedPendulum")
         )
+
+        if (
+            is_env_with_unhealthy_termination
+            and teacher_feedback_mode is not None
+            and teacher_feedback_mode == "human"
+        ):
+            env = gym.make(
+                env_id,
+                render_mode=render,
+                default_camera_config=camera_settings,
+                terminate_when_unhealthy=False,
+            )
+        else:
+            env = gym.make(
+                env_id, render_mode=render, default_camera_config=camera_settings
+            )
     return env
 
 
-def make_env(env_id: str, seed: Optional[int], render: Optional[str] = None):
+def make_env(
+    env_id: str,
+    seed: Optional[int],
+    render: Optional[str] = None,
+    teacher_feedback_mode: Optional[str] = None,
+):
     """
     Create an environment
     :param env_id: The run argument env_id
+    :param teacher_feedback_mode: The teacher feedback mode
     :param seed: The seed for creating the environment
     :param render: Set rendering mode
+
     :return:
     """
     if render == "":
         render = None
 
     def thunk():
-        env = make_single_env(env_id, render=render)
+        env = make_single_env(
+            env_id, render=render, teacher_feedback_mode=teacher_feedback_mode
+        )
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
         return env
@@ -152,15 +183,20 @@ def make_env_ppo(
     seed: Optional[int],
     index: int,
     render_mode: Optional[str] = None,
+    teacher_feedback_mode: Optional[str] = None,
 ):
     if render_mode == "":
         render_mode = None
 
     def thunk():
         if index == 0 and render_mode is not None:
-            env = make_single_env(env_id, render=render_mode)
+            env = make_single_env(
+                env_id, render=render_mode, teacher_feedback_mode=teacher_feedback_mode
+            )
         else:
-            env = make_single_env(env_id, render=render_mode)
+            env = make_single_env(
+                env_id, render=render_mode, teacher_feedback_mode=teacher_feedback_mode
+            )
         env = gym.wrappers.FlattenObservation(env)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env = gym.wrappers.ClipAction(env)

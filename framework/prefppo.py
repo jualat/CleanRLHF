@@ -308,7 +308,12 @@ def train(args: Any, run_name: str):
     envs = gym.vector.SyncVectorEnv(
         [
             make_env_ppo(
-                args.env_id, args.gamma, args.seed, i, render_mode=args.render_mode
+                args.env_id,
+                args.gamma,
+                args.seed,
+                i,
+                render_mode=args.render_mode,
+                teacher_feedback_mode=args.teacher_feedback_mode,
             )
             for i in range(
                 1
@@ -368,7 +373,9 @@ def train(args: Any, run_name: str):
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4
     )
-    video_recorder = VideoRecorder(rb, args.seed, args.env_id, dm_control_bool)
+    video_recorder = VideoRecorder(
+        rb, args.seed, args.env_id, dm_control_bool, args.teacher_feedback_mode
+    )
 
     # Init Teacher
     sim_teacher = Teacher(
@@ -385,6 +392,7 @@ def train(args: Any, run_name: str):
         seed=args.seed,
         torch_deterministic=args.torch_deterministic,
         run_name=run_name,
+        teacher_feedback_mode=args.teacher_feedback_mode,
     )
     metrics = PerformanceMetrics(run_name, args, evaluate)
     surf_H_max = args.trajectory_length - args.min_augmentation_offset
