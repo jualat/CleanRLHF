@@ -1,26 +1,26 @@
 <br/>
-<div style="display: flex; justify-content: center; align-items: center;">
-  <div style="text-align: center; width: 25%">
+<span style="display: flex; justify-content: center; align-items: center;">
+  <span style="text-align: center; width: 25%">
     Swimmer<br/>
     <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
     <img src="./media/swimmer_human_feedback.gif" alt="">
-  </div>
-  <div style="text-align: center; width: 25%">
+  </span>
+  <span style="text-align: center; width: 25%">
     Raise one leg<br>
     <img alt="HF" src="https://img.shields.io/badge/Human%20feedback-8A2BE2"><br>
     <img src="./media/ant_raise_leg_human_feedback.gif"><br>
-  </div>
-  <div style="text-align: center; width: 25%">
+  </span>
+  <span style="text-align: center; width: 25%">
    Hopper<br>
     <img alt="SF" src="https://img.shields.io/badge/Synthetic%20feedback-8A2BE2"><br>
     <img src="./media/hopper_synthetic_feedback.gif"><br>
-  </div>
-  <div style="text-align: center; width: 25%">
+  </span>
+  <span style="text-align: center; width: 25%">
    Cheetah<br>
     <img alt="SF" src="https://img.shields.io/badge/Synthetic%20feedback-8A2BE2"><br>
     <img src="./media/cheetah_synthetic_feedback.gif"><br>
-  </div>
-</div>
+  </span>
+</span>
 
 <div style="display: flex; justify-content: center; align-items: center;">
   <div style="text-align: center; width: 50%">
