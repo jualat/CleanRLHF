@@ -126,6 +126,8 @@ class Args:
     """the validation split for the reward network"""
     reward_net_dropout: float = 0.2
     """the dropout rate for the reward network"""
+    reward_net_ensemble_size: int = 3
+    """the ensemble size for the reward network"""
     agent_net_hidden_dim: int = 128
     """the dimension of the hidden layers in the actor network"""
     agent_net_hidden_layers: int = 4
@@ -369,6 +371,7 @@ def train(args: Any, run_name: str):
         hidden_layers=args.reward_net_hidden_layers,
         env=envs,
         dropout=args.reward_net_dropout,
+        ensemble_size=args.reward_net_ensemble_size,
     ).to(device)
     reward_optimizer = optim.Adam(
         reward_net.parameters(), lr=args.teacher_learning_rate, weight_decay=1e-4

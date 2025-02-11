@@ -35,11 +35,11 @@ def gen_reward_net(hidden_dim, layers, env=None, p=0.3):
 
 
 class RewardNet(nn.Module):
-    def __init__(self, env, hidden_dim, hidden_layers, dropout):
+    def __init__(self, env, hidden_dim, hidden_layers, dropout, ensemble_size=3):
         super().__init__()
         self.ensemble = nn.ModuleList()
 
-        for _ in range(3):
+        for _ in range(ensemble_size):
             model = nn.Sequential(
                 *gen_reward_net(hidden_dim, hidden_layers, env=env, p=dropout)
             )
