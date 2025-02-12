@@ -1,6 +1,6 @@
 #!/bin/bash
 
-poetry run python sac_rlhf.py \
+poetry run python framework/sac_rlhf.py \
     --tau 0.005 \
     --cuda \
     --q_lr 0.00043582739885087064 \
@@ -13,7 +13,6 @@ poetry run python sac_rlhf.py \
     --env_id Swimmer-v5 \
     --autotune \
     --log_file \
-    --num_envs 1 \
     --surf_tau 0.999 \
     --log_level INFO \
     --policy_lr 0.0005031039106349765 \

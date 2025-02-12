@@ -1,6 +1,6 @@
 #!/bin/bash
 
-poetry run python sac_rlhf.py \
+poetry run python framework/sac_rlhf.py \
     --tau 0.005 \
     --cuda \
     --q_lr 0.0006143918780906629 \
@@ -13,7 +13,6 @@ poetry run python sac_rlhf.py \
     --env_id Hopper-v5 \
     --autotune \
     --log_file \
-    --num_envs 1 \
     --surf_tau 0.999 \
     --log_level INFO \
     --policy_lr 0.0002236151342771317 \
