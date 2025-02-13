@@ -1,0 +1,60 @@
+poetry run python sac_rlhf.py --env-id=Pusher-v5 \
+  --tau 0.005 \
+  --q_lr 0.00015777259423254417 \
+  --rune \
+  --seed 7 \
+  --surf \
+  --alpha 0.2 \
+  --gamma 0.992791800741667 \
+  --track \
+  --autotune \
+  --log_file \
+  --surf_tau 0.999 \
+  --policy_lr 0.0008920273424190728 \
+  --rune_beta 555.6552344998339 \
+  --batch_size 256 \
+  --no-early_stopping \
+  --lambda_ssl 0.1 \
+  --buffer_size 1000000 \
+  --learning_starts 5000 \
+  --policy_frequency 2 \
+  --teacher_sim_beta -1 \
+  --teacher_sim_gamma 1 \
+  --trajectory_length 128 \
+  --explore_batch_size 256 \
+  --reward_net_dropout 0.2 \
+  --evaluation_episodes 10 \
+  --preference_sampling disagree \
+  --teacher_sim_epsilon 0 \
+  --torch_deterministic \
+  --total_explore_steps 10000 \
+  --evaluation_frequency 10000 \
+  --reward_net_val_split 0 \
+  --reward_net_hidden_dim 128 \
+  --teacher_learning_rate 0.0008883200043694438 \
+  --teacher_update_epochs 20 \
+  --unlabeled_batch_ratio 1 \
+  --surf_sampling_strategy uniform \
+  --teacher_batch_strategy full \
+  --teacher_minibatch_size 10 \
+  --teacher_sim_delta_skip -10000000 \
+  --explore_learning_starts 512 \
+  --max_augmentation_offset 10 \
+  --min_augmentation_offset 5 \
+  --teacher_sim_delta_equal 0 \
+  --reward_net_hidden_layers 4 \
+  --target_network_frequency 1 \
+  --unsupervised_exploration \
+  --teacher_feedback_schedule linear \
+  --actor_and_q_net_hidden_dim 128 \
+  --teacher_feedback_batch_size 16 \
+  --actor_and_q_net_hidden_layers 3 \
+  --teacher_feedback_total_queries 5000 \
+  --no-enable_greater_or_smaller_check \
+  --teacher_feedback_exponential_lambda 0.1 \
+  --teacher_feedback_num_queries_per_session 30 \
+  --teacher_feedback_mode human \
+  --feedback_server_autostart \
+  --wandb_project_name Pusher-human-feedback \
+  --wandb-entity CleanRLHF \
+  --no-exploration-load
