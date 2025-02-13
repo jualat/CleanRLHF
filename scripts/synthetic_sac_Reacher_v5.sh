@@ -1,6 +1,6 @@
 #!/bin/bash
 
-poetry run python framework/sac_rlhf.py \
+poetry run python sac_rlhf.py \
     --tau 0.005 \
     --cuda \
     --q_lr 0.00033371535287005474 \
